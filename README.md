@@ -44,7 +44,3 @@ Click the gear icon on the toolbar to configure:
 ## Credits
 
 Cat sprites from [bongo.cat](https://github.com/Externalizable/bongo.cat) by Externalizable (MIT License).
-
-## License
-
-MIT
