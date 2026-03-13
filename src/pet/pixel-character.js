@@ -6,34 +6,58 @@
  * They are designed to overlay at the same origin in an 800x900 viewport.
  * We crop a viewport region from the composited result to fit our 300x300 canvas.
  *
- * Skins apply CSS filter (hue-rotate etc.) to cat/paw/mouth sprites only.
+ * Skins use Canvas multiply blend to tint the entire cat body (including white areas).
+ * Instruments replace the keyboard layer at the bottom.
  */
 
 const SPRITE_W = 800;
 const SPRITE_H = 900;
 
 // The visible region we crop from the 800x900 composite.
-// Original bongo.cat content sits roughly in the bottom-right area.
-// Cat head: ~(300,0)-(750,250), Keyboard: ~(50,450)-(750,450+h), Paws: ~(200,300)-(700,600)
-// We crop a 800x500 region from y=200..700 to capture cat+keyboard without excess whitespace.
 const CROP_Y = 320;
 const CROP_H = 530;
 
+// All possible sprites to preload (base + instruments)
 const SPRITE_NAMES = [
   'cat', 'paw-left', 'paw-right', 'mouth', 'keyboard',
+  'bongo', 'cymbal', 'tambourine', 'marimba', 'cowbell',
 ];
 
-// Skin definitions — CSS filter strings applied to cat sprites
+// Skin definitions:
+//   tint: hex color for multiply blend (colors the whole cat including white body)
+//   filter: optional CSS filter for special effects (dark, invert, ghost)
+//   instrument: which instrument sprite to use as base
 const SKINS = {
-  'bongo-classic': { name: 'Classic',      filter: 'none' },
-  'bongo-orange':  { name: 'Orange Cat',   filter: 'sepia(0.4) saturate(2.5) hue-rotate(10deg)' },
-  'bongo-pink':    { name: 'Pink Cat',     filter: 'sepia(0.3) saturate(2) hue-rotate(300deg) brightness(1.1)' },
-  'bongo-blue':    { name: 'Blue Cat',     filter: 'sepia(0.3) saturate(2) hue-rotate(180deg) brightness(1.1)' },
-  'bongo-green':   { name: 'Green Cat',    filter: 'sepia(0.3) saturate(2) hue-rotate(90deg) brightness(1.05)' },
-  'bongo-purple':  { name: 'Purple Cat',   filter: 'sepia(0.3) saturate(2) hue-rotate(240deg) brightness(1.1)' },
-  'bongo-golden':  { name: 'Golden Cat',   filter: 'sepia(0.5) saturate(3) hue-rotate(20deg) brightness(1.1)' },
-  'bongo-dark':    { name: 'Shadow Cat',   filter: 'brightness(0.4) contrast(1.3)' },
-  'bongo-invert':  { name: 'Inverted Cat', filter: 'invert(1) hue-rotate(180deg)' },
+  // === Color skins (keyboard) ===
+  'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard' },
+  'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard' },
+  'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard' },
+  'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard' },
+  'bongo-green':   { name: 'Green Cat',     tint: '#90EE90', filter: null,                                      instrument: 'keyboard' },
+  'bongo-purple':  { name: 'Purple Cat',    tint: '#D8B4FE', filter: null,                                      instrument: 'keyboard' },
+  'bongo-golden':  { name: 'Golden Cat',    tint: '#FFD700', filter: null,                                      instrument: 'keyboard' },
+  'bongo-dark':    { name: 'Shadow Cat',    tint: null,      filter: 'brightness(0.4) contrast(1.3)',           instrument: 'keyboard' },
+  'bongo-invert':  { name: 'Inverted Cat',  tint: null,      filter: 'invert(1) hue-rotate(180deg)',            instrument: 'keyboard' },
+  // === Extra color skins ===
+  'bongo-cyber':   { name: 'Cyber Cat',     tint: '#00F5D4', filter: 'contrast(1.1)',                           instrument: 'keyboard' },
+  'bongo-sunset':  { name: 'Sunset Cat',    tint: '#FFA07A', filter: null,                                      instrument: 'keyboard' },
+  'bongo-ice':     { name: 'Ice Cat',       tint: '#B0E0E6', filter: 'brightness(1.1)',                         instrument: 'keyboard' },
+  'bongo-cherry':  { name: 'Cherry Cat',    tint: '#FF6B81', filter: null,                                      instrument: 'keyboard' },
+  'bongo-mint':    { name: 'Mint Cat',      tint: '#98FB98', filter: null,                                      instrument: 'keyboard' },
+  'bongo-coral':   { name: 'Coral Cat',     tint: '#F08080', filter: null,                                      instrument: 'keyboard' },
+  'bongo-lemon':   { name: 'Lemon Cat',     tint: '#FFF44F', filter: null,                                      instrument: 'keyboard' },
+  'bongo-ghost':   { name: 'Ghost Cat',     tint: null,      filter: 'brightness(1.4) contrast(0.7) saturate(0.2)', instrument: 'keyboard' },
+  // === Instrument skins ===
+  'bongo-drum':       { name: 'Bongo Drum',     tint: null,      filter: null,                                  instrument: 'bongo' },
+  'bongo-cymbal':     { name: 'Cymbal Cat',     tint: null,      filter: null,                                  instrument: 'cymbal' },
+  'bongo-tambourine': { name: 'Tambourine Cat', tint: null,      filter: null,                                  instrument: 'tambourine' },
+  'bongo-marimba':    { name: 'Marimba Cat',    tint: null,      filter: null,                                  instrument: 'marimba' },
+  'bongo-cowbell':    { name: 'Cowbell Cat',     tint: null,      filter: null,                                  instrument: 'cowbell' },
+  // === Instrument + color combos ===
+  'bongo-drum-pink':    { name: 'Pink Drummer',   tint: '#FFB6C1', filter: null,                                instrument: 'bongo' },
+  'bongo-drum-blue':    { name: 'Blue Drummer',   tint: '#87CEEB', filter: null,                                instrument: 'bongo' },
+  'bongo-cymbal-gold':  { name: 'Gold Cymbalist', tint: '#FFD700', filter: null,                                instrument: 'cymbal' },
+  'bongo-marimba-green':{ name: 'Green Marimba',  tint: '#90EE90', filter: null,                                instrument: 'marimba' },
 };
 
 export { SKINS };
@@ -53,6 +77,12 @@ export class SpriteCharacter {
     this._composite.width = SPRITE_W;
     this._composite.height = SPRITE_H;
     this._compCtx = this._composite.getContext('2d');
+
+    // Offscreen canvas for tinting individual sprite layers
+    this._tintCanvas = document.createElement('canvas');
+    this._tintCanvas.width = SPRITE_W;
+    this._tintCanvas.height = SPRITE_H;
+    this._tintCtx = this._tintCanvas.getContext('2d');
 
     // Paw states
     this.leftPawDown = false;
@@ -150,16 +180,47 @@ export class SpriteCharacter {
     this._rafId = requestAnimationFrame(this._animate);
   }
 
-  /** Draw a single sprite layer onto the composite canvas. */
-  _drawLayer(cctx, img, srcX, applyFilter) {
+  /**
+   * Draw a single sprite layer onto the composite canvas.
+   * If applyColor is true and the skin has a tint, use multiply blend to color the sprite.
+   */
+  _drawLayer(cctx, img, srcX, applyColor) {
     const skin = SKINS[this.skinId];
-    if (applyFilter && skin && skin.filter !== 'none') {
-      cctx.filter = skin.filter;
-    }
-    // srcX selects the frame for 2-frame sprites (0 or SPRITE_W)
-    cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-    if (applyFilter) {
+
+    if (applyColor && skin.tint) {
+      // Tint via multiply blend on a temporary canvas:
+      // 1. Draw original sprite
+      // 2. Multiply with tint color (white → tint, black stays black, grays get tinted)
+      // 3. Restore original alpha mask
+      const tc = this._tintCtx;
+      tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+
+      tc.globalCompositeOperation = 'source-over';
+      tc.filter = 'none';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      tc.globalCompositeOperation = 'multiply';
+      tc.fillStyle = skin.tint;
+      tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
+
+      tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      // Draw tinted result onto composite, with optional CSS filter
+      if (skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(this._tintCanvas, 0, 0);
       cctx.filter = 'none';
+    } else {
+      // No tint — apply CSS filter directly if present
+      if (applyColor && skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      if (applyColor) {
+        cctx.filter = 'none';
+      }
     }
   }
 
@@ -175,42 +236,41 @@ export class SpriteCharacter {
     const cc = this._compCtx;
     cc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    // Instrument (keyboard) — drawn at bottom, no filter
-    const kbImg = this.images['keyboard'];
-    if (kbImg) {
-      // keyboard.png is 800x450, positioned at bottom of 800x900
-      cc.drawImage(kbImg, 0, SPRITE_H - 450);
+    // Instrument layer — drawn at bottom, no tint/filter
+    const skin = SKINS[this.skinId] || SKINS['bongo-classic'];
+    const instrumentName = skin.instrument || 'keyboard';
+    const instrImg = this.images[instrumentName];
+    if (instrImg) {
+      cc.drawImage(instrImg, 0, SPRITE_H - 450);
     }
 
-    // Cat body (apply skin filter)
+    // Cat body (apply tint/filter)
     const catImg = this.images['cat'];
     if (catImg) {
       this._drawLayer(cc, catImg, 0, true);
     }
 
-    // Mouth (2-frame, apply filter)
+    // Mouth (2-frame, apply tint/filter)
     const mouthImg = this.images['mouth'];
     if (mouthImg) {
       this._drawLayer(cc, mouthImg, this.mouthOpen ? SPRITE_W : 0, true);
     }
 
-    // Left paw (2-frame, apply filter)
+    // Left paw (2-frame, apply tint/filter)
     const leftImg = this.images['paw-left'];
     if (leftImg) {
       this._drawLayer(cc, leftImg, this.leftPawDown ? SPRITE_W : 0, true);
     }
 
-    // Right paw (2-frame, apply filter)
+    // Right paw (2-frame, apply tint/filter)
     const rightImg = this.images['paw-right'];
     if (rightImg) {
       this._drawLayer(cc, rightImg, this.rightPawDown ? SPRITE_W : 0, true);
     }
 
     // Step 2: Crop the interesting region from the composite and draw to canvas
-    // We take a CROP_H tall strip starting at CROP_Y, fitting it into the 300x300 canvas
     const scale = cw / SPRITE_W;
     const drawH = CROP_H * scale;
-    // Center vertically in canvas
     const offsetY = (ch - drawH) / 2;
 
     ctx.drawImage(

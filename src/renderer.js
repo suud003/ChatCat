@@ -8,6 +8,7 @@ import { InputTracker } from './input/tracker.js';
 import { AIService } from './chat/ai-service.js';
 import { ChatUI } from './chat/chat-ui.js';
 import { SystemInfoWidget } from './widgets/system-info.js';
+import { TypeRecorder } from './recorder/type-recorder.js';
 
 // Preset API configurations
 const API_PRESETS = {
@@ -36,6 +37,11 @@ const API_PRESETS = {
   gemini: {
     url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',
     models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview']
+  },
+  openclaw: {
+    url: '', model: '',
+    models: [],
+    needsUrl: true
   }
 };
 
@@ -69,27 +75,30 @@ async function init() {
   const aiService = new AIService();
   await aiService.loadConfig();
 
-  // Chat UI
-  const chatUI = new ChatUI(aiService, characterProxy);
+  // Chat UI (with integrated settings)
+  const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
+  chatUI.positionFn = positionAbovePet;
   await chatUI.loadHistory();
 
   // System info widget
   const widget = new SystemInfoWidget();
+  widget.positionFn = positionAbovePet;
+
+  // Type recorder
+  const typeRecorder = new TypeRecorder();
+  typeRecorder.positionFn = positionAbovePet;
 
   // Setup UI
-  setupToolbar(chatUI, widget);
+  setupToolbar(chatUI, widget, typeRecorder);
   setupToolbarHover();
   setupDrag();
-  setupSettings(aiService);
+  setupClickThrough();
   setupCharacterSelect(spriteCharacter);
 
   console.log('ChatCat Desktop Pet initialized!');
 }
 
-// Store settings loader globally for toolbar access
-let openSettingsPanel = null;
-
-function setupToolbar(chatUI, widget) {
+function setupToolbar(chatUI, widget, typeRecorder) {
   const toolbar = document.getElementById('toolbar');
   toolbar.addEventListener('click', async (e) => {
     const btn = e.target.closest('.toolbar-btn');
@@ -99,9 +108,6 @@ function setupToolbar(chatUI, widget) {
     const action = btn.dataset.action;
 
     switch (action) {
-      case 'settings':
-        if (openSettingsPanel) openSettingsPanel();
-        break;
       case 'chat':
         chatUI.toggle();
         break;
@@ -109,10 +115,38 @@ function setupToolbar(chatUI, widget) {
         widget.toggle();
         break;
       case 'character':
-        document.getElementById('character-select').classList.remove('hidden');
+        const charPanel = document.getElementById('character-select');
+        const wasHidden = charPanel.classList.contains('hidden');
+        charPanel.classList.toggle('hidden');
+        if (wasHidden) positionAbovePet(charPanel);
+        break;
+      case 'recorder':
+        typeRecorder.toggle();
         break;
     }
   });
+}
+
+/**
+ * Position a panel above the pet container, centered horizontally
+ */
+function positionAbovePet(panel) {
+  if (panel.classList.contains('maximized')) return;
+  // Only set position if not already manually dragged (no inline left/top)
+  if (panel.style.left && panel.style.top) return;
+
+  const petContainer = document.getElementById('pet-container');
+  const petRect = petContainer.getBoundingClientRect();
+  const panelWidth = panel.offsetWidth || 280;
+
+  const left = petRect.left + (petRect.width / 2) - (panelWidth / 2);
+  const top = petRect.top - panel.offsetHeight - 20;
+
+  panel.style.left = Math.max(10, left) + 'px';
+  panel.style.top = Math.max(10, top) + 'px';
+  panel.style.bottom = 'auto';
+  panel.style.right = 'auto';
+  panel.style.transform = 'none';
 }
 
 function setupToolbarHover() {
@@ -140,6 +174,7 @@ function setupToolbarHover() {
 
 function setupDrag() {
   const petContainer = document.getElementById('pet-container');
+  const panelIds = ['chat-container', 'recorder-container', 'widget-container', 'character-select'];
   let isDragging = false;
   let lastX, lastY;
 
@@ -159,7 +194,23 @@ function setupDrag() {
       const dy = e.screenY - lastY;
       lastX = e.screenX;
       lastY = e.screenY;
-      window.electronAPI.dragWindow(dx, dy);
+
+      // Move pet
+      const petRect = petContainer.getBoundingClientRect();
+      petContainer.style.left = (petRect.left + dx) + 'px';
+      petContainer.style.top = (petRect.top + dy) + 'px';
+
+      // Move all visible, non-maximized panels along with pet
+      for (const id of panelIds) {
+        const panel = document.getElementById(id);
+        if (panel.classList.contains('hidden') || panel.classList.contains('maximized')) continue;
+        const rect = panel.getBoundingClientRect();
+        panel.style.left = (rect.left + dx) + 'px';
+        panel.style.top = (rect.top + dy) + 'px';
+        panel.style.bottom = 'auto';
+        panel.style.right = 'auto';
+        panel.style.transform = 'none';
+      }
     }
   });
 
@@ -169,104 +220,122 @@ function setupDrag() {
   });
 }
 
-function setupSettings(aiService) {
-  const settingsContainer = document.getElementById('settings-container');
-  const presetSelect = document.getElementById('setting-preset');
-  const modelSelect = document.getElementById('setting-model');
-  const modelCustomInput = document.getElementById('setting-model-custom');
-  const apiKeyInput = document.getElementById('setting-api-key');
-  const opacityInput = document.getElementById('setting-opacity');
-  const opacityValue = document.getElementById('opacity-value');
-
-  function populateModels(presetKey, savedModel) {
-    const preset = API_PRESETS[presetKey];
-    if (preset && preset.models) {
-      modelSelect.style.display = '';
-      modelCustomInput.style.display = 'none';
-      modelSelect.innerHTML = '';
-      for (const m of preset.models) {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = m;
-        modelSelect.appendChild(opt);
-      }
-      if (savedModel && preset.models.includes(savedModel)) {
-        modelSelect.value = savedModel;
-      } else {
-        modelSelect.value = preset.model;
-      }
-    } else {
-      modelSelect.style.display = 'none';
-      modelCustomInput.style.display = '';
-      modelCustomInput.value = savedModel || '';
+// Fullscreen click-through: transparent areas pass through,
+// but any visible element captures mouse events
+function setupClickThrough() {
+  // When mouse enters any interactive element, disable click-through
+  document.addEventListener('mouseenter', (e) => {
+    const el = e.target;
+    if (el.closest('#pet-container') || el.closest('#chat-container') ||
+        el.closest('#recorder-container') || el.closest('#widget-container') ||
+        el.closest('#character-select')) {
+      window.electronAPI.setIgnoreMouse(false);
     }
-  }
+  }, true);
 
-  presetSelect.addEventListener('change', () => {
-    populateModels(presetSelect.value, null);
-  });
-
-  async function loadSettings() {
-    apiKeyInput.value = await window.electronAPI.getStore('apiKey') || '';
-    const opacity = await window.electronAPI.getStore('opacity') || 1;
-    opacityInput.value = opacity;
-    opacityValue.textContent = Math.round(opacity * 100) + '%';
-
-    const savedPreset = await window.electronAPI.getStore('apiPreset') || 'custom';
-    presetSelect.value = savedPreset;
-
-    const savedModel = await window.electronAPI.getStore('modelName') || '';
-    populateModels(savedPreset, savedModel);
-  }
-
-  opacityInput.addEventListener('input', () => {
-    const val = parseFloat(opacityInput.value);
-    opacityValue.textContent = Math.round(val * 100) + '%';
-  });
-
-  document.getElementById('settings-save').addEventListener('click', async () => {
-    const presetKey = presetSelect.value;
-    const preset = API_PRESETS[presetKey];
-
-    let selectedModel;
-    if (preset) {
-      await window.electronAPI.setStore('apiBaseUrl', preset.url);
-      selectedModel = modelSelect.value;
-    } else {
-      selectedModel = modelCustomInput.value.trim();
+  // When mouse leaves all interactive areas back to transparent body, re-enable click-through
+  document.addEventListener('mouseleave', (e) => {
+    const el = e.target;
+    if (el.closest('#pet-container') || el.closest('#chat-container') ||
+        el.closest('#recorder-container') || el.closest('#widget-container') ||
+        el.closest('#character-select')) {
+      // Check if relatedTarget is still within an interactive area
+      const to = e.relatedTarget;
+      if (!to || (!to.closest('#pet-container') && !to.closest('#chat-container') &&
+          !to.closest('#recorder-container') && !to.closest('#widget-container') &&
+          !to.closest('#character-select'))) {
+        window.electronAPI.setIgnoreMouse(true);
+      }
     }
-    await window.electronAPI.setStore('modelName', selectedModel);
-
-    await window.electronAPI.setStore('apiKey', apiKeyInput.value);
-    await window.electronAPI.setStore('opacity', parseFloat(opacityInput.value));
-    await window.electronAPI.setStore('apiPreset', presetKey);
-
-    await aiService.loadConfig();
-
-    settingsContainer.classList.add('hidden');
-  });
-
-  document.getElementById('settings-close').addEventListener('click', () => {
-    settingsContainer.classList.add('hidden');
-  });
-
-  const showSettings = async () => {
-    await loadSettings();
-    settingsContainer.classList.remove('hidden');
-  };
-  openSettingsPanel = showSettings;
-  window.electronAPI.onOpenSettings(showSettings);
+  }, true);
 }
 
 function setupCharacterSelect(spriteCharacter) {
   const grid = document.getElementById('character-grid');
   const panel = document.getElementById('character-select');
+  const charHeader = document.getElementById('character-bubble-header');
+  const charBody = document.getElementById('character-body');
   const tabsContainer = document.getElementById('character-tabs');
   const searchInput = document.getElementById('character-search');
   const errorToast = document.getElementById('character-error-toast');
+  const closeBtn = document.getElementById('character-close-x');
+  const maximizeBtn = document.getElementById('character-maximize');
 
   let currentCategory = 'all';
   let searchQuery = '';
+  let isMaximized = false;
+  let savedPosition = null;
+
+  // Close
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.classList.add('hidden');
+    if (isMaximized) {
+      isMaximized = false;
+      panel.classList.remove('maximized');
+      maximizeBtn.textContent = '□';
+      if (savedPosition) {
+        Object.assign(panel.style, savedPosition);
+        savedPosition = null;
+      }
+    }
+  });
+
+  // Maximize
+  maximizeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isMaximized = !isMaximized;
+    if (isMaximized) {
+      savedPosition = {
+        left: panel.style.left,
+        top: panel.style.top,
+        bottom: panel.style.bottom,
+        right: panel.style.right,
+        transform: panel.style.transform
+      };
+      panel.classList.add('maximized');
+      maximizeBtn.textContent = '❐';
+      maximizeBtn.title = 'Restore';
+    } else {
+      panel.classList.remove('maximized');
+      maximizeBtn.textContent = '□';
+      maximizeBtn.title = 'Maximize';
+      if (savedPosition) {
+        Object.assign(panel.style, savedPosition);
+        savedPosition = null;
+      }
+    }
+  });
+
+  // Drag
+  {
+    let isDragging = false;
+    let startX, startY, origLeft, origTop;
+
+    charHeader.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.chat-ctrl-btn')) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = panel.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+      panel.style.left = origLeft + 'px';
+      panel.style.top = origTop + 'px';
+      panel.style.bottom = 'auto';
+      panel.style.right = 'auto';
+      panel.style.transform = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      panel.style.left = (origLeft + (e.clientX - startX)) + 'px';
+      panel.style.top = (origTop + (e.clientY - startY)) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => { isDragging = false; });
+  }
 
   // Build category tabs
   CATEGORIES.forEach(cat => {
@@ -314,7 +383,8 @@ function setupCharacterSelect(spriteCharacter) {
       const c = preset.color || { from: '#74b9ff', to: '#0984e3' };
       const thumbnailHtml = `<span class="avatar-initial" style="background:linear-gradient(135deg,${c.from},${c.to})">${initials}</span>`;
 
-      const typeBadge = 'Sprite';
+      const typeBadge = preset.type === 'instrument' ? 'Instrument' :
+                        preset.type === 'combo' ? 'Combo' : 'Skin';
 
       card.innerHTML = `
         <div class="card-thumbnail cat-${preset.category}">
@@ -343,17 +413,6 @@ function setupCharacterSelect(spriteCharacter) {
     renderGrid();
     panel.classList.add('hidden');
   }
-
-  // Close buttons
-  document.getElementById('character-close-x').addEventListener('click', () => {
-    panel.classList.add('hidden');
-  });
-
-  document.getElementById('character-select').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-      panel.classList.add('hidden');
-    }
-  });
 }
 
 // Start the app

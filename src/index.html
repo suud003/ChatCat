@@ -10,85 +10,127 @@
   <!-- Character Canvas -->
   <div id="pet-container">
     <div id="toolbar">
-      <button class="toolbar-btn" data-action="settings" title="Settings">⚙</button>
-      <button class="toolbar-btn" data-action="chat" title="Chat">💬</button>
+      <button class="toolbar-btn" data-action="chat" title="Chat & Settings">💬</button>
       <button class="toolbar-btn" data-action="widget" title="System Info">📊</button>
       <button class="toolbar-btn" data-action="character" title="Character">👤</button>
+      <button class="toolbar-btn" data-action="recorder" title="Type Recorder">⌨</button>
     </div>
     <canvas id="pet-canvas" width="300" height="300"></canvas>
   </div>
 
-  <!-- System Info Widget -->
+  <!-- System Info Widget (Manga Bubble Style) -->
   <div id="widget-container" class="hidden">
-    <div id="system-info"></div>
+    <div id="widget-bubble">
+      <div id="widget-bubble-header">
+        <span class="bubble-title">System Info</span>
+        <button id="widget-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
+        <button id="widget-close" class="chat-ctrl-btn" title="Close">×</button>
+      </div>
+      <div id="widget-body">
+        <div id="system-info"></div>
+      </div>
+      <div id="widget-bubble-tail"></div>
+    </div>
   </div>
 
-  <!-- Manga Speech Bubble -->
+  <!-- Chat + Settings Combined Panel (Manga Bubble with Tabs) -->
   <div id="chat-container" class="hidden">
     <div id="chat-bubble">
       <div id="chat-bubble-header">
-        <button id="chat-collapse" class="chat-ctrl-btn" title="Collapse">−</button>
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-tab="chat">💬 Chat</button>
+          <button class="panel-tab" data-tab="settings">⚙ Settings</button>
+        </div>
+        <button id="chat-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
         <button id="chat-close" class="chat-ctrl-btn" title="Close">×</button>
       </div>
       <div id="chat-body">
-        <div id="chat-messages"></div>
-        <div id="chat-input-area">
-          <input type="text" id="chat-input" placeholder="Say something..." autocomplete="off">
-          <button id="chat-send">➤</button>
+        <!-- Chat Tab Content -->
+        <div id="tab-chat" class="tab-content active">
+          <div id="chat-messages"></div>
+          <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Say something..." autocomplete="off">
+            <button id="chat-send">➤</button>
+          </div>
+        </div>
+        <!-- Settings Tab Content -->
+        <div id="tab-settings" class="tab-content">
+          <div class="setting-group">
+            <label>AI Service Preset</label>
+            <select id="setting-preset">
+              <option value="custom">Custom (OpenAI Compatible)</option>
+              <option value="openai">OpenAI</option>
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="openclaw">OpenClaw (Self-hosted)</option>
+            </select>
+          </div>
+          <div class="setting-group" id="url-group">
+            <label>API Base URL</label>
+            <input type="text" id="setting-api-url" placeholder="https://your-server.com/v1">
+          </div>
+          <div class="setting-group" id="model-group">
+            <label>Model</label>
+            <select id="setting-model"></select>
+            <input type="text" id="setting-model-custom" placeholder="model-name" style="display:none;">
+          </div>
+          <div class="setting-group">
+            <label>API Key</label>
+            <input type="password" id="setting-api-key" placeholder="sk-...">
+          </div>
+          <div class="setting-group">
+            <label>Opacity: <span id="opacity-value">100%</span></label>
+            <input type="range" id="setting-opacity" min="0.3" max="1" step="0.05" value="1">
+          </div>
+          <div class="setting-actions">
+            <button id="settings-save">Save</button>
+          </div>
         </div>
       </div>
       <div id="chat-bubble-tail"></div>
     </div>
   </div>
 
-  <!-- Character Select Panel -->
+  <!-- Character Select Panel (Manga Bubble Style) -->
   <div id="character-select" class="hidden">
-    <div class="character-panel">
-      <div class="character-header">
-        <h3>Choose Character</h3>
-        <button id="character-close-x" class="character-close-btn">&times;</button>
+    <div id="character-bubble">
+      <div id="character-bubble-header">
+        <span class="bubble-title">Choose Character</span>
+        <button id="character-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
+        <button id="character-close-x" class="chat-ctrl-btn" title="Close">×</button>
       </div>
-      <input type="text" id="character-search" class="character-search" placeholder="Search characters...">
-      <div id="character-tabs" class="character-tabs"></div>
-      <div class="character-grid-container">
-        <div id="character-grid" class="character-grid"></div>
+      <div id="character-body">
+        <input type="text" id="character-search" class="character-search" placeholder="Search characters...">
+        <div id="character-tabs" class="character-tabs"></div>
+        <div class="character-grid-container">
+          <div id="character-grid" class="character-grid"></div>
+        </div>
+        <div id="character-error-toast" class="character-error-toast hidden"></div>
       </div>
-      <div id="character-error-toast" class="character-error-toast hidden"></div>
+      <div id="character-bubble-tail"></div>
     </div>
   </div>
 
-  <!-- Settings Panel -->
-  <div id="settings-container" class="hidden">
-    <div class="settings-panel">
-      <h3>Settings</h3>
-      <div class="setting-group">
-        <label>AI Service Preset</label>
-        <select id="setting-preset">
-          <option value="custom">Custom</option>
-          <option value="openai">OpenAI</option>
-          <option value="claude">Claude (OpenAI compatible)</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="openrouter">OpenRouter</option>
-          <option value="gemini">Google Gemini</option>
-        </select>
+  <!-- Recorder Panel (Manga Bubble Style) -->
+  <div id="recorder-container" class="hidden">
+    <div id="recorder-bubble">
+      <div id="recorder-bubble-header">
+        <span id="recorder-status-dot" class="recorder-dot"></span>
+        <span id="recorder-title">Type Recorder</span>
+        <button id="recorder-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
+        <button id="recorder-close" class="chat-ctrl-btn" title="Close">×</button>
       </div>
-      <div class="setting-group" id="model-group">
-        <label>Model</label>
-        <select id="setting-model"></select>
-        <input type="text" id="setting-model-custom" placeholder="model-name" style="display:none;">
+      <div id="recorder-body">
+        <div id="recorder-preview"></div>
+        <div id="recorder-controls">
+          <button id="recorder-toggle-btn" class="recorder-btn">REC</button>
+          <button id="recorder-dir-btn" class="recorder-btn" title="Select output directory">📁</button>
+        </div>
+        <div id="recorder-dir-display"></div>
       </div>
-      <div class="setting-group">
-        <label>API Key</label>
-        <input type="password" id="setting-api-key" placeholder="sk-...">
-      </div>
-      <div class="setting-group">
-        <label>Opacity: <span id="opacity-value">100%</span></label>
-        <input type="range" id="setting-opacity" min="0.3" max="1" step="0.05" value="1">
-      </div>
-      <div class="setting-actions">
-        <button id="settings-save">Save</button>
-        <button id="settings-close">Close</button>
-      </div>
+      <div id="recorder-bubble-tail"></div>
     </div>
   </div>
 

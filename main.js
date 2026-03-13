@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
+const { KeyboardRecorder } = require('./src/recorder/keyboard-recorder');
 
 const store = new Store({
   defaults: {
@@ -10,22 +11,26 @@ const store = new Store({
     opacity: 1.0,
     character: 'bongo-classic',
     windowPosition: null,
-    chatHistory: []
+    chatHistory: [],
+    recorderOutputDir: '',
+    recorderEnabled: false
   }
 });
 
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let keyboardRecorder = null;
 
 function createWindow() {
-  const position = store.get('windowPosition');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
 
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 500,
-    x: position ? position.x : undefined,
-    y: position ? position.y : undefined,
+    width: width,
+    height: height,
+    x: 0,
+    y: 0,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -39,18 +44,12 @@ function createWindow() {
     }
   });
 
-  // Make window click-through on transparent areas
-  mainWindow.setIgnoreMouseEvents(false);
+  // Click-through on transparent areas, forward mouse events so hover still works
+  mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
   mainWindow.setOpacity(store.get('opacity'));
-
-  // Save position on move
-  mainWindow.on('moved', () => {
-    const bounds = mainWindow.getBounds();
-    store.set('windowPosition', { x: bounds.x, y: bounds.y });
-  });
 
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
@@ -181,20 +180,52 @@ ipcMain.handle('get-system-info', () => {
   };
 });
 
-// Handle window drag
+// Handle window drag (legacy - now pet moves via CSS within fullscreen window)
 ipcMain.on('window-drag', (_, { dx, dy }) => {
-  const bounds = mainWindow.getBounds();
-  mainWindow.setBounds({
-    x: bounds.x + dx,
-    y: bounds.y + dy,
-    width: bounds.width,
-    height: bounds.height
-  });
+  // no-op: window is fullscreen, pet position is managed in renderer
 });
 
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+});
+
+// Recorder IPC handlers
+ipcMain.handle('recorder-toggle', () => {
+  if (!keyboardRecorder) return { recording: false, outputDir: '' };
+  if (keyboardRecorder.recording) {
+    keyboardRecorder.stop();
+    store.set('recorderEnabled', false);
+  } else {
+    keyboardRecorder.start();
+    store.set('recorderEnabled', true);
+  }
+  return { recording: keyboardRecorder.recording, outputDir: keyboardRecorder.outputDir };
+});
+
+ipcMain.handle('recorder-set-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Recorder Output Directory'
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    const dir = result.filePaths[0];
+    if (keyboardRecorder) {
+      keyboardRecorder.setOutputDir(dir);
+    }
+    return { outputDir: dir };
+  }
+  return { outputDir: keyboardRecorder ? keyboardRecorder.outputDir : '' };
+});
+
+ipcMain.handle('recorder-get-status', () => {
+  if (!keyboardRecorder) return { recording: false, outputDir: '' };
+  return { recording: keyboardRecorder.recording, outputDir: keyboardRecorder.outputDir };
+});
+
+ipcMain.handle('recorder-get-today-content', () => {
+  if (!keyboardRecorder) return '';
+  return keyboardRecorder.getTodayContent(50);
 });
 
 // Setup global shortcuts
@@ -215,6 +246,9 @@ function setupInputHook() {
     uIOhook.on('keydown', (e) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('global-keydown', { keycode: e.keycode });
+      }
+      if (keyboardRecorder) {
+        keyboardRecorder.processKeydown(e.keycode);
       }
     });
 
@@ -266,10 +300,19 @@ app.whenReady().then(() => {
   createTray();
   setupShortcuts();
   setupInputHook();
+
+  // Initialize keyboard recorder
+  keyboardRecorder = new KeyboardRecorder(mainWindow, store);
+  if (store.get('recorderEnabled') && keyboardRecorder.outputDir) {
+    keyboardRecorder.start();
+  }
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  if (keyboardRecorder) {
+    try { keyboardRecorder.stop(); } catch {}
+  }
   if (inputHook) {
     try { inputHook.stop(); } catch {}
   }
