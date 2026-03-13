@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatCat Desktop Pet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Character Canvas -->
+  <div id="pet-container">
+    <div id="toolbar">
+      <button class="toolbar-btn" data-action="settings" title="Settings">⚙</button>
+      <button class="toolbar-btn" data-action="chat" title="Chat">💬</button>
+      <button class="toolbar-btn" data-action="widget" title="System Info">📊</button>
+      <button class="toolbar-btn" data-action="character" title="Character">👤</button>
+    </div>
+    <canvas id="pet-canvas" width="300" height="300"></canvas>
+  </div>
+
+  <!-- System Info Widget -->
+  <div id="widget-container" class="hidden">
+    <div id="system-info"></div>
+  </div>
+
+  <!-- Manga Speech Bubble -->
+  <div id="chat-container" class="hidden">
+    <div id="chat-bubble">
+      <div id="chat-bubble-header">
+        <button id="chat-collapse" class="chat-ctrl-btn" title="Collapse">−</button>
+        <button id="chat-close" class="chat-ctrl-btn" title="Close">×</button>
+      </div>
+      <div id="chat-body">
+        <div id="chat-messages"></div>
+        <div id="chat-input-area">
+          <input type="text" id="chat-input" placeholder="Say something..." autocomplete="off">
+          <button id="chat-send">➤</button>
+        </div>
+      </div>
+      <div id="chat-bubble-tail"></div>
+    </div>
+  </div>
+
+  <!-- Character Select Panel -->
+  <div id="character-select" class="hidden">
+    <div class="character-panel">
+      <div class="character-header">
+        <h3>Choose Character</h3>
+        <button id="character-close-x" class="character-close-btn">&times;</button>
+      </div>
+      <input type="text" id="character-search" class="character-search" placeholder="Search characters...">
+      <div id="character-tabs" class="character-tabs"></div>
+      <div class="character-grid-container">
+        <div id="character-grid" class="character-grid"></div>
+      </div>
+      <div id="character-error-toast" class="character-error-toast hidden"></div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settings-container" class="hidden">
+    <div class="settings-panel">
+      <h3>Settings</h3>
+      <div class="setting-group">
+        <label>AI Service Preset</label>
+        <select id="setting-preset">
+          <option value="custom">Custom</option>
+          <option value="openai">OpenAI</option>
+          <option value="claude">Claude (OpenAI compatible)</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="gemini">Google Gemini</option>
+        </select>
+      </div>
+      <div class="setting-group" id="model-group">
+        <label>Model</label>
+        <select id="setting-model"></select>
+        <input type="text" id="setting-model-custom" placeholder="model-name" style="display:none;">
+      </div>
+      <div class="setting-group">
+        <label>API Key</label>
+        <input type="password" id="setting-api-key" placeholder="sk-...">
+      </div>
+      <div class="setting-group">
+        <label>Opacity: <span id="opacity-value">100%</span></label>
+        <input type="range" id="setting-opacity" min="0.3" max="1" step="0.05" value="1">
+      </div>
+      <div class="setting-actions">
+        <button id="settings-save">Save</button>
+        <button id="settings-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js" type="module"></script>
+</body>
+</html>

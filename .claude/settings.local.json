@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(g++:*)",
+      "Bash(node:*)",
+      "Bash(pip3:*)",
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:guansss.github.io)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "Bash(npm start:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:api-docs.deepseek.com)",
+      "WebFetch(domain:openrouter.ai)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npx electron:*)",
+      "WebFetch(domain:cubism.live2d.com)",
+      "WebFetch(domain:data.jsdelivr.com)",
+      "WebFetch(domain:opengameart.org)",
+      "WebFetch(domain:itch.io)",
+      "WebFetch(domain:elthen.itch.io)",
+      "Bash(tasklist:*)"
+    ]
+  }
+}
