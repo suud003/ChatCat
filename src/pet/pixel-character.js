@@ -27,37 +27,42 @@ const SPRITE_NAMES = [
 //   tint: hex color for multiply blend (colors the whole cat including white body)
 //   filter: optional CSS filter for special effects (dark, invert, ghost)
 //   instrument: which instrument sprite to use as base
+//   spriteSheet: sprite sheet id (null = classic sprite mode)
 const SKINS = {
   // === Color skins (keyboard) ===
-  'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard' },
-  'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard' },
-  'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard' },
-  'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard' },
-  'bongo-green':   { name: 'Green Cat',     tint: '#90EE90', filter: null,                                      instrument: 'keyboard' },
-  'bongo-purple':  { name: 'Purple Cat',    tint: '#D8B4FE', filter: null,                                      instrument: 'keyboard' },
-  'bongo-golden':  { name: 'Golden Cat',    tint: '#FFD700', filter: null,                                      instrument: 'keyboard' },
-  'bongo-dark':    { name: 'Shadow Cat',    tint: null,      filter: 'brightness(0.4) contrast(1.3)',           instrument: 'keyboard' },
-  'bongo-invert':  { name: 'Inverted Cat',  tint: null,      filter: 'invert(1) hue-rotate(180deg)',            instrument: 'keyboard' },
+  'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-green':   { name: 'Green Cat',     tint: '#90EE90', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-purple':  { name: 'Purple Cat',    tint: '#D8B4FE', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-golden':  { name: 'Golden Cat',    tint: '#FFD700', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-dark':    { name: 'Shadow Cat',    tint: null,      filter: 'brightness(0.4) contrast(1.3)',           instrument: 'keyboard', spriteSheet: null },
+  'bongo-invert':  { name: 'Inverted Cat',  tint: null,      filter: 'invert(1) hue-rotate(180deg)',            instrument: 'keyboard', spriteSheet: null },
   // === Extra color skins ===
-  'bongo-cyber':   { name: 'Cyber Cat',     tint: '#00F5D4', filter: 'contrast(1.1)',                           instrument: 'keyboard' },
-  'bongo-sunset':  { name: 'Sunset Cat',    tint: '#FFA07A', filter: null,                                      instrument: 'keyboard' },
-  'bongo-ice':     { name: 'Ice Cat',       tint: '#B0E0E6', filter: 'brightness(1.1)',                         instrument: 'keyboard' },
-  'bongo-cherry':  { name: 'Cherry Cat',    tint: '#FF6B81', filter: null,                                      instrument: 'keyboard' },
-  'bongo-mint':    { name: 'Mint Cat',      tint: '#98FB98', filter: null,                                      instrument: 'keyboard' },
-  'bongo-coral':   { name: 'Coral Cat',     tint: '#F08080', filter: null,                                      instrument: 'keyboard' },
-  'bongo-lemon':   { name: 'Lemon Cat',     tint: '#FFF44F', filter: null,                                      instrument: 'keyboard' },
-  'bongo-ghost':   { name: 'Ghost Cat',     tint: null,      filter: 'brightness(1.4) contrast(0.7) saturate(0.2)', instrument: 'keyboard' },
+  'bongo-cyber':   { name: 'Cyber Cat',     tint: '#00F5D4', filter: 'contrast(1.1)',                           instrument: 'keyboard', spriteSheet: null },
+  'bongo-sunset':  { name: 'Sunset Cat',    tint: '#FFA07A', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-ice':     { name: 'Ice Cat',       tint: '#B0E0E6', filter: 'brightness(1.1)',                         instrument: 'keyboard', spriteSheet: null },
+  'bongo-cherry':  { name: 'Cherry Cat',    tint: '#FF6B81', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-mint':    { name: 'Mint Cat',      tint: '#98FB98', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-coral':   { name: 'Coral Cat',     tint: '#F08080', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-lemon':   { name: 'Lemon Cat',     tint: '#FFF44F', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'bongo-ghost':   { name: 'Ghost Cat',     tint: null,      filter: 'brightness(1.4) contrast(0.7) saturate(0.2)', instrument: 'keyboard', spriteSheet: null },
   // === Instrument skins ===
-  'bongo-drum':       { name: 'Bongo Drum',     tint: null,      filter: null,                                  instrument: 'bongo' },
-  'bongo-cymbal':     { name: 'Cymbal Cat',     tint: null,      filter: null,                                  instrument: 'cymbal' },
-  'bongo-tambourine': { name: 'Tambourine Cat', tint: null,      filter: null,                                  instrument: 'tambourine' },
-  'bongo-marimba':    { name: 'Marimba Cat',    tint: null,      filter: null,                                  instrument: 'marimba' },
-  'bongo-cowbell':    { name: 'Cowbell Cat',     tint: null,      filter: null,                                  instrument: 'cowbell' },
+  'bongo-drum':       { name: 'Bongo Drum',     tint: null,      filter: null,                                  instrument: 'bongo',      spriteSheet: null },
+  'bongo-cymbal':     { name: 'Cymbal Cat',     tint: null,      filter: null,                                  instrument: 'cymbal',     spriteSheet: null },
+  'bongo-tambourine': { name: 'Tambourine Cat', tint: null,      filter: null,                                  instrument: 'tambourine', spriteSheet: null },
+  'bongo-marimba':    { name: 'Marimba Cat',    tint: null,      filter: null,                                  instrument: 'marimba',    spriteSheet: null },
+  'bongo-cowbell':    { name: 'Cowbell Cat',     tint: null,      filter: null,                                  instrument: 'cowbell',    spriteSheet: null },
   // === Instrument + color combos ===
-  'bongo-drum-pink':    { name: 'Pink Drummer',   tint: '#FFB6C1', filter: null,                                instrument: 'bongo' },
-  'bongo-drum-blue':    { name: 'Blue Drummer',   tint: '#87CEEB', filter: null,                                instrument: 'bongo' },
-  'bongo-cymbal-gold':  { name: 'Gold Cymbalist', tint: '#FFD700', filter: null,                                instrument: 'cymbal' },
-  'bongo-marimba-green':{ name: 'Green Marimba',  tint: '#90EE90', filter: null,                                instrument: 'marimba' },
+  'bongo-drum-pink':    { name: 'Pink Drummer',   tint: '#FFB6C1', filter: null,                                instrument: 'bongo',  spriteSheet: null },
+  'bongo-drum-blue':    { name: 'Blue Drummer',   tint: '#87CEEB', filter: null,                                instrument: 'bongo',  spriteSheet: null },
+  'bongo-cymbal-gold':  { name: 'Gold Cymbalist', tint: '#FFD700', filter: null,                                instrument: 'cymbal', spriteSheet: null },
+  'bongo-marimba-green':{ name: 'Green Marimba',  tint: '#90EE90', filter: null,                                instrument: 'marimba', spriteSheet: null },
+  // === Animated sprite sheet skins ===
+  'animated-default':   { name: 'Animated Cat',   tint: null,      filter: null,                                instrument: null, spriteSheet: 'default' },
+  'animated-pink':      { name: 'Animated Pink',   tint: '#FFB6C1', filter: null,                               instrument: null, spriteSheet: 'default' },
+  'animated-blue':      { name: 'Animated Blue',   tint: '#87CEEB', filter: null,                               instrument: null, spriteSheet: 'default' },
 };
 
 export { SKINS };
@@ -88,6 +93,10 @@ export class SpriteCharacter {
     this.leftPawDown = false;
     this.rightPawDown = false;
     this.mouthOpen = false;
+
+    // Click expression state
+    this._clickExpr = null;     // { emoji, startTime, duration }
+    this._clickExprTimer = null;
 
     // Typing alternation
     this._lastTypingPaw = 'right';
@@ -148,16 +157,12 @@ export class SpriteCharacter {
   }
 
   triggerClick() {
-    this.leftPawDown = true;
-    this.rightPawDown = true;
-    clearTimeout(this._leftTimer);
-    clearTimeout(this._rightTimer);
-    const t = setTimeout(() => {
-      this.leftPawDown = false;
-      this.rightPawDown = false;
-    }, 300);
-    this._leftTimer = t;
-    this._rightTimer = t;
+    // Show a random expression emoji near the cat's face instead of paw slap
+    const expressions = ['✨', '❗', '💢', '❤', '❓', '💫', '⭐', '♪', '😳', '💤'];
+    const emoji = expressions[Math.floor(Math.random() * expressions.length)];
+    this._clickExpr = { emoji, startTime: performance.now(), duration: 500 };
+    clearTimeout(this._clickExprTimer);
+    this._clickExprTimer = setTimeout(() => { this._clickExpr = null; }, 500);
   }
 
   triggerHappy() {
@@ -171,6 +176,7 @@ export class SpriteCharacter {
     clearTimeout(this._leftTimer);
     clearTimeout(this._rightTimer);
     clearTimeout(this._mouthTimer);
+    clearTimeout(this._clickExprTimer);
   }
 
   // --- Internal ---
@@ -278,5 +284,20 @@ export class SpriteCharacter {
       0, CROP_Y, SPRITE_W, CROP_H,   // source crop
       0, offsetY, cw, drawH           // destination
     );
+
+    // Step 3: Click expression overlay — drawn on final canvas so it won't be clipped
+    if (this._clickExpr) {
+      const elapsed = performance.now() - this._clickExpr.startTime;
+      const progress = Math.min(elapsed / this._clickExpr.duration, 1);
+      const alpha = 1 - progress * 0.7;
+      const floatY = progress * 50;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = 'bold 36px serif';
+      ctx.textAlign = 'center';
+      // Draw near top-right of the visible cat area
+      ctx.fillText(this._clickExpr.emoji, cw * 0.72, ch * 0.58 - floatY);
+      ctx.restore();
+    }
   }
 }

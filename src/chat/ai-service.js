@@ -1,6 +1,9 @@
 /**
  * AI Service - OpenAI-compatible API client with streaming support
+ * V1.1: Dynamic system prompt via personality + memory integration, sentiment detection
  */
+
+import { buildSystemPrompt, detectSentiment } from './personality.js';
 
 export class AIService {
   constructor() {
@@ -8,7 +11,26 @@ export class AIService {
     this.apiKey = '';
     this.modelName = '';
     this.conversationHistory = [];
-    this.systemPrompt = `You are ChatCat, a cute and helpful desktop pet cat. You speak in a friendly, playful manner. Keep responses concise (1-3 sentences unless asked for more detail). You can use simple kaomoji occasionally like (=^.^=) or (>^ω^<). You help with questions, tell jokes, and keep the user company.`;
+
+    // V1.1: personality & memory context
+    this._personality = 'lively';
+    this._affectionSystem = null;
+    this._memoryManager = null;
+    this.lastSentiment = 'neutral';
+    this.lastFullResponse = '';
+  }
+
+  /**
+   * Set context objects for dynamic prompt building.
+   */
+  setContext(personality, affectionSystem, memoryManager) {
+    this._personality = personality || 'lively';
+    this._affectionSystem = affectionSystem;
+    this._memoryManager = memoryManager;
+  }
+
+  setPersonality(p) {
+    this._personality = p || 'lively';
   }
 
   async loadConfig() {
@@ -26,6 +48,13 @@ export class AIService {
     return this.apiKey && this.apiKey.length > 0;
   }
 
+  _buildSystemPrompt() {
+    const level = this._affectionSystem?.level || 1;
+    const mood = this._affectionSystem?.mood || 'normal';
+    const memories = this._memoryManager?.getTopMemories(10) || [];
+    return buildSystemPrompt(this._personality, level, mood, memories);
+  }
+
   async *sendMessageStream(userMessage) {
     if (!this.isConfigured()) {
       yield 'Please configure your API key in Settings first! (=^.^=)';
@@ -35,7 +64,7 @@ export class AIService {
     this.conversationHistory.push({ role: 'user', content: userMessage });
 
     const messages = [
-      { role: 'system', content: this.systemPrompt },
+      { role: 'system', content: this._buildSystemPrompt() },
       ...this.conversationHistory
     ];
 
@@ -101,6 +130,15 @@ export class AIService {
           this.conversationHistory = this.conversationHistory.slice(-20);
         }
         await window.electronAPI.setStore('chatHistory', this.conversationHistory);
+
+        // V1.1: Detect sentiment from response
+        this.lastFullResponse = fullResponse;
+        this.lastSentiment = detectSentiment(fullResponse);
+
+        // V1.1: Fire-and-forget memory extraction
+        if (this._memoryManager) {
+          this._memoryManager.extractMemories(userMessage, fullResponse).catch(() => {});
+        }
       }
 
     } catch (error) {

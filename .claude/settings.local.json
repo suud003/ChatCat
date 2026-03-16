@@ -27,7 +27,19 @@
       "WebFetch(domain:opengameart.org)",
       "WebFetch(domain:itch.io)",
       "WebFetch(domain:elthen.itch.io)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(gh repo:*)",
+      "Bash(do echo:*)",
+      "Bash(wc:*)",
+      "Read(//tmp/claude/G--tianyishao-Bongocat/**)",
+      "Bash(find /tmp -name \"bo0bzraq1*\")",
+      "WebFetch(domain:orteil.dashnet.org)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)"
     ]
   }
 }

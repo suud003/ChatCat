@@ -1,7 +1,13 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const { KeyboardRecorder } = require('./src/recorder/keyboard-recorder');
+const { TextConverter } = require('./src/skills/text-converter');
+const { DailyReport } = require('./src/skills/daily-report');
+const { TodoExtractor } = require('./src/skills/todo-extractor');
+const { SkillRegistry } = require('./src/skills/skill-registry');
+const { SkillEngine } = require('./src/skills/skill-engine');
+const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 
 const store = new Store({
   defaults: {
@@ -13,7 +19,61 @@ const store = new Store({
     windowPosition: null,
     chatHistory: [],
     recorderOutputDir: '',
-    recorderEnabled: false
+    recorderEnabled: false,
+    // Affection system
+    affinity: 0,
+    level: 1,
+    streakDays: 0,
+    lastLoginDate: null,
+    unlockedItems: [],
+    dailyStats: {},
+    // Todo list
+    todos: [],
+    // Pomodoro stats
+    pomodoroStats: { date: null, count: 0 },
+    // V1.1: New store keys
+    catPersonality: 'lively',
+    aiMemories: [],
+    surpriseEventsToday: { date: null, count: 0 },
+    proactiveGreetDate: null,
+    clipboardHistory: [],
+    // V1.2: Proactive Engine + Skill System
+    userProfile: {
+      occupation: '',
+      workSchedule: { startHour: 9, endHour: 18 },
+      interactionPreference: 'medium',
+      importantDates: [],
+      workType: '',
+      onboardingDay: 0,
+      onboardingCompleted: false
+    },
+    behaviorModel: {
+      avgTypingSpeed: 0,
+      dailyActivePattern: new Array(24).fill(0),
+      pushResponseRate: 0,
+      lastInteractionTime: ''
+    },
+    proactiveConfig: {
+      enabled: true,
+      maxDailyInteractions: 8,
+      quietHours: { start: 23, end: 7 },
+      enabledSceneTypes: ['info', 'care', 'efficiency', 'chat']
+    },
+    proactiveHistory: [],
+    feedItems: [],
+    skillsEnabled: { textConverter: true, dailyReport: true, todoExtractor: true },
+    dailyReportHour: 18,
+    dailyReportOutputDir: '',
+    todoRemindInterval: 30,
+    // V1.3: Pet Base System
+    petBaseOwned: [],
+    petBaseShopRefresh: {},
+    // V1.4: Multiplayer
+    mpMode: 'lan',          // 'lan' | 'external'
+    mpServerPort: 9527,
+    mpExternalUrl: '',
+    mpUsername: '',
+    mpToken: ''
   }
 });
 
@@ -21,6 +81,12 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let keyboardRecorder = null;
+let textConverter = null;
+let dailyReport = null;
+let todoExtractor = null;
+let embeddedServer = null;
+let skillRegistry = null;
+let skillEngine = null;
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -115,14 +181,31 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Quit',
-      click: () => {
-        isQuitting = true;
-        app.quit();
+      click: async () => {
+        // Check if server is running, warn user
+        if (embeddedServer && embeddedServer.isRunning) {
+          const { response } = await dialog.showMessageBox(mainWindow, {
+            type: 'question',
+            buttons: ['取消', '退出'],
+            defaultId: 0,
+            cancelId: 0,
+            title: '确认退出',
+            message: '当前正在运行联机服务器，退出将断开所有连接。确定要退出吗？'
+          });
+          if (response === 0) return; // cancelled
+        }
+        // Notify renderer to clean up before quit
+        mainWindow.webContents.send('app-before-quit');
+        // Brief delay to let renderer destroy WebSocket cleanly
+        setTimeout(() => {
+          isQuitting = true;
+          app.quit();
+        }, 150);
       }
     }
   ]);
 
-  tray.setToolTip('ChatCat Desktop Pet');
+  tray.setToolTip('ChatCat Desktop Pet V1.2');
   tray.setContextMenu(contextMenu);
 
   tray.on('click', () => {
@@ -228,6 +311,170 @@ ipcMain.handle('recorder-get-today-content', () => {
   return keyboardRecorder.getTodayContent(50);
 });
 
+// Clipboard polling
+let lastClipboardText = '';
+let clipboardTimer = null;
+
+function startClipboardPolling() {
+  lastClipboardText = clipboard.readText() || '';
+  clipboardTimer = setInterval(() => {
+    try {
+      const text = clipboard.readText();
+      if (text && text !== lastClipboardText && text.trim().length > 0) {
+        lastClipboardText = text;
+        const item = { text, timestamp: Date.now() };
+        const history = store.get('clipboardHistory') || [];
+        history.unshift(item);
+        if (history.length > 50) history.length = 50;
+        store.set('clipboardHistory', history);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('clipboard-update', item);
+        }
+      }
+    } catch {}
+  }, 2000);
+}
+
+// Clipboard IPC handlers
+ipcMain.handle('clipboard-get-history', () => {
+  return store.get('clipboardHistory') || [];
+});
+
+ipcMain.handle('clipboard-copy', (_, text) => {
+  clipboard.writeText(text);
+  lastClipboardText = text;
+});
+
+ipcMain.handle('clipboard-clear', () => {
+  store.set('clipboardHistory', []);
+});
+
+// Skill IPC handlers
+ipcMain.handle('skill-trigger', async (_, skillId) => {
+  try {
+    switch (skillId) {
+      case 'textConverter':
+        if (textConverter) return await textConverter.execute();
+        return { success: false, reason: 'not-initialized' };
+      case 'dailyReport':
+        if (dailyReport) return await dailyReport.execute();
+        return { success: false, reason: 'not-initialized' };
+      case 'todoExtractor':
+        if (todoExtractor) return await todoExtractor.execute();
+        return { success: false, reason: 'not-initialized' };
+      default:
+        return { success: false, reason: 'unknown-skill' };
+    }
+  } catch (err) {
+    return { success: false, reason: 'error', error: err.message };
+  }
+});
+
+ipcMain.handle('skill-get-status', () => {
+  const enabled = store.get('skillsEnabled') || {};
+  return {
+    textConverter: { enabled: enabled.textConverter !== false },
+    dailyReport: { enabled: enabled.dailyReport !== false },
+    todoExtractor: { enabled: enabled.todoExtractor !== false }
+  };
+});
+
+ipcMain.handle('skill-get-converted-text', (_, date) => {
+  return store.get(`convertedText_${date}`) || '';
+});
+
+ipcMain.handle('skill-get-daily-report', (_, date) => {
+  return store.get(`dailyReport_${date}`) || null;
+});
+
+// Skill Agent IPC handlers (SKILL.md-based system)
+ipcMain.handle('skill-execute', async (_, skillId, context) => {
+  if (!skillEngine) return { success: false, output: 'Skill engine not initialized', outputType: 'text' };
+  const result = await skillEngine.execute(skillId, context);
+  // Notify renderer to reload todos after todo-management skill
+  if (skillId === 'todo-management' && result.success && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('todos-updated');
+  }
+  return result;
+});
+
+ipcMain.handle('skill-get-all-meta', () => {
+  if (!skillRegistry) return [];
+  return skillRegistry.getAllMeta();
+});
+
+ipcMain.handle('daily-report-set-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: '选择日报存放目录'
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    const dir = result.filePaths[0];
+    store.set('dailyReportOutputDir', dir);
+    return { outputDir: dir };
+  }
+  return { outputDir: store.get('dailyReportOutputDir') || '' };
+});
+
+ipcMain.handle('open-file-path', (_, filePath) => {
+  const { shell } = require('electron');
+  shell.showItemInFolder(filePath);
+});
+
+ipcMain.handle('save-file', async (_, filePath, content) => {
+  const fs = require('fs');
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Multiplayer IPC handlers
+ipcMain.handle('mp-start-server', async (_, port) => {
+  try {
+    if (!embeddedServer) {
+      embeddedServer = new EmbeddedServer(app.getPath('userData'));
+    }
+    if (embeddedServer.isRunning) {
+      return { success: true, address: embeddedServer.getAddress() };
+    }
+    const result = await embeddedServer.start(port || store.get('mpServerPort') || 9527);
+    return { success: true, address: result.address };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('mp-stop-server', () => {
+  if (embeddedServer && embeddedServer.isRunning) {
+    embeddedServer.stop();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('mp-get-server-status', () => {
+  return {
+    running: embeddedServer ? embeddedServer.isRunning : false,
+    address: embeddedServer ? embeddedServer.getAddress() : null,
+    onlineCount: embeddedServer ? embeddedServer.onlineCount : 0
+  };
+});
+
+ipcMain.handle('mp-save-credentials', (_, { username, token }) => {
+  store.set('mpUsername', username || '');
+  store.set('mpToken', token || '');
+  return { success: true };
+});
+
+ipcMain.handle('mp-get-credentials', () => {
+  return {
+    username: store.get('mpUsername') || '',
+    token: store.get('mpToken') || ''
+  };
+});
+
 // Setup global shortcuts
 function setupShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+C', () => {
@@ -297,6 +544,13 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // Log renderer console messages to main process stdout
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const prefix = ['LOG', 'WARN', 'ERROR'][level] || 'LOG';
+    console.log(`[Renderer ${prefix}] ${message} (${sourceId}:${line})`);
+  });
+
   createTray();
   setupShortcuts();
   setupInputHook();
@@ -306,15 +560,38 @@ app.whenReady().then(() => {
   if (store.get('recorderEnabled') && keyboardRecorder.outputDir) {
     keyboardRecorder.start();
   }
+
+  // Initialize skills
+  textConverter = new TextConverter(store, keyboardRecorder);
+  dailyReport = new DailyReport(store);
+  todoExtractor = new TodoExtractor(store);
+
+  // Initialize SKILL.md-based skill system
+  skillRegistry = new SkillRegistry(path.join(__dirname, 'src', 'skills', 'skills'));
+  skillRegistry.init().then(() => {
+    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder);
+    console.log('[Main] Skill system initialized');
+  }).catch(err => {
+    console.warn('[Main] Skill system init failed:', err.message);
+  });
+
+  // Start clipboard monitoring
+  startClipboardPolling();
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  if (clipboardTimer) {
+    clearInterval(clipboardTimer);
+  }
   if (keyboardRecorder) {
     try { keyboardRecorder.stop(); } catch {}
   }
   if (inputHook) {
     try { inputHook.stop(); } catch {}
+  }
+  if (embeddedServer && embeddedServer.isRunning) {
+    try { embeddedServer.stop(); } catch {}
   }
 });
 

@@ -3,89 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChatCat Desktop Pet</title>
+  <title>ChatCat 桌面猫咪</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <!-- Character Canvas -->
   <div id="pet-container">
+    <div id="proactive-dot" class="proactive-dot hidden"></div>
+    <div id="cat-bubble" class="cat-bubble hidden"></div>
     <div id="toolbar">
-      <button class="toolbar-btn" data-action="chat" title="Chat & Settings">💬</button>
-      <button class="toolbar-btn" data-action="widget" title="System Info">📊</button>
-      <button class="toolbar-btn" data-action="character" title="Character">👤</button>
-      <button class="toolbar-btn" data-action="recorder" title="Type Recorder">⌨</button>
+      <button class="toolbar-btn" data-action="chat" title="聊天与设置">💬</button>
+      <button class="toolbar-btn" data-action="tools" title="生产力工具">📋</button>
+      <button class="toolbar-btn" data-action="fun" title="角色与宠物">🎮</button>
+    </div>
+    <div id="pet-overlay-bar">
+      <span id="overlay-level">Lv.1</span>
+      <div id="overlay-progress">
+        <div id="overlay-progress-fill"></div>
+      </div>
+      <span id="overlay-coins">🐱 0</span>
+      <div id="overlay-float-container"></div>
     </div>
     <canvas id="pet-canvas" width="300" height="300"></canvas>
   </div>
 
-  <!-- System Info Widget (Manga Bubble Style) -->
-  <div id="widget-container" class="hidden">
-    <div id="widget-bubble">
-      <div id="widget-bubble-header">
-        <span class="bubble-title">System Info</span>
-        <button id="widget-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
-        <button id="widget-close" class="chat-ctrl-btn" title="Close">×</button>
-      </div>
-      <div id="widget-body">
-        <div id="system-info"></div>
-      </div>
-      <div id="widget-bubble-tail"></div>
-    </div>
-  </div>
+  <!-- Multiplayer Mini Cats Container -->
+  <div id="mp-cats-container"></div>
 
-  <!-- Chat + Settings Combined Panel (Manga Bubble with Tabs) -->
+  <!-- Chat + Settings Panel (Manga Bubble with Tabs) -->
   <div id="chat-container" class="hidden">
     <div id="chat-bubble">
       <div id="chat-bubble-header">
         <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="chat">💬 Chat</button>
-          <button class="panel-tab" data-tab="settings">⚙ Settings</button>
+          <button class="panel-tab active" data-tab="chat">💬 聊天</button>
+          <button class="panel-tab" data-tab="settings">⚙ 设置</button>
         </div>
-        <button id="chat-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
-        <button id="chat-close" class="chat-ctrl-btn" title="Close">×</button>
+        <button id="chat-maximize" class="chat-ctrl-btn" title="最大化">□</button>
+        <button id="chat-close" class="chat-ctrl-btn" title="关闭">×</button>
       </div>
       <div id="chat-body">
         <!-- Chat Tab Content -->
         <div id="tab-chat" class="tab-content active">
           <div id="chat-messages"></div>
           <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Say something..." autocomplete="off">
+            <input type="text" id="chat-input" placeholder="说点什么..." autocomplete="off">
             <button id="chat-send">➤</button>
           </div>
         </div>
         <!-- Settings Tab Content -->
         <div id="tab-settings" class="tab-content">
           <div class="setting-group">
-            <label>AI Service Preset</label>
+            <label>AI服务预设</label>
             <select id="setting-preset">
-              <option value="custom">Custom (OpenAI Compatible)</option>
+              <option value="custom">自定义（OpenAI兼容）</option>
               <option value="openai">OpenAI</option>
               <option value="claude">Claude (Anthropic)</option>
               <option value="deepseek">DeepSeek</option>
               <option value="openrouter">OpenRouter</option>
               <option value="gemini">Google Gemini</option>
-              <option value="openclaw">OpenClaw (Self-hosted)</option>
+              <option value="openclaw">OpenClaw（自托管）</option>
             </select>
           </div>
           <div class="setting-group" id="url-group">
-            <label>API Base URL</label>
+            <label>API基础地址</label>
             <input type="text" id="setting-api-url" placeholder="https://your-server.com/v1">
           </div>
           <div class="setting-group" id="model-group">
-            <label>Model</label>
+            <label>模型</label>
             <select id="setting-model"></select>
             <input type="text" id="setting-model-custom" placeholder="model-name" style="display:none;">
           </div>
           <div class="setting-group">
-            <label>API Key</label>
+            <label>API密钥</label>
             <input type="password" id="setting-api-key" placeholder="sk-...">
           </div>
           <div class="setting-group">
-            <label>Opacity: <span id="opacity-value">100%</span></label>
+            <label>不透明度: <span id="opacity-value">100%</span></label>
             <input type="range" id="setting-opacity" min="0.3" max="1" step="0.05" value="1">
           </div>
+          <div class="setting-group">
+            <label>猫咪性格</label>
+            <select id="setting-personality">
+              <option value="lively">活泼 Lively</option>
+              <option value="cool">高冷 Cool</option>
+              <option value="soft">软萌 Soft</option>
+              <option value="scholar">学者 Scholar</option>
+            </select>
+          </div>
+          <div class="setting-section-title">记忆管理</div>
+          <div id="memory-list" class="memory-list">
+            <div class="memory-empty">暂无记忆</div>
+          </div>
           <div class="setting-actions">
-            <button id="settings-save">Save</button>
+            <button id="memory-clear-btn" class="memory-clear-btn">清除所有记忆</button>
+          </div>
+          <div class="setting-section-title">技能设置</div>
+          <div class="setting-group">
+            <label><input type="checkbox" id="skill-text-converter" checked> 文本转换器（自动转换输入）</label>
+          </div>
+          <div class="setting-group">
+            <label><input type="checkbox" id="skill-daily-report" checked> 日报（自动生成）</label>
+          </div>
+          <div class="setting-group">
+            <label>报告时间: <input type="number" id="skill-report-hour" value="18" min="0" max="23" style="width:50px;"></label>
+          </div>
+          <div class="setting-group">
+            <label>日报存放路径: </label>
+            <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
+              <input type="text" id="daily-report-dir" placeholder="未设置（点击选择）" readonly style="flex:1;cursor:pointer;font-size:11px;">
+              <button id="daily-report-dir-btn" style="padding:2px 6px;cursor:pointer;" title="选择目录">📁</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label><input type="checkbox" id="skill-todo-extractor" checked> 待办提取器（自动检测）</label>
+          </div>
+          <div class="setting-group">
+            <label>待办提醒间隔: <input type="number" id="todo-remind-interval" value="30" min="1" max="180" style="width:50px;"> 分钟</label>
+          </div>
+          <div class="setting-section-title">主动交互</div>
+          <div class="setting-group">
+            <label><input type="checkbox" id="proactive-enabled" checked> 启用主动交互</label>
+          </div>
+          <div class="setting-group">
+            <label>每日频率: <span id="proactive-freq-value">8</span></label>
+            <input type="range" id="proactive-max-daily" min="1" max="15" step="1" value="8">
+          </div>
+          <div class="setting-group">
+            <label>安静时段: <input type="number" id="quiet-start" value="23" min="0" max="23" style="width:45px;"> - <input type="number" id="quiet-end" value="7" min="0" max="23" style="width:45px;"></label>
+          </div>
+          <div class="setting-group scene-toggles">
+            <label>场景类型:</label>
+            <label><input type="checkbox" id="scene-info" checked> 信息</label>
+            <label><input type="checkbox" id="scene-care" checked> 关怀</label>
+            <label><input type="checkbox" id="scene-efficiency" checked> 效率</label>
+            <label><input type="checkbox" id="scene-chat" checked> 聊天</label>
+          </div>
+          <div class="setting-actions setting-actions-bottom">
+            <button id="settings-save">保存</button>
           </div>
         </div>
       </div>
@@ -93,44 +147,205 @@
     </div>
   </div>
 
-  <!-- Character Select Panel (Manga Bubble Style) -->
-  <div id="character-select" class="hidden">
-    <div id="character-bubble">
-      <div id="character-bubble-header">
-        <span class="bubble-title">Choose Character</span>
-        <button id="character-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
-        <button id="character-close-x" class="chat-ctrl-btn" title="Close">×</button>
-      </div>
-      <div id="character-body">
-        <input type="text" id="character-search" class="character-search" placeholder="Search characters...">
-        <div id="character-tabs" class="character-tabs"></div>
-        <div class="character-grid-container">
-          <div id="character-grid" class="character-grid"></div>
+  <!-- Tools Panel: Pomodoro | Todo | Recorder | SysInfo (Manga Bubble with Tabs) -->
+  <div id="tools-container" class="hidden">
+    <div id="tools-bubble">
+      <div id="tools-bubble-header">
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-tab="tools-pomodoro">🍅 专注</button>
+          <button class="panel-tab" data-tab="tools-todo">📝 待办</button>
+          <button class="panel-tab" data-tab="tools-recorder">⌨ 记录器</button>
+          <button class="panel-tab" data-tab="tools-clipboard">📋 剪贴板</button>
+          <button class="panel-tab" data-tab="tools-sysinfo">📊 系统</button>
         </div>
-        <div id="character-error-toast" class="character-error-toast hidden"></div>
+        <button id="tools-maximize" class="chat-ctrl-btn" title="最大化">□</button>
+        <button id="tools-close" class="chat-ctrl-btn" title="关闭">×</button>
       </div>
-      <div id="character-bubble-tail"></div>
+      <div id="tools-body">
+        <!-- Pomodoro Tab -->
+        <div id="tab-tools-pomodoro" class="tab-content active">
+          <div id="pomodoro-display">
+            <div id="pomodoro-time">25:00</div>
+            <div id="pomodoro-status">准备专注</div>
+          </div>
+          <div id="pomodoro-controls">
+            <button id="pomodoro-start-btn" class="pomodoro-btn primary">开始</button>
+            <button id="pomodoro-reset-btn" class="pomodoro-btn">重置</button>
+          </div>
+          <div id="pomodoro-settings-row">
+            <label>工作 <input type="number" id="pomodoro-work-min" value="25" min="1" max="120">m</label>
+            <label>休息 <input type="number" id="pomodoro-break-min" value="5" min="1" max="30">m</label>
+          </div>
+          <div id="pomodoro-stats">
+            <span id="pomodoro-today-count">今天：0 🍅</span>
+          </div>
+        </div>
+        <!-- Todo Tab -->
+        <div id="tab-tools-todo" class="tab-content">
+          <div id="todo-input-area">
+            <input type="text" id="todo-input" placeholder="添加任务..." autocomplete="off">
+            <button id="todo-add-btn">+</button>
+          </div>
+          <div id="todo-list"></div>
+          <div id="todo-summary"></div>
+        </div>
+        <!-- Recorder Tab -->
+        <div id="tab-tools-recorder" class="tab-content">
+          <div id="recorder-status-row">
+            <span id="recorder-status-dot" class="recorder-dot"></span>
+            <span id="recorder-title">打字记录器</span>
+          </div>
+          <div id="recorder-preview"></div>
+          <div id="recorder-controls">
+            <button id="recorder-toggle-btn" class="recorder-btn">录制</button>
+            <button id="recorder-dir-btn" class="recorder-btn" title="选择输出目录">📁</button>
+          </div>
+          <div id="recorder-dir-display"></div>
+        </div>
+        <!-- SysInfo Tab -->
+        <div id="tab-tools-sysinfo" class="tab-content">
+          <div id="system-info"></div>
+        </div>
+        <!-- Clipboard Tab -->
+        <div id="tab-tools-clipboard" class="tab-content">
+          <div id="clipboard-empty" class="clipboard-empty">暂无剪贴板历史</div>
+          <div id="clipboard-list" class="clipboard-list"></div>
+          <div class="clipboard-controls">
+            <button id="clipboard-clear-btn" class="clipboard-clear-btn">清除历史</button>
+          </div>
+        </div>
+      </div>
+      <div id="tools-bubble-tail"></div>
     </div>
   </div>
 
-  <!-- Recorder Panel (Manga Bubble Style) -->
-  <div id="recorder-container" class="hidden">
-    <div id="recorder-bubble">
-      <div id="recorder-bubble-header">
-        <span id="recorder-status-dot" class="recorder-dot"></span>
-        <span id="recorder-title">Type Recorder</span>
-        <button id="recorder-maximize" class="chat-ctrl-btn" title="Maximize">□</button>
-        <button id="recorder-close" class="chat-ctrl-btn" title="Close">×</button>
-      </div>
-      <div id="recorder-body">
-        <div id="recorder-preview"></div>
-        <div id="recorder-controls">
-          <button id="recorder-toggle-btn" class="recorder-btn">REC</button>
-          <button id="recorder-dir-btn" class="recorder-btn" title="Select output directory">📁</button>
+  <!-- Fun Panel: Character | Pet Status | Shop | Items (Manga Bubble with Tabs) -->
+  <div id="fun-container" class="hidden">
+    <div id="fun-bubble">
+      <div id="fun-bubble-header">
+        <div class="panel-tabs hidden" id="fun-panel-tabs">
+          <button class="panel-tab" data-tab="fun-character">👤 角色</button>
+          <button class="panel-tab" data-tab="fun-status">🐱 状态</button>
+          <button class="panel-tab" data-tab="fun-shop">🛒 商店</button>
+          <button class="panel-tab" data-tab="fun-owned">📦 物品</button>
+          <button class="panel-tab" data-tab="fun-connection">🌐 联机</button>
+          <button class="panel-tab" data-tab="fun-leaderboard">🏆 排行</button>
         </div>
-        <div id="recorder-dir-display"></div>
+        <button id="fun-maximize" class="chat-ctrl-btn" title="最大化">□</button>
+        <button id="fun-close" class="chat-ctrl-btn" title="关闭">×</button>
       </div>
-      <div id="recorder-bubble-tail"></div>
+      <div id="fun-body">
+        <!-- Login Screen (shown before authentication) -->
+        <div id="fun-login-screen" class="fun-login-screen">
+          <div class="fun-login-title">🐱 进入猫猫世界</div>
+          <div class="mp-row">
+            <input type="text" id="fun-login-username" class="mp-input" placeholder="给自己取个名字" maxlength="20">
+          </div>
+          <div id="fun-login-server-section" class="mp-section hidden">
+            <div class="mp-row">
+              <input type="text" id="fun-login-server" class="mp-input" placeholder="服务器地址（如 127.0.0.1:9527）">
+            </div>
+            <div class="mp-row">
+              <input type="password" id="fun-login-password" class="mp-input" placeholder="密码">
+            </div>
+            <div class="mp-row mp-auth-buttons">
+              <button id="fun-register-btn" class="mp-btn">注册</button>
+            </div>
+            <div class="mp-row mp-auto-login-row">
+              <label><input type="checkbox" id="fun-auto-login"> 自动登录</label>
+            </div>
+          </div>
+          <div class="mp-row mp-auth-buttons">
+            <button id="fun-login-btn" class="mp-btn mp-btn-primary">进入</button>
+            <button id="fun-toggle-server-btn" class="mp-btn">联机登录 ▸</button>
+          </div>
+          <div id="fun-login-error" class="mp-error hidden"></div>
+          <div id="fun-login-success" class="mp-success hidden"></div>
+          <div class="mp-login-hint">直接进入 = 单机模式 | 联机登录 = 连接服务器</div>
+        </div>
+        <!-- Character Tab -->
+        <div id="tab-fun-character" class="tab-content">
+          <input type="text" id="character-search" class="character-search" placeholder="搜索角色...">
+          <div id="character-tabs" class="character-tabs"></div>
+          <div class="character-grid-container">
+            <div id="character-grid" class="character-grid"></div>
+          </div>
+          <div id="character-error-toast" class="character-error-toast hidden"></div>
+        </div>
+        <!-- Pet Status Tab -->
+        <div id="tab-fun-status" class="tab-content">
+          <div id="pet-status">
+            <div class="pet-status-coin-row">
+              <span class="pet-coin-label">🐱 猫猫币</span>
+              <span id="pet-affinity-value" class="pet-coin-value">0</span>
+              <span id="pet-cps-value" class="pet-cps-value">⚡ 0/s</span>
+            </div>
+            <div id="pet-status-level">
+              <span class="pet-status-label">Lv.</span>
+              <span id="pet-level-value">1</span>
+              <div class="pet-progress-bar">
+                <div id="pet-affinity-fill" class="pet-progress-fill"></div>
+              </div>
+              <span id="pet-level-next" class="pet-level-next"></span>
+            </div>
+            <div class="pet-status-row-compact">
+              <div><span class="pet-status-label">心情</span> <span id="pet-mood-value">😊 正常</span></div>
+              <div><span class="pet-status-label">连续</span> <span id="pet-streak-value">0 天</span></div>
+              <div><span class="pet-status-label">按键</span> <span id="flow-marker" class="flow-marker hidden">🔥</span> <span id="stat-typing">0</span></div>
+            </div>
+            <div id="pet-status-prestige">
+              <span class="pet-status-label">❤️ 转生</span>
+              <span id="pet-prestige-value">第0世</span>
+              <button id="prestige-btn" class="prestige-btn" disabled>转生 (加载中...)</button>
+            </div>
+          </div>
+          <div id="pet-multiplier-breakdown">
+            <div class="multiplier-title">倍率明细</div>
+            <div class="multiplier-rows">
+              <div class="multiplier-row"><span>转生</span><span id="mult-prestige">×1.0</span></div>
+              <div class="multiplier-row"><span>心情</span><span id="mult-mood">×1.0</span></div>
+              <div class="multiplier-row"><span>登录</span><span id="mult-streak">×1.0</span></div>
+              <div class="multiplier-row"><span>道具</span><span id="mult-items">×1.0</span></div>
+              <div class="multiplier-row multiplier-total"><span>总计</span><span id="mult-total">×1.0</span></div>
+            </div>
+          </div>
+          <div id="pet-upgrade-info">
+            <div class="upgrade-info-title">升级说明</div>
+            <div class="upgrade-info-content">
+              <div class="upgrade-info-row"><span>⌨ 每次按键</span><span>+1 猫猫币</span></div>
+              <div class="upgrade-info-row"><span>🔥 心流按键</span><span>+2（连续打字≥5分钟）</span></div>
+              <div class="upgrade-info-row"><span>🎯 道具加成</span><span>提升打字倍率</span></div>
+              <div class="upgrade-info-row"><span>😊 心情加成</span><span>开心×1.2 / 正常×1 / 无聊×0.8</span></div>
+              <div class="upgrade-info-row"><span>📅 登录连续</span><span>每天+2%倍率（最高×2）</span></div>
+              <div class="upgrade-info-row"><span>❤️ 转生</span><span>消耗猫猫币和转生石，永久+50%倍率，+1道具槽</span></div>
+            </div>
+            <div class="upgrade-info-levels" id="upgrade-level-list"></div>
+          </div>
+        </div>
+        <!-- Shop Tab -->
+        <div id="tab-fun-shop" class="tab-content">
+          <div class="base-status-bar">
+            <span>🐱 <span id="base-coins">0</span></span>
+            <span>🎯 <span id="base-bonus">+0%</span></span>
+            <span>📦 <span id="base-slots">0/3</span></span>
+          </div>
+          <div id="base-shop-grid" class="base-shop-grid"></div>
+        </div>
+        <!-- Owned Items Tab -->
+        <div id="tab-fun-owned" class="tab-content">
+          <div class="base-status-bar">
+            <span>🐱 <span id="base-coins-2">0</span></span>
+            <span>🎯 <span id="base-bonus-2">+0%</span></span>
+            <span>📦 <span id="base-slots-2">0/3</span></span>
+          </div>
+          <div id="base-owned-list" class="base-owned-list"></div>
+        </div>
+        <!-- Connection Tab -->
+        <div id="tab-fun-connection" class="tab-content"></div>
+        <!-- Leaderboard Tab -->
+        <div id="tab-fun-leaderboard" class="tab-content"></div>
+      </div>
+      <div id="fun-bubble-tail"></div>
     </div>
   </div>
 

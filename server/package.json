@@ -1,0 +1,13 @@
+{
+  "name": "bongocat-multiplayer-server",
+  "version": "1.0.0",
+  "description": "Standalone multiplayer server for Bongocat desktop pet",
+  "main": "standalone-server.js",
+  "scripts": {
+    "start": "node standalone-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "bcryptjs": "^2.4.3"
+  }
+}
