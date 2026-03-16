@@ -1,9 +1,11 @@
 /**
- * Mini-cat renderer — shows other online users as small canvas-based cat sprites
- * at the bottom of the screen, with real-time typing/click action animations.
+ * Mini-cat renderer — shows other online users as canvas-based cat sprites
+ * on screen, with real-time typing/click action animations.
  *
  * Renders the FULL cat character (matching SpriteCharacter from pixel-character.js)
- * including skin tint, filter, and correct instrument — just scaled down to 80×80.
+ * including skin tint, filter, and correct instrument — with proper aspect ratio.
+ *
+ * Each mini-cat is draggable to any position on screen.
  *
  * ES module for renderer process.
  */
@@ -18,9 +20,16 @@ const SPRITE_H = 900;
 const CROP_Y = 320;
 const CROP_H = 530;
 
-// Canvas display size
-const CANVAS_W = 80;
-const CANVAS_H = 80;
+// The main pet uses a 300×300 canvas. Aspect ratio of crop = 800:530 ≈ 1.509:1
+// We keep canvas square and center the render inside, just like pixel-character.js
+
+// Size presets: small / medium / large — canvas is square, cat is drawn inside
+// preserving aspect ratio (matching main pet's rendering approach)
+const SIZE_PRESETS = {
+  small:  { canvas: 100, nameSize: 9,  levelSize: 8,  gap: 6 },
+  medium: { canvas: 200, nameSize: 11, levelSize: 10, gap: 10 },
+  large:  { canvas: 300, nameSize: 13, levelSize: 12, gap: 14 },
+};
 
 // Animation timing
 const PAW_DURATION = 120;    // ms — paw stays down
@@ -64,9 +73,13 @@ function _loadSprites() {
 export class MiniCatRenderer {
   constructor() {
     this._container = document.getElementById('mp-cats-container');
-    // userId → { element, canvas, ctx, username, state, anim, dirty }
+    // userId → { element, canvas, ctx, username, state, anim, dirty, dragPos }
     this._cats = new Map();
     this._rafId = null;
+
+    // Current size preset
+    this._size = SIZE_PRESETS.medium;
+    this._sizeName = 'medium';
 
     // Offscreen compositing canvas (shared, full resolution)
     this._composite = document.createElement('canvas');
@@ -84,6 +97,48 @@ export class MiniCatRenderer {
     _loadSprites();
   }
 
+  /** Set display size: 'small' | 'medium' | 'large' */
+  setSize(sizeName) {
+    const preset = SIZE_PRESETS[sizeName];
+    if (!preset) return;
+    this._size = preset;
+    this._sizeName = sizeName;
+
+    // Update container gap
+    if (this._container) {
+      this._container.style.gap = preset.gap + 'px';
+    }
+
+    // Resize all existing mini-cats
+    for (const [, cat] of this._cats) {
+      this._resizeCat(cat);
+      cat.dirty = true;
+    }
+    this._markDirty();
+  }
+
+  _resizeCat(cat) {
+    const s = this._size;
+    const containerW = s.canvas + 10;
+    cat.element.style.width = containerW + 'px';
+    cat.canvas.width = s.canvas;
+    cat.canvas.height = s.canvas;
+    cat.canvas.style.width = s.canvas + 'px';
+    cat.canvas.style.height = s.canvas + 'px';
+    // Re-acquire context after resize
+    cat.ctx = cat.canvas.getContext('2d');
+
+    const nameEl = cat.element.querySelector('.mini-cat-name');
+    if (nameEl) {
+      nameEl.style.fontSize = s.nameSize + 'px';
+      nameEl.style.maxWidth = containerW + 'px';
+    }
+    const levelEl = cat.element.querySelector('.mini-cat-level');
+    if (levelEl) {
+      levelEl.style.fontSize = s.levelSize + 'px';
+    }
+  }
+
   /** Add or update a user's mini cat */
   addUser(userId, username, state = {}) {
     if (this._cats.has(userId)) {
@@ -96,20 +151,25 @@ export class MiniCatRenderer {
       return;
     }
 
+    const s = this._size;
+    const containerW = s.canvas + 10;
+
     const el = document.createElement('div');
     el.className = 'mini-cat';
     el.dataset.userId = userId;
+    el.style.width = containerW + 'px';
 
     const level = state.level || 1;
     const flowBadge = state.isInFlow ? '<span class="mini-cat-flow">🔥</span>' : '';
 
     el.innerHTML = `
       <div class="mini-cat-canvas-wrap" style="position:relative;">
-        <canvas class="mini-cat-canvas" width="${CANVAS_W}" height="${CANVAS_H}"></canvas>
+        <canvas class="mini-cat-canvas" width="${s.canvas}" height="${s.canvas}"
+                style="width:${s.canvas}px;height:${s.canvas}px;"></canvas>
         ${flowBadge}
       </div>
-      <div class="mini-cat-name">${this._escapeHtml(username)}</div>
-      <div class="mini-cat-level">Lv.${level}</div>
+      <div class="mini-cat-name" style="font-size:${s.nameSize}px;max-width:${containerW}px;">${this._escapeHtml(username)}</div>
+      <div class="mini-cat-level" style="font-size:${s.levelSize}px;">Lv.${level}</div>
     `;
 
     el.classList.add('mini-cat-enter');
@@ -135,7 +195,12 @@ export class MiniCatRenderer {
         rightPawTimer: null,
       },
       dirty: true, // needs initial render
+      // Drag state
+      dragPos: null, // null = in flow layout, { x, y } = absolute positioned
     };
+
+    // Setup drag
+    this._setupDrag(catData);
 
     this._cats.set(userId, catData);
     this._updateOverflowBadge();
@@ -234,6 +299,62 @@ export class MiniCatRenderer {
   }
 
   /* ------------------------------------------------------------------ */
+  /*  Drag support — each mini-cat can be dragged freely                 */
+  /* ------------------------------------------------------------------ */
+
+  _setupDrag(cat) {
+    const el = cat.element;
+    let isDragging = false;
+    let startX, startY, origLeft, origTop;
+
+    el.style.cursor = 'grab';
+
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      el.style.cursor = 'grabbing';
+      startX = e.clientX;
+      startY = e.clientY;
+
+      // If still in flow layout, capture current position and switch to absolute
+      if (!cat.dragPos) {
+        const rect = el.getBoundingClientRect();
+        cat.dragPos = { x: rect.left, y: rect.top };
+      }
+      origLeft = cat.dragPos.x;
+      origTop = cat.dragPos.y;
+
+      // Apply absolute positioning
+      el.style.position = 'fixed';
+      el.style.left = origLeft + 'px';
+      el.style.top = origTop + 'px';
+      el.style.zIndex = '100';
+    });
+
+    const onMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      cat.dragPos.x = origLeft + dx;
+      cat.dragPos.y = origTop + dy;
+      el.style.left = cat.dragPos.x + 'px';
+      el.style.top = cat.dragPos.y + 'px';
+    };
+
+    const onUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      el.style.cursor = 'grab';
+      el.style.zIndex = '51';
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Typing animation — alternate left/right paw                       */
   /* ------------------------------------------------------------------ */
 
@@ -277,8 +398,9 @@ export class MiniCatRenderer {
     const emojiEl = document.createElement('div');
     emojiEl.className = 'mini-cat-click-emoji';
     emojiEl.textContent = emoji;
-    // Random horizontal offset
-    emojiEl.style.left = (Math.random() * 40 + 20) + 'px';
+    // Random horizontal offset based on current canvas size
+    const cSize = this._size.canvas;
+    emojiEl.style.left = (Math.random() * cSize * 0.5 + cSize * 0.25) + 'px';
     wrap.appendChild(emojiEl);
 
     setTimeout(() => {
@@ -315,11 +437,6 @@ export class MiniCatRenderer {
   /**
    * Draw a single sprite layer onto the composite canvas, with optional tint/filter.
    * Matches the _drawLayer logic from SpriteCharacter in pixel-character.js.
-   * @param {CanvasRenderingContext2D} cctx - composite context
-   * @param {HTMLImageElement} img - sprite image (may be multi-frame: 1600×900)
-   * @param {number} srcX - x offset into sprite (0 or SPRITE_W for 2nd frame)
-   * @param {boolean} applyColor - whether to apply skin tint/filter
-   * @param {object} skin - skin config from SKINS
    */
   _drawLayer(cctx, img, srcX, applyColor, skin) {
     if (applyColor && skin.tint) {
@@ -383,7 +500,6 @@ export class MiniCatRenderer {
     }
 
     // Layer 3: Mouth (2-frame 1600×900, frame 0 = closed, frame 1 = open)
-    // For mini-cat, always show closed mouth (frame 0)
     const mouthImg = _sprites['mouth'];
     if (mouthImg) {
       this._drawLayer(cc, mouthImg, 0, true, effectiveSkin);
@@ -401,12 +517,19 @@ export class MiniCatRenderer {
       this._drawLayer(cc, rightImg, anim.rightPawDown ? SPRITE_W : 0, true, effectiveSkin);
     }
 
-    // Crop and scale to mini canvas
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    // Scale and draw to mini canvas — preserving aspect ratio (same as pixel-character.js)
+    const cw = this._size.canvas;
+    const ch = this._size.canvas;
+    ctx.clearRect(0, 0, cw, ch);
+
+    const scale = cw / SPRITE_W;
+    const drawH = CROP_H * scale;
+    const offsetY = (ch - drawH) / 2;
+
     ctx.drawImage(
       this._composite,
-      0, CROP_Y, SPRITE_W, CROP_H,  // source crop
-      0, 0, CANVAS_W, CANVAS_H       // dest: fill entire 80×80 canvas
+      0, CROP_Y, SPRITE_W, CROP_H,   // source crop
+      0, offsetY, cw, drawH           // dest: maintain aspect ratio
     );
   }
 

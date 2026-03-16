@@ -447,6 +447,11 @@ async function init() {
   const connectionUI = new ConnectionUI(mpClient);
   const leaderboardUI = new LeaderboardUI(mpClient);
 
+  // Wire cat size selector
+  connectionUI.onCatSizeChange = (size) => {
+    miniCatRenderer.setSize(size);
+  };
+
   // Wire affection events to push state updates
   const getMultiplayerState = () => ({
     level: affection.level,
@@ -454,7 +459,7 @@ async function init() {
     rebirthCount: affection.rebirthCount,
     mood: affection.mood,
     isInFlow: affection.isInFlow,
-    skinId: activeCharacter?.currentSkin || 'bongo-classic',
+    skinId: activeCharacter?.skinId || activeCharacter?.currentSkin || 'bongo-classic',
     totalCPS: 0
   });
 
@@ -736,7 +741,7 @@ function setupDrag() {
 }
 
 function setupClickThrough() {
-  const selectors = '#pet-container, #chat-container, #tools-container, #fun-container';
+  const selectors = '#pet-container, #chat-container, #tools-container, #fun-container, .mini-cat';
   let lastIgnoreState = true; // start as ignored (transparent)
 
   document.addEventListener('mouseenter', (e) => {
@@ -858,6 +863,8 @@ function setupCharacterSelect(canvas) {
       }
     }
     await window.electronAPI.setStore('character', preset.id);
+    // Push skin change to multiplayer immediately
+    _mpClient?.sendStateUpdate({ skinId: preset.id }, true);
     renderGrid();
   }
 }

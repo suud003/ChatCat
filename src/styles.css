@@ -3077,15 +3077,14 @@ body {
   right: 0;
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
   pointer-events: none;
   z-index: 50;
 }
 
 .mini-cat {
-  width: 90px;
   text-align: center;
-  pointer-events: none;
+  pointer-events: auto;
   animation: miniCatEnter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -3113,14 +3112,7 @@ body {
 }
 
 .mini-cat-canvas {
-  width: 80px;
-  height: 80px;
   image-rendering: pixelated;
-}
-
-.mini-cat-sprite {
-  font-size: 28px;
-  line-height: 1;
 }
 
 .mini-cat-flow {
@@ -3131,18 +3123,15 @@ body {
 }
 
 .mini-cat-name {
-  font-size: 9px;
   font-weight: 600;
   color: #333;
   text-shadow: 0 0 3px #fff, 0 0 3px #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90px;
 }
 
 .mini-cat-level {
-  font-size: 8px;
   color: #666;
   text-shadow: 0 0 3px #fff;
 }
@@ -3275,6 +3264,20 @@ body {
 }
 
 .mp-mode-switch label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.mp-size-switch {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.mp-size-switch label {
   display: flex;
   align-items: center;
   gap: 3px;

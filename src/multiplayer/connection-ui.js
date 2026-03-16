@@ -25,6 +25,9 @@ export class ConnectionUI {
     this._loggedIn = false;
     this._loggedInUsername = '';
 
+    // Callback for cat size change
+    this.onCatSizeChange = null;
+
     if (!this._container) return;
 
     this._render();
@@ -84,6 +87,16 @@ export class ConnectionUI {
         <!-- Logout button (always visible when logged in) -->
         <div id="mp-logout-section" class="mp-section hidden">
           <button id="mp-logout-btn" class="mp-btn mp-btn-small mp-btn-muted">登出账号</button>
+        </div>
+
+        <!-- Cat size selector (always visible when logged in) -->
+        <div id="mp-cat-size-section" class="mp-section hidden">
+          <div class="mp-section-label">猫猫大小</div>
+          <div class="mp-size-switch">
+            <label><input type="radio" name="mp-cat-size" value="small"> 小</label>
+            <label><input type="radio" name="mp-cat-size" value="medium" checked> 中</label>
+            <label><input type="radio" name="mp-cat-size" value="large"> 大</label>
+          </div>
         </div>
       </div>
     `;
@@ -183,6 +196,15 @@ export class ConnectionUI {
     // Logout (full reset)
     this._container.querySelector('#mp-logout-btn')?.addEventListener('click', () => {
       this._doLogout();
+    });
+
+    // Cat size selector
+    this._container.querySelectorAll('input[name="mp-cat-size"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const size = e.target.value;
+        window.electronAPI?.setStore('mpCatSize', size);
+        this.onCatSizeChange?.(size);
+      });
     });
 
     // ─── Login screen events ────────────────────────────
@@ -350,7 +372,9 @@ export class ConnectionUI {
         btn.classList.add('mp-btn-danger');
         if (addrEl) addrEl.textContent = result.address;
         info?.classList.remove('hidden');
-        this._client.connect(result.address);
+        // Connect locally via 127.0.0.1 (the LAN address may not be reachable from self)
+        const localAddr = result.address.replace(/\/\/[^:]+:/, '//127.0.0.1:');
+        this._client.connect(localAddr);
       } else {
         this._showConnectionError('启动失败: ' + (result.error || '未知错误'));
       }
@@ -592,6 +616,14 @@ export class ConnectionUI {
     } else {
       logoutSection?.classList.add('hidden');
     }
+
+    // Cat size section — show when logged in
+    const catSizeSection = this._container.querySelector('#mp-cat-size-section');
+    if (this._loggedIn && catSizeSection) {
+      catSizeSection.classList.remove('hidden');
+    } else if (catSizeSection) {
+      catSizeSection.classList.add('hidden');
+    }
   }
 
   /** Initialize from saved settings */
@@ -614,6 +646,7 @@ export class ConnectionUI {
     const offlineUsername = await window.electronAPI.getStore('mpOfflineUsername') || '';
 
     const creds = await window.electronAPI.mpGetCredentials();
+
     if (autoLogin && creds.username && creds.token && savedServer) {
       // Online auto-login
       const usernameInput = this._loginScreen?.querySelector('#fun-login-username');
@@ -626,6 +659,12 @@ export class ConnectionUI {
       const usernameInput = this._loginScreen?.querySelector('#fun-login-username');
       if (usernameInput) usernameInput.value = offlineUsername;
       this._client._username = offlineUsername;
+      // If we have saved credentials (from a previous online session), pre-set them
+      // so that when user later connects to a server, token-based auto-login works
+      if (creds.username && creds.token) {
+        this._client._saveCredentials = true;
+        this._client.setCredentials(creds.username, creds.token);
+      }
       this._setLoggedIn(offlineUsername);
     } else if (creds.username) {
       // Just fill in the username field
@@ -645,6 +684,12 @@ export class ConnectionUI {
     if (status.running) {
       this._refreshLanStatus();
     }
+
+    // Restore cat size preference
+    const savedSize = await window.electronAPI.getStore('mpCatSize') || 'medium';
+    const sizeRadio = this._container.querySelector(`input[name="mp-cat-size"][value="${savedSize}"]`);
+    if (sizeRadio) sizeRadio.checked = true;
+    this.onCatSizeChange?.(savedSize);
   }
 
   async _refreshLanStatus() {
