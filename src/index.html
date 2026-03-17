@@ -76,6 +76,10 @@
           <div class="setting-group">
             <label>API密钥</label>
             <input type="password" id="setting-api-key" placeholder="sk-...">
+            <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+              <button id="test-connection-btn" class="chat-tool-btn" style="padding: 4px 12px; font-size: 12px; background: rgba(255, 126, 103, 0.2); border: 1px solid var(--primary); border-radius: 4px; color: var(--primary); cursor: pointer; transition: all 0.2s;">测试连接</button>
+              <span id="test-connection-status" style="font-size: 12px;"></span>
+            </div>
           </div>
           <div class="setting-group">
             <label>不透明度: <span id="opacity-value">100%</span></label>
