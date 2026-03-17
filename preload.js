@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window control
   dragWindow: (dx, dy) => ipcRenderer.send('window-drag', { dx, dy }),
   setIgnoreMouse: (ignore) => ipcRenderer.send('set-ignore-mouse', ignore),
+  moveToDisplay: (screenX, screenY) => ipcRenderer.send('move-to-display', { screenX, screenY }),
 
   // Events from main process
   onGlobalKeydown: (callback) => ipcRenderer.on('global-keydown', (_, data) => callback(data)),
@@ -20,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onToggleChat: (callback) => ipcRenderer.on('toggle-chat', () => callback()),
   onOpenSettings: (callback) => ipcRenderer.on('open-settings', () => callback()),
   onBeforeQuit: (callback) => ipcRenderer.on('app-before-quit', () => callback()),
+  onDisplayChanged: (callback) => ipcRenderer.on('display-changed', (_, data) => callback(data)),
+  onResetPetPosition: (callback) => ipcRenderer.on('reset-pet-position', () => callback()),
 
   // Recorder
   recorderToggle: () => ipcRenderer.invoke('recorder-toggle'),

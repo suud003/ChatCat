@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatCat V2 — 行为节奏智能 + 轻办公AI + 打字内容消费 综合方案</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    color: #333;
+    line-height: 1.7;
+    padding: 20px;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border-radius: 20px;
+    padding: 40px;
+    margin-bottom: 24px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  }
+  .hero h1 { font-size: 30px; margin-bottom: 8px; }
+  .hero .subtitle { font-size: 15px; opacity: 0.85; }
+  .hero .cat { font-size: 48px; margin-bottom: 12px; }
+  .hero .pillars {
+    display: flex; justify-content: center; gap: 24px; margin-top: 20px; flex-wrap: wrap;
+  }
+  .hero .pillar-badge {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 14px;
+    padding: 12px 20px;
+    font-size: 14px;
+    backdrop-filter: blur(4px);
+  }
+  .hero .pillar-badge .pillar-icon { font-size: 24px; display: block; margin-bottom: 4px; }
+
+  /* Section cards */
+  .section {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border-left: 4px solid #667eea;
+  }
+  .section h2 {
+    font-size: 20px; color: #333; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section h3 {
+    font-size: 16px; color: #555; margin: 16px 0 8px;
+    padding-bottom: 4px; border-bottom: 1px dashed #eee;
+  }
+
+  /* Pillar header */
+  .pillar-header {
+    background: linear-gradient(135deg, var(--ph-from), var(--ph-to));
+    color: #fff;
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .pillar-header .ph-icon { font-size: 36px; }
+  .pillar-header .ph-text h3 { color: #fff; font-size: 18px; border: none; margin: 0; padding: 0; }
+  .pillar-header .ph-text p { font-size: 13px; opacity: 0.9; margin-top: 2px; }
+
+  /* Tags */
+  .tag {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; margin: 2px;
+  }
+  .tag-green { background: #e8f5e9; color: #2e7d32; }
+  .tag-blue { background: #e3f2fd; color: #1565c0; }
+  .tag-purple { background: #f3e5f5; color: #7b1fa2; }
+  .tag-orange { background: #fff3e0; color: #e65100; }
+  .tag-red { background: #fce4ec; color: #c62828; }
+  .tag-gray { background: #f5f5f5; color: #616161; }
+  .tag-teal { background: #e0f2f1; color: #00695c; }
+  .tag-amber { background: #fff8e1; color: #f57f17; }
+
+  /* Pillar C opt-in badge */
+  .opt-in-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    border: 1px solid #ffcc80; border-radius: 8px;
+    padding: 3px 10px; font-size: 11px; font-weight: 700; color: #e65100;
+  }
+  .opt-in-badge::before { content: '🔐'; }
+
+  /* Security dialog mockup */
+  .security-dialog {
+    background: #fff; border: 2px solid #ffb74d; border-radius: 16px;
+    padding: 24px; margin: 16px 0; max-width: 480px;
+    box-shadow: 0 8px 32px rgba(255, 152, 0, 0.15);
+  }
+  .security-dialog .sd-header {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 17px; font-weight: 700; color: #e65100; margin-bottom: 16px;
+  }
+  .security-dialog .sd-body { font-size: 13px; color: #555; line-height: 1.8; }
+  .security-dialog .sd-check {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #fff8e1; border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 13px;
+  }
+  .security-dialog .sd-check input[type="checkbox"] { margin-top: 3px; }
+  .security-dialog .sd-actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;
+  }
+  .security-dialog .sd-btn {
+    padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: none; cursor: pointer;
+  }
+  .security-dialog .sd-btn-cancel { background: #f5f5f5; color: #888; }
+  .security-dialog .sd-btn-ok { background: linear-gradient(135deg, #FF9800, #F57C00); color: #fff; }
+
+  /* Module card C */
+  .module-card .module-num.c { background: linear-gradient(135deg, #FF9800, #F57C00); }
+
+  /* Boxes */
+  .problem-box {
+    background: linear-gradient(135deg, #fff5f5, #fff0f0);
+    border: 1px solid #ffcdd2; border-radius: 12px; padding: 16px; margin: 12px 0;
+  }
+  .solution-box {
+    background: linear-gradient(135deg, #f1f8e9, #e8f5e9);
+    border: 1px solid #c8e6c9; border-radius: 12px; padding: 16px; margin: 12px 0;
+  }
+
+  /* Architecture */
+  .arch-diagram {
+    background: #1a1a2e; color: #e0e0e0; border-radius: 12px; padding: 20px; margin: 16px 0;
+    font-family: 'Consolas', 'Monaco', monospace; font-size: 12.5px; line-height: 1.6;
+    overflow-x: auto; white-space: pre;
+  }
+  .arch-diagram .layer { color: #82aaff; font-weight: bold; }
+  .arch-diagram .pillar-a { color: #c3e88d; }
+  .arch-diagram .pillar-b { color: #f78c6c; }
+  .arch-diagram .pillar-c { color: #ffa726; }
+  .arch-diagram .existing { color: #ffcb6b; }
+  .arch-diagram .arrow { color: #89ddff; }
+
+  /* Module card */
+  .module-card {
+    border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; margin: 12px 0;
+    background: #fafbfc; transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .module-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+  .module-card .module-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .module-card .module-num {
+    color: #fff; width: 32px; height: 32px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .module-card .module-num.a { background: linear-gradient(135deg, #4CAF50, #2E7D32); }
+  .module-card .module-num.b { background: linear-gradient(135deg, #FF6B35, #E91E63); }
+  .module-card .module-title { font-size: 16px; font-weight: 700; }
+  .module-card .module-file {
+    font-family: monospace; font-size: 12px; color: #888;
+    background: #f0f0f0; padding: 2px 8px; border-radius: 6px;
+  }
+
+  /* Code block */
+  .code-block {
+    background: #2d2d3f; color: #e0e0e0; border-radius: 10px; padding: 16px; margin: 10px 0;
+    font-family: 'Consolas', 'Monaco', monospace; font-size: 12.5px; line-height: 1.5; overflow-x: auto;
+  }
+  .code-block .key { color: #82aaff; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .num { color: #f78c6c; }
+  .code-block .comment { color: #676e95; font-style: italic; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e0e0e0; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover td { background: #fafafa; }
+
+  /* Dashboard mockup */
+  .dashboard-mockup {
+    background: #fff; border: 2px solid #e0e0e0; border-radius: 16px; padding: 20px; margin: 16px 0;
+  }
+  .dash-score { text-align: center; padding: 16px 0; border-bottom: 1px solid #f0f0f0; margin-bottom: 12px; }
+  .dash-score .score-num {
+    font-size: 48px; font-weight: 800;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .dash-score .score-label { font-size: 14px; color: #888; }
+  .dash-time-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0 16px; }
+  .dash-time-bar .focus { background: #4CAF50; }
+  .dash-time-bar .distract { background: #F44336; }
+  .dash-time-bar .idle { background: #E0E0E0; }
+  .dash-category { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+  .dash-category .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dash-category .cat-bar { flex: 1; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+  .dash-category .cat-bar-fill { height: 100%; border-radius: 3px; }
+  .dash-category .cat-time { font-size: 12px; color: #888; min-width: 50px; text-align: right; }
+  .dash-hourly { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin: 16px 0 4px; }
+  .dash-hourly .bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 4px; }
+  .dash-hourly-labels { display: flex; justify-content: space-between; font-size: 10px; color: #bbb; }
+  .insight-card {
+    background: linear-gradient(135deg, #f8f9ff, #f0f4ff);
+    border: 1px solid #e0e8ff; border-radius: 10px; padding: 12px; margin: 6px 0; font-size: 13px;
+  }
+
+  /* Quick Panel mockup */
+  .qp-mockup {
+    background: linear-gradient(135deg, #f8f6ff, #fff0f6);
+    border: 2px solid #e0d4ff;
+    border-radius: 16px;
+    padding: 20px;
+    margin: 16px 0;
+    max-width: 420px;
+  }
+  .qp-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    font-weight: 700; font-size: 15px; color: #6c4ab6;
+  }
+  .qp-input {
+    background: #fff; border: 1px solid #e0d4ff; border-radius: 10px;
+    padding: 10px 12px; width: 100%; font-size: 13px; color: #888;
+    margin-bottom: 10px;
+  }
+  .qp-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .qp-btn {
+    background: #fff; border: 1px solid #e0d4ff; border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .qp-btn:hover { background: #f0e8ff; }
+  .qp-btn.active { background: #6c4ab6; color: #fff; border-color: #6c4ab6; }
+  .qp-result {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 10px;
+    padding: 12px; font-size: 13px; line-height: 1.6; min-height: 60px;
+    color: #444;
+  }
+  .qp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .qp-act-btn {
+    background: #6c4ab6; color: #fff; border: none; border-radius: 6px;
+    padding: 5px 14px; font-size: 12px; cursor: pointer;
+  }
+  .qp-act-btn.secondary { background: #f0f0f0; color: #666; }
+
+  /* Screenshot mockup */
+  .ss-mockup {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+  }
+  .ss-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ss-region {
+    width: 200px; height: 100px;
+    border: 2px dashed #82aaff;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: #82aaff; font-size: 13px;
+  }
+  .ss-hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    color: #888; font-size: 12px;
+  }
+
+  /* Interaction diagram */
+  .interaction-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0;
+  }
+  .interaction-card {
+    background: linear-gradient(135deg, #fafbfc, #f5f7fa);
+    border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; text-align: center;
+  }
+  .interaction-card .ic-icon { font-size: 28px; margin-bottom: 6px; }
+  .interaction-card .ic-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .interaction-card .ic-desc { font-size: 11px; color: #888; }
+
+  /* Phase timeline */
+  .phase-timeline { position: relative; padding-left: 32px; }
+  .phase-timeline::before {
+    content: ''; position: absolute; left: 14px; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, #4CAF50, #2196F3, #FF6B35, #9C27B0, #FF9800, #F57C00);
+    border-radius: 2px;
+  }
+  .phase-item {
+    position: relative; margin-bottom: 20px; padding: 16px;
+    background: #fff; border-radius: 12px; border: 1px solid #e0e0e0;
+  }
+  .phase-item::before {
+    content: ''; position: absolute; left: -24px; top: 20px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #4CAF50; border: 3px solid #fff; box-shadow: 0 0 0 2px #4CAF50;
+  }
+  .phase-item:nth-child(2)::before { background: #2196F3; box-shadow: 0 0 0 2px #2196F3; }
+  .phase-item:nth-child(3)::before { background: #FF6B35; box-shadow: 0 0 0 2px #FF6B35; }
+  .phase-item:nth-child(4)::before { background: #9C27B0; box-shadow: 0 0 0 2px #9C27B0; }
+  .phase-item:nth-child(5)::before { background: #FF9800; box-shadow: 0 0 0 2px #FF9800; }
+  .phase-item:nth-child(6)::before { background: #F57C00; box-shadow: 0 0 0 2px #F57C00; }
+  .phase-item .phase-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .phase-item .phase-pillar { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+  .phase-item .pp-a { background: #e8f5e9; color: #2e7d32; }
+  .phase-item .pp-b { background: #fce4ec; color: #c62828; }
+  .phase-item .pp-ab { background: #f3e5f5; color: #7b1fa2; }
+  .phase-item .pp-c { background: #fff3e0; color: #e65100; }
+  .phase-item ol { padding-left: 20px; font-size: 13px; }
+  .phase-item ol li { margin: 3px 0; }
+
+  /* File list */
+  .file-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .file-item {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    background: #f8f9fa; border-radius: 8px; font-size: 12px; font-family: monospace;
+  }
+  .file-item .file-icon { font-size: 14px; }
+
+  /* Compare */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+
+  /* Report */
+  .report-mockup {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; margin: 12px 0;
+    font-size: 13px; line-height: 1.8;
+  }
+  .report-mockup h4 { font-size: 16px; margin-bottom: 8px; color: #333; }
+  .report-mockup .report-section { margin: 10px 0; }
+  .report-mockup .report-label { font-weight: 700; color: #667eea; font-size: 14px; margin-bottom: 4px; }
+  .bar-text { font-family: monospace; font-size: 12px; color: #666; }
+
+  @media (max-width: 700px) {
+    .compare { grid-template-columns: 1fr; }
+    .file-grid { grid-template-columns: 1fr; }
+    .interaction-grid { grid-template-columns: 1fr; }
+    .hero .pillars { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Hero -->
+<div class="hero">
+  <div class="cat">🐱</div>
+  <h1>ChatCat V2 — 行为节奏智能 + 轻办公AI + 打字内容消费</h1>
+  <div class="subtitle">从「关怀型桌面宠物」→「懂你节奏的AI伙伴」· 三轮驱动 · A/B零内容采集 · C用户授权可选</div>
+  <div class="pillars">
+    <div class="pillar-badge">
+      <span class="pillar-icon">🎵</span>
+      <strong>Pillar A: 行为节奏智能</strong><br>
+      <span style="font-size:12px;">打字节奏 · 鼠标信号 · 个性化反应 · AI节奏画像</span>
+    </div>
+    <div class="pillar-badge">
+      <span class="pillar-icon">✨</span>
+      <strong>Pillar B: 轻办公AI</strong><br>
+      <span style="font-size:12px;">文本处理 · 截图OCR · 快捷问答 · 随叫随到</span>
+    </div>
+    <div class="pillar-badge" style="border-color:rgba(255,200,100,0.6);">
+      <span class="pillar-icon">📝</span>
+      <strong>Pillar C: 打字内容消费</strong><br>
+      <span style="font-size:12px;">用户授权 · 数据清洗 · 智能转换 · 日报增强 · 可选功能</span>
+    </div>
+  </div>
+</div>
+
+<!-- 1. 为什么 -->
+<div class="section" style="border-left-color: #e91e63;">
+  <h2>🎯 为什么做 V2</h2>
+  <div class="compare">
+    <div class="problem-box" style="margin:0;">
+      <strong>❌ V1 的不足</strong>
+      <p style="margin-top:6px; font-size:13px;">
+        猫有28个主动场景，但都基于「时间+打字速度」<br>
+        <strong>猫知道你在打字，但反应模式单一</strong><br>
+        鼠标数据完全浪费，不参与行为判断<br>
+        日报只是打字流水账，缺乏节奏洞察<br>
+        AI能力只在聊天框内，不能主动帮忙
+      </p>
+    </div>
+    <div class="solution-box" style="margin:0;">
+      <strong>✅ V2 的目标</strong>
+      <p style="margin-top:6px; font-size:13px;">
+        <strong>Pillar A</strong>: 忠于BongoCat，只用键鼠频率数据<br>
+        行为节奏可视化 + 个性化猫咪反应 + AI节奏画像<br>
+        <strong>零内容采集 = 零隐私风险</strong><br>
+        <strong>Pillar B</strong>: 随时呼出AI处理文本/截图/提问<br>
+        全局热键 + 浮窗 + 拖拽到猫 = 不切换应用<br>
+        <strong>Pillar C</strong>: 基于打字内容的下游智能消费<br>
+        <strong>🔐 用户授权可选</strong> · 安全协议弹窗 · 数据清洗后消费
+      </p>
+    </div>
+  </div>
+
+  <h3>设计原则：零内容采集</h3>
+  <div class="solution-box">
+    <p style="font-size:13px;">
+      ChatCat 灵感来自 BongoCat，原项目只采样键盘和鼠标的<strong>操作频率</strong>。<br>
+      V2 严格遵循这一原则：<strong>不读键盘内容、不读剪贴板文本、不读窗口标题</strong>。<br>
+      所有 Pillar A 的智能能力，完全基于以下无内容数据：
+    </p>
+    <table style="margin-top:8px;">
+      <tr><th>数据源</th><th>采集内容</th><th>是否涉及内容</th></tr>
+      <tr><td>键盘 keycode</td><td>击键频率、速度(CPM)、节奏、退格率</td><td>❌ 纯频率</td></tr>
+      <tr><td>鼠标 click</td><td>点击频率、按钮类型</td><td>❌ 纯事件</td></tr>
+      <tr><td>鼠标 mousemove</td><td>移动距离、速度</td><td>❌ 纯坐标</td></tr>
+      <tr><td>时间</td><td>小时、星期、工作时长</td><td>❌ 纯时钟</td></tr>
+    </table>
+  </div>
+
+  <h3>用户确认的需求</h3>
+  <div style="margin-bottom:8px;">
+    <strong style="color:#4CAF50;">Pillar A:</strong>
+    <span class="tag tag-green">行为节奏可视化</span>
+    <span class="tag tag-green">个性化猫咪反应</span>
+    <span class="tag tag-green">鼠标信号化</span>
+    <span class="tag tag-green">AI节奏日报/周报</span>
+  </div>
+  <div style="margin-bottom:8px;">
+    <strong style="color:#E91E63;">Pillar B:</strong>
+    <span class="tag tag-red">润色/改写</span>
+    <span class="tag tag-red">总结/提取</span>
+    <span class="tag tag-red">解释/教学</span>
+    <span class="tag tag-red">截图OCR</span>
+    <span class="tag tag-red">快捷问答</span>
+  </div>
+  <div style="margin-bottom:8px;">
+    <strong style="color:#F57C00;">Pillar C (可选):</strong>
+    <span class="tag tag-amber">打字内容记录</span>
+    <span class="tag tag-amber">敏感过滤</span>
+    <span class="tag tag-amber">拼音→中文转换</span>
+    <span class="tag tag-amber">智能日报增强</span>
+    <span class="tag tag-amber">待办提取</span>
+  </div>
+  <div>
+    <span class="tag tag-teal">隐私: A/B零内容采集 · C用户授权</span>
+    <span class="tag tag-gray">OCR: 多模态AI</span>
+    <span class="tag tag-gray">交互: 热键+浮窗+拖拽+选中</span>
+    <span class="tag tag-amber">Pillar C: 安全协议弹窗 · 默认关闭</span>
+  </div>
+</div>
+
+<!-- 2. 理想的一天 -->
+<div class="section" style="border-left-color: #FF9800;">
+  <h2>🔄 理想的一天 (V2)</h2>
+  <div class="compare">
+    <div style="background: #f8f9fa; border-radius: 12px; padding: 16px; font-size: 13px;">
+      <strong style="color:#4CAF50;">🎵 行为节奏智能 · 全天候</strong>
+      <p style="margin-top:8px;">
+        9:00 开始打字 → 猫咪醒来伸懒腰 🐱<br>
+        10:00 高速稳定敲代码 → 猫咪安静陪伴，不打扰心流 ✨<br>
+        10:40 连续40分钟心流结束 → 猫咪:「刚才那段太棒了！」<br>
+        11:30 打字骤降+高退格 → 猫咪:「卡住了？摸摸头 🐾」<br>
+        14:00 鼠标动但不打字 → 猫咪趴着等待，知道你在看东西<br>
+        15:00 频繁短打+暂停 → 猫咪:「在聊天吗？记得回来干活哦」<br>
+        18:00 AI节奏日报 → 心流37分钟/打字2.8万次/节奏画像
+      </p>
+    </div>
+    <div style="background: #fff0f6; border-radius: 12px; padding: 16px; font-size: 13px;">
+      <strong style="color:#E91E63;">✨ 轻办公AI · 随叫随到</strong>
+      <p style="margin-top:8px;">
+        写邮件卡住 → <kbd>Ctrl+Shift+Space</kbd> → 选「润色」→ 秒出专业版<br>
+        看到长文章 → 选中文本拖到猫 → 一键总结要点<br>
+        屏幕上有个公式 → <kbd>Ctrl+Shift+S</kbd> → 截图识别 → 解释含义<br>
+        突然想问 → 热键呼出 → 直接提问 → 不用切换应用<br>
+        复制了图片 → 猫提示「要我看看吗？」→ OCR+理解
+      </p>
+    </div>
+  </div>
+  <div style="margin-top:12px; background: linear-gradient(135deg, #fff8e1, #fff3e0); border-radius: 12px; padding: 16px; font-size: 13px; border: 1px solid #ffe0b2;">
+    <strong style="color:#F57C00;">📝 打字内容消费 · 用户授权后开启 <span class="opt-in-badge">OPT-IN</span></strong>
+    <p style="margin-top:8px;">
+      首次使用 → 弹出安全协议对话框 → 用户勾选确认 → 开启打字记录 🔐<br>
+      10:00 敲了一段代码注释 → 自动过滤敏感行（password/token/密码）<br>
+      10:30 拼音输入法写了段文字 → 拼音→中文自动转换 ✨<br>
+      14:00 每10分钟自动转换 → 原始按键流→干净可读文本<br>
+      18:00 AI日报增强版 → 不仅有节奏数据，还有「今天写了什么」概要<br>
+      随时 <code>/todo</code> → 从打字内容中提取待办事项
+    </p>
+  </div>
+</div>
+
+<!-- 3. 架构 -->
+<div class="section" style="border-left-color: #4CAF50;">
+  <h2>🏗️ 双轮架构</h2>
+  <div class="arch-diagram"><span class="layer">═══════════════ Pillar A: 行为节奏智能 (零内容采集) ═══════════════</span>
+
+<span class="layer">[Layer 1: 信号采集]</span>
+  ├─ <span class="existing">键盘频率 (现有增强)</span> <span class="arrow">──→</span> CPM/节奏/退格率/连击/7天基线
+  ├─ <span class="pillar-a">鼠标信号化 (新)</span> <span class="arrow">──→</span> 点击频率/移动距离/速度/静止检测
+  └─ <span class="existing">时间信号 (现有)</span> <span class="arrow">──→</span> 小时/星期/连续工作时长/空闲时长
+
+<span class="layer">[Layer 2: 行为推断]</span>
+  ├─ <span class="pillar-a">节奏分析器 (新)</span> <span class="arrow">──→</span> 心流/卡壳/阅读/聊天/离开 五态识别
+  ├─ <span class="pillar-a">组合信号引擎 (新)</span> <span class="arrow">──→</span> 键鼠组合判断 + 7天基线对比
+  └─ <span class="existing">RuleEngine (现有增强)</span> <span class="arrow">──→</span> 纯规则驱动场景，0 token
+
+<span class="layer">[Layer 3: 展示 & 反馈]</span>
+  ├─ <span class="pillar-a">节奏仪表盘 (新)</span> <span class="arrow">──→</span> Tools面板新Tab · 实时节奏 + 日节奏曲线
+  ├─ <span class="pillar-a">AI节奏画像 (新)</span> <span class="arrow">──→</span> 纯数值→AI人话日报/周报
+  └─ <span class="existing">猫咪反应 (增强)</span> <span class="arrow">──→</span> 基于节奏的个性化动画/气泡
+
+<span class="layer">═══════════════════ Pillar B: 轻办公AI ═══════════════════</span>
+
+<span class="layer">[Layer 1: 输入捕获]</span>
+  ├─ <span class="pillar-b">全局热键 (新)</span> <span class="arrow">──→</span> Ctrl+Shift+Space / S / Q
+  ├─ <span class="pillar-b">截图引擎 (新)</span> <span class="arrow">──→</span> 区域截图 / 全屏截图
+  ├─ <span class="pillar-b">拖拽接收 (新)</span> <span class="arrow">──→</span> 拖拽文本/文件到猫咪窗口
+  └─ <span class="existing">剪贴板监控 (增强)</span> <span class="arrow">──→</span> 检测图片内容
+
+<span class="layer">[Layer 2: AI处理]</span>
+  ├─ <span class="pillar-b">文本处理器 (新)</span> <span class="arrow">──→</span> 润色/改写 · 总结/提取 · 解释/教学
+  ├─ <span class="pillar-b">多模态OCR (新)</span> <span class="arrow">──→</span> 截图/图片 → 文字+理解
+  └─ <span class="pillar-b">快捷问答 (新)</span> <span class="arrow">──→</span> 多轮对话 + 上下文感知
+
+<span class="layer">[Layer 3: 结果展示]</span>
+  ├─ <span class="pillar-b">Quick Panel浮窗 (新)</span> <span class="arrow">──→</span> 热键呼出的轻量结果窗口
+  ├─ <span class="existing">猫咪气泡 (增强)</span> <span class="arrow">──→</span> 短结果直接气泡展示
+  └─ <span class="pillar-b">结果卡片 (新)</span> <span class="arrow">──→</span> 长结果可折叠卡片
+
+<span class="layer">═══════════ Pillar C: 打字内容消费 (🔐 用户授权可选) ═══════════</span>
+
+<span class="layer">[Layer 0: 安全授权]</span>
+  └─ <span class="pillar-c">安全协议弹窗 (新)</span> <span class="arrow">──→</span> 首次使用弹出 · 勾选确认 · 开关控制
+      <span class="pillar-c">│  用户未授权 → Pillar C 全部不加载</span>
+      <span class="pillar-c">│  用户已授权 → 激活 Layer 1/2/3</span>
+
+<span class="layer">[Layer 1: 内容采集]</span>
+  └─ <span class="pillar-c">键盘记录器 (现有增强)</span> <span class="arrow">──→</span> keycode→字符 · 拼音检测 · 本地文件存储
+      <span class="pillar-c">│  keyboard_YYYY-MM-DD.txt (纯本地，不上传)</span>
+
+<span class="layer">[Layer 2: 数据清洗]</span>
+  ├─ <span class="pillar-c">敏感信息过滤 (新)</span> <span class="arrow">──→</span> password/token/密码/secret 行过滤
+  ├─ <span class="pillar-c">拼音→中文转换 (现有增强)</span> <span class="arrow">──→</span> PinyinDetector 识别 + AI 批量转换
+  └─ <span class="pillar-c">内容分段器 (新)</span> <span class="arrow">──→</span> 按时间+类型分段 · 代码/文本/聊天 分类
+
+<span class="layer">[Layer 3: 下游消费]</span>
+  ├─ <span class="pillar-c">日报增强 (现有升级)</span> <span class="arrow">──→</span> 节奏数据 + 内容概要 = 完整日报
+  ├─ <span class="pillar-c">待办提取 (现有增强)</span> <span class="arrow">──→</span> 从打字内容中自动识别TODO
+  └─ <span class="pillar-c">内容回顾 (新)</span> <span class="arrow">──→</span> 「今天写了什么」可视化摘要</div>
+</div>
+
+<!-- ═══════════════════ Pillar A ═══════════════════ -->
+<div class="section" style="border-left-color: #4CAF50;">
+  <div class="pillar-header" style="--ph-from: #4CAF50; --ph-to: #2E7D32;">
+    <div class="ph-icon">🎵</div>
+    <div class="ph-text">
+      <h3>Pillar A: 行为节奏智能 (6个模块)</h3>
+      <p>忠于BongoCat · 只用键鼠频率 + 时间 · 零内容采集 · 零隐私风险</p>
+    </div>
+  </div>
+
+  <!-- 设计理念 -->
+  <div class="solution-box">
+    <strong>🔒 核心原则：只读频率，不读内容</strong>
+    <p style="font-size:13px; margin-top:6px;">
+      不读键盘内容（无 RecentTypingBuffer）· 不读剪贴板文本 · 不读窗口标题<br>
+      所有智能能力基于：<strong>打字速度/节奏/退格率 + 鼠标频率/距离 + 时间</strong><br>
+      这些纯数值数据，即使泄露也不会暴露任何用户隐私。
+    </p>
+  </div>
+
+  <!-- A1: 鼠标信号化 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A1</div>
+      <div>
+        <div class="module-title">鼠标信号化 Mouse Signal Collector</div>
+        <span class="module-file">src/proactive/mouse-signal-collector.js</span>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>当前 <code>main.js</code> 已发送 <code>global-click</code> 和 <code>global-mousemove</code> 到渲染进程，但 SignalCollector <strong>完全没利用</strong>。本模块补充鼠标信号维度。</p>
+    <table>
+      <tr><th>信号量</th><th>计算方式</th><th>价值</th></tr>
+      <tr><td>点击频率 (clicks/min)</td><td>30秒滑动窗口计数</td><td>区分阅读 vs 操作</td></tr>
+      <tr><td>移动距离 (px/30s)</td><td>坐标差绝对值累加</td><td>区分活跃 vs 静止</td></tr>
+      <tr><td>移动速度 (px/s)</td><td>距离 / 时间</td><td>快速浏览 vs 精细操作</td></tr>
+      <tr><td>完全静止检测</td><td>鼠标+键盘都无事件 >N秒</td><td>真正离开 vs 在思考</td></tr>
+    </table>
+    <div class="code-block"><span class="comment">// 输出数据 (每30秒快照)</span>
+{ <span class="key">clicksPerMin</span>: <span class="num">8</span>, <span class="key">moveDistance</span>: <span class="num">1240</span>,
+  <span class="key">moveSpeed</span>: <span class="num">41.3</span>, <span class="key">isStill</span>: <span class="num">false</span>,
+  <span class="key">timestamp</span>: <span class="num">1710648000000</span> }</div>
+  </div>
+
+  <!-- A2: 节奏分析器 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A2</div>
+      <div>
+        <div class="module-title">节奏分析器 Rhythm Analyzer</div>
+        <span class="module-file">src/proactive/rhythm-analyzer.js</span>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>组合键盘频率 + 鼠标信号 + 时间，推断用户当前行为状态。<strong>纯规则引擎，0 token消耗。</strong></p>
+    <table>
+      <tr><th>信号组合</th><th>推断状态</th><th>猫咪行为</th></tr>
+      <tr><td>高速稳定打字 > 20min，低退格率</td><td>🔥 心流状态 (Flow)</td><td>安静陪伴动画，不打扰<br>心流结束后夸奖</td></tr>
+      <tr><td>速度骤降 + 高退格率 (>15%)</td><td>😣 遇到困难 (Stuck)</td><td>摸头安慰 + 打气气泡</td></tr>
+      <tr><td>鼠标动 + 无打字 > 3min</td><td>📖 阅读/思考 (Reading)</td><td>趴着等待，安静不打扰</td></tr>
+      <tr><td>频繁短打字 + 频繁暂停</td><td>💬 聊天模式 (Chatting)</td><td>可配置提醒：「别忘了正事哦」</td></tr>
+      <tr><td>键鼠完全无输入 > 30min</td><td>💤 离开了 (Away)</td><td>睡觉动画 🐱💤</td></tr>
+    </table>
+    <div class="code-block"><span class="comment">// 状态推断数据结构</span>
+{ <span class="key">state</span>: <span class="str">'flow'</span>, <span class="key">confidence</span>: <span class="num">0.85</span>,
+  <span class="key">duration</span>: <span class="num">2520000</span>, <span class="comment">// 已持续42分钟</span>
+  <span class="key">signals</span>: { <span class="key">avgCPM</span>: <span class="num">310</span>, <span class="key">deleteRate</span>: <span class="num">0.03</span>,
+    <span class="key">mouseActive</span>: <span class="num">false</span>, <span class="key">baselineDeviation</span>: <span class="num">'+28%'</span> } }</div>
+  </div>
+
+  <!-- A3: 组合信号引擎 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A3</div>
+      <div>
+        <div class="module-title">组合信号引擎 Composite Signal Engine</div>
+        <span class="module-file">src/proactive/composite-signal-engine.js</span>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>在现有 SignalCollector 的7天基线基础上，增加<strong>鼠标+键盘组合信号</strong>和<strong>时间模式学习</strong>。</p>
+    <table>
+      <tr><th>能力</th><th>算法</th><th>输出</th></tr>
+      <tr><td>个人基线</td><td>7天滑动均值 + 标准差</td><td>「今天比平时快18%」</td></tr>
+      <tr><td>时段模式</td><td>按小时统计历史CPM分布</td><td>发现最佳工作时段</td></tr>
+      <tr><td>休息时机</td><td>历史连续工作时长P90</td><td>个性化休息提醒阈值</td></tr>
+      <tr><td>活跃度评分</td><td>打字量×0.5 + 点击量×0.3 + 移动×0.2</td><td>每小时活跃度0-100</td></tr>
+    </table>
+    <p style="margin-top:8px;"><strong>存储</strong>: <code>rhythmBaseline_YYYY-MM-DD</code> · 每日一条 · 滚动保留30天</p>
+  </div>
+
+  <!-- A4: 节奏仪表盘 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A4</div>
+      <div>
+        <div class="module-title">节奏仪表盘 Rhythm Dashboard</div>
+        <span class="module-file">src/widgets/rhythm-dashboard.js</span>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>Tools 面板新Tab「🎵 节奏」，纯CSS实现，30秒刷新。展示纯数值数据可视化。</p>
+    <div class="dashboard-mockup">
+      <div class="dash-score">
+        <div class="score-label">今日节奏</div>
+        <div class="score-num">🔥</div>
+        <div style="font-size:12px; color:#aaa;">心流 37min · 总打字 2.8万次 · 活跃 4h12m</div>
+      </div>
+      <div style="margin:12px 0; padding:12px; background:#f8f9fa; border-radius:10px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">实时状态</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:24px;">🔥</span>
+          <div>
+            <div style="font-size:15px; font-weight:700; color:#4CAF50;">心流模式</div>
+            <div style="font-size:12px; color:#888;">已持续 23 分钟 · CPM 298 · 退格率 2.8%</div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-category">
+        <span class="cat-dot" style="background:#4CAF50"></span><span style="min-width:50px;">打字速度</span>
+        <div class="cat-bar"><div class="cat-bar-fill" style="width:72%;background:#4CAF50;"></div></div>
+        <span class="cat-time">298 CPM</span>
+      </div>
+      <div class="dash-category">
+        <span class="cat-dot" style="background:#2196F3"></span><span style="min-width:50px;">退格率</span>
+        <div class="cat-bar"><div class="cat-bar-fill" style="width:8%;background:#2196F3;"></div></div>
+        <span class="cat-time">2.8%</span>
+      </div>
+      <div class="dash-category">
+        <span class="cat-dot" style="background:#FF9800"></span><span style="min-width:50px;">鼠标活跃</span>
+        <div class="cat-bar"><div class="cat-bar-fill" style="width:35%;background:#FF9800;"></div></div>
+        <span class="cat-time">8 click/m</span>
+      </div>
+      <div style="margin-top:16px;font-size:13px;font-weight:600;color:#666;">活跃度曲线 (每小时)</div>
+      <div class="dash-hourly">
+        <div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:25%;background:#a5d6a7;"></div><div class="bar" style="height:70%;background:#66bb6a;"></div><div class="bar" style="height:95%;background:#43a047;"></div><div class="bar" style="height:80%;background:#43a047;"></div><div class="bar" style="height:40%;background:#a5d6a7;"></div><div class="bar" style="height:30%;background:#c8e6c9;"></div><div class="bar" style="height:60%;background:#66bb6a;"></div><div class="bar" style="height:85%;background:#43a047;"></div><div class="bar" style="height:65%;background:#66bb6a;"></div><div class="bar" style="height:40%;background:#a5d6a7;"></div><div class="bar" style="height:10%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div><div class="bar" style="height:0%;background:#e0e0e0;"></div>
+      </div>
+      <div class="dash-hourly-labels"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span><span>20</span><span>24</span></div>
+      <div style="margin-top:16px;font-size:13px;font-weight:600;color:#666;">💡 洞察</div>
+      <div class="insight-card">🔥 10:00-10:42 进入心流状态，连续高速输出37分钟，打字速度比基线高28%</div>
+      <div class="insight-card">📖 14:00-14:30 鼠标活跃但几乎未打字，看起来在阅读/浏览</div>
+      <div class="insight-card">💡 你的最佳打字时段是上午10-11点，建议安排重要创作任务</div>
+    </div>
+  </div>
+
+  <!-- A5: AI节奏画像 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A5</div>
+      <div>
+        <div class="module-title">AI节奏画像 (日报/周报)</div>
+        <span class="tag tag-purple">修改+新建</span> <span class="tag tag-orange">AI</span>
+      </div>
+    </div>
+    <p>把一天的<strong>纯数值时序数据</strong>喂给AI，让它用猫咪语气生成人话描述。<br>
+    <strong>传给AI的数据只有数字，不含任何内容！</strong></p>
+    <div class="code-block"><span class="comment">// 传给 AI 的数据示例（零内容！纯数值！）</span>
+{ <span class="key">date</span>: <span class="str">'2026-03-17'</span>,
+  <span class="key">hourlyActivity</span>: [
+    { <span class="key">hour</span>: <span class="num">9</span>, <span class="key">typingMin</span>: <span class="num">12</span>, <span class="key">avgCPM</span>: <span class="num">180</span>, <span class="key">peakCPM</span>: <span class="num">320</span>,
+      <span class="key">delRate</span>: <span class="num">0.05</span>, <span class="key">clicks</span>: <span class="num">45</span>, <span class="key">mouseDist</span>: <span class="num">8200</span>, <span class="key">idleMin</span>: <span class="num">8</span> },
+    { <span class="key">hour</span>: <span class="num">10</span>, <span class="key">typingMin</span>: <span class="num">35</span>, <span class="key">avgCPM</span>: <span class="num">290</span>, <span class="key">peakCPM</span>: <span class="num">410</span>,
+      <span class="key">delRate</span>: <span class="num">0.03</span>, <span class="key">clicks</span>: <span class="num">12</span>, <span class="key">mouseDist</span>: <span class="num">2100</span>, <span class="key">idleMin</span>: <span class="num">3</span> },
+    <span class="comment">// ...</span>
+  ],
+  <span class="key">flowSessions</span>: [{ <span class="key">start</span>: <span class="str">'10:05'</span>, <span class="key">end</span>: <span class="str">'10:42'</span>, <span class="key">avgCPM</span>: <span class="num">310</span> }],
+  <span class="key">frustrationEvents</span>: [{ <span class="key">time</span>: <span class="str">'14:22'</span>, <span class="key">speedDrop</span>: <span class="str">'55%'</span>, <span class="key">deleteRate</span>: <span class="str">'22%'</span> }],
+  <span class="key">totalTypingMin</span>: <span class="num">185</span>, <span class="key">longestStreak</span>: <span class="num">42</span> }</div>
+
+    <div class="report-mockup">
+      <h4>🐱 节奏日报 2026-03-17</h4>
+      <div class="report-section">
+        <div class="report-label">今日概要</div>
+        活跃 4h12m · 心流 37min · 总打字 2.8万次 · 最长连续 42min
+      </div>
+      <div class="report-section">
+        <div class="report-label">🐱 猫咪说</div>
+        "今天你10点进入了一段超棒的心流！连续37分钟高速输出 ✨
+        下午2点好像卡住了一会儿（退格率飙到22%），不过后来又找回了节奏～
+        总共高效工作了4小时12分钟，比昨天多了20分钟哦！
+        你的最佳时段是上午10-11点，明天试试把重要的事安排在那个时间？"
+      </div>
+      <div class="report-section">
+        <div class="report-label">节奏亮点</div>
+        🔥 心流时段 10:05-10:42 (CPM 310) | 📖 午后阅读时段 14:00-14:30 | 💡 最佳时段: 上午10-11点
+      </div>
+    </div>
+    <p style="margin-top:8px;"><strong>周报</strong>: 每周日18:00 或 <code>/weekly</code> 命令 · 7天趋势 + 节奏对比 + AI建议</p>
+    <p><strong>AI用量</strong>: 仅日报/周报时调用一次，最便宜模型即可 · 一天≈1次API调用</p>
+  </div>
+
+  <!-- A6: 增强猫咪场景 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num a">A6</div>
+      <div>
+        <div class="module-title">增强猫咪场景 (基于节奏)</div>
+        <span class="module-file">src/proactive/scenes/rhythm-scenes.js</span>
+        <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>基于节奏分析器的状态推断，触发更智能的猫咪反应。<strong>纯规则驱动，0 token。</strong></p>
+    <table>
+      <tr><th>场景</th><th>触发条件</th><th>猫咪动作</th></tr>
+      <tr><td>🔥 心流守护</td><td>进入心流状态 (高速稳定 >20min)</td><td>安静动画 + 心流结束后L1夸奖</td></tr>
+      <tr><td>😣 卡壳安慰</td><td>速度骤降 >50% + 退格率 >15%</td><td>L1摸头气泡 + 打气表情</td></tr>
+      <tr><td>⏰ 个性化休息</td><td>连续工作超过个人P90时长</td><td>L2提醒休息 (基于你的习惯)</td></tr>
+      <tr><td>📈 今日超越</td><td>打字总量/心流时长超越昨天</td><td>L1庆祝气泡</td></tr>
+      <tr><td>🌅 最佳时段</td><td>进入历史统计的最佳工作小时</td><td>L0卡片提示:「黄金时间到了」</td></tr>
+      <tr><td>💤 欢迎回来</td><td>离开>30min后回来</td><td>L1欢迎 + 显示离开时长</td></tr>
+      <tr><td>📖 安静陪伴</td><td>鼠标动但无打字 >5min</td><td>趴下动画，不打扰阅读</td></tr>
+    </table>
+    <p style="margin-top:8px;">相比V1的28个场景，新增7个<strong>基于多维信号组合</strong>的智能场景，而非单纯时间/速度阈值。</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ Pillar B ═══════════════════ -->
+<div class="section" style="border-left-color: #E91E63;">
+  <div class="pillar-header" style="--ph-from: #FF6B35; --ph-to: #E91E63;">
+    <div class="ph-icon">✨</div>
+    <div class="ph-text">
+      <h3>Pillar B: 轻办公AI (5个模块)</h3>
+      <p>让猫从「旁观者」变成「随叫随到的AI助手」· 不切换应用就能处理文本/截图/问答</p>
+    </div>
+  </div>
+
+  <!-- 交互方式总览 -->
+  <h3>三种交互方式</h3>
+  <div class="interaction-grid">
+    <div class="interaction-card">
+      <div class="ic-icon">⌨️</div>
+      <div class="ic-title">全局热键 + 浮窗</div>
+      <div class="ic-desc">
+        Ctrl+Shift+Space 呼出Quick Panel<br>
+        Ctrl+Shift+S 截图识别<br>
+        ESC 关闭 · 随处可用
+      </div>
+    </div>
+    <div class="interaction-card">
+      <div class="ic-icon">🖱️</div>
+      <div class="ic-title">拖拽到猫</div>
+      <div class="ic-desc">
+        选中文本拖到猫咪窗口<br>
+        拖入文件也能处理<br>
+        弹出操作菜单选择
+      </div>
+    </div>
+    <div class="interaction-card">
+      <div class="ic-icon">📋</div>
+      <div class="ic-title">剪贴板感知</div>
+      <div class="ic-desc">
+        复制图片自动检测<br>
+        猫咪提示「要我看看吗？」<br>
+        一键OCR识别
+      </div>
+    </div>
+  </div>
+
+  <!-- B1 Quick Panel -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num b">B1</div>
+      <div>
+        <div class="module-title">Quick Panel 浮窗</div>
+        <span class="module-file">src/quick-panel/quick-panel-main.js</span>
+        <span class="module-file">src/quick-panel/quick-panel.html</span>
+        <span class="tag tag-red">主进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>全局热键呼出的轻量浮窗，是所有轻办公功能的统一入口。400×350，毛玻璃效果，alwaysOnTop。</p>
+
+    <div class="qp-mockup">
+      <div class="qp-header">🐱 ChatCat Quick Panel</div>
+      <div class="qp-input">输入问题或粘贴文本...</div>
+      <div class="qp-buttons">
+        <div class="qp-btn">💬 问答</div>
+        <div class="qp-btn active">✏️ 润色</div>
+        <div class="qp-btn">📋 总结</div>
+        <div class="qp-btn">🔍 解释</div>
+        <div class="qp-btn">📸 截图</div>
+      </div>
+      <div class="qp-result">
+        <strong>✨ 润色结果:</strong><br>
+        该功能目前处于开发阶段，可能存在已知问题，我们正在积极修复中。
+      </div>
+      <div class="qp-actions">
+        <div class="qp-act-btn secondary">关闭</div>
+        <div class="qp-act-btn">📋 复制</div>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>热键</th><th>功能</th><th>说明</th></tr>
+      <tr><td><kbd>Ctrl+Shift+Space</kbd></td><td>打开Quick Panel</td><td>通用入口，自动读取剪贴板</td></tr>
+      <tr><td><kbd>Ctrl+Shift+S</kbd></td><td>截图→OCR</td><td>全屏遮罩 + 区域选择</td></tr>
+      <tr><td><kbd>ESC</kbd></td><td>关闭浮窗</td><td>快速退出</td></tr>
+    </table>
+  </div>
+
+  <!-- B2 文本处理 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num b">B2</div>
+      <div>
+        <div class="module-title">文本处理器 Text Processor</div>
+        <span class="module-file">src/quick-panel/text-processor.js</span>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span> <span class="tag tag-orange">AI</span>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>模式</th><th>输入示例</th><th>AI输出</th></tr>
+      <tr>
+        <td><strong>✏️ 润色/改写</strong></td>
+        <td>"这个功能还没做完，可能有bug"</td>
+        <td>"该功能目前处于开发阶段，可能存在已知问题，我们正在积极修复中。"</td>
+      </tr>
+      <tr>
+        <td><strong>📋 总结/提取</strong></td>
+        <td>一大段会议记录/文章/邮件</td>
+        <td>• 要点1: ... • 要点2: ... • 结论: ...</td>
+      </tr>
+      <tr>
+        <td><strong>🔍 解释/教学</strong></td>
+        <td>"什么是Event Loop？" 或一段代码</td>
+        <td>通俗解释 + 示例 + 代码逐行注释</td>
+      </tr>
+    </table>
+
+    <p style="margin-top:10px;"><strong>输入来源</strong>: Quick Panel手动输入 | 文本选中→热键 | 拖拽文本到猫窗口 | 剪贴板自动读取</p>
+  </div>
+
+  <!-- B3 截图OCR -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num b">B3</div>
+      <div>
+        <div class="module-title">截图OCR引擎</div>
+        <span class="module-file">src/quick-panel/screenshot-ocr.js</span>
+        <span class="tag tag-red">主进程</span> <span class="tag tag-green">新建</span> <span class="tag tag-orange">多模态AI</span>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div style="background:#f8f9fa; border-radius:12px; padding:16px;">
+        <strong>📸 来源1: 主动截图</strong>
+        <p style="font-size:13px; margin-top:6px;">
+          Ctrl+Shift+S → 全屏遮罩<br>
+          鼠标拖拽选区 → 裁剪<br>
+          截图自动送入多模态AI
+        </p>
+        <div class="ss-mockup">
+          <div class="ss-overlay">
+            <div class="ss-region">📐 拖拽选区</div>
+          </div>
+          <div class="ss-hint">Ctrl+Shift+S 触发截图模式</div>
+        </div>
+      </div>
+      <div style="background:#fff0f6; border-radius:12px; padding:16px;">
+        <strong>📋 来源2: 剪贴板图片</strong>
+        <p style="font-size:13px; margin-top:6px;">
+          用户复制了图片/截图<br>
+          猫咪检测到 → 气泡提示<br>
+          「检测到图片，要我看看吗？」<br>
+          [识别] [忽略]
+        </p>
+        <p style="font-size:12px; margin-top:10px; color:#888;">
+          技术: clipboard.readImage() 定期检测<br>
+          支持: 截图、网页图片、文档截图
+        </p>
+      </div>
+    </div>
+
+    <p style="margin-top:12px;"><strong>AI处理</strong>: GPT-4o / Gemini Vision 多模态 → 智能识别类型(文档/代码/表格/公式/UI) → 提取文字 + 理解内容</p>
+    <p><strong>串联</strong>: OCR提取的文字可继续执行 润色/总结/解释 操作</p>
+  </div>
+
+  <!-- B4 快捷问答 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num b">B4</div>
+      <div>
+        <div class="module-title">快捷问答 Quick Q&A</div>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">复用Quick Panel</span>
+      </div>
+    </div>
+    <p>Quick Panel 的问答模式。支持多轮对话(最近10轮)，上下文感知(附带当前窗口标题)。</p>
+    <table>
+      <tr><th>特性</th><th>说明</th></tr>
+      <tr><td>多轮对话</td><td>浮窗内维护对话历史，连续追问</td></tr>
+      <tr><td>快速模式</td><td>&lt;50字直接显示，长回答可折叠</td></tr>
+      <tr><td>上下文感知</td><td>可选附带当前应用+窗口标题</td></tr>
+      <tr><td>代码高亮</td><td>回复中的代码块自动语法高亮</td></tr>
+    </table>
+  </div>
+
+  <!-- B5 拖拽 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num b">B5</div>
+      <div>
+        <div class="module-title">拖拽到猫 + 结果展示</div>
+        <span class="tag tag-blue">渲染进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>拖拽文本/文件到猫咪窗口，弹出操作菜单 [✏️ 润色] [📋 总结] [🔍 解释]。</p>
+    <table>
+      <tr><th>结果长度</th><th>展示方式</th></tr>
+      <tr><td>&lt;50字</td><td>猫咪气泡 (3秒自动消失)</td></tr>
+      <tr><td>50-500字</td><td>Quick Panel 结果区</td></tr>
+      <tr><td>&gt;500字</td><td>可折叠结果卡片</td></tr>
+    </table>
+    <p style="margin-top:6px;"><strong>通用功能</strong>: 一键复制 | 历史记录(最近20条) | 拖入文件支持(txt/md/代码)</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ Pillar C ═══════════════════ -->
+<div class="section" style="border-left-color: #FF9800;">
+  <div class="pillar-header" style="--ph-from: #FF9800; --ph-to: #F57C00;">
+    <div class="ph-icon">📝</div>
+    <div class="ph-text">
+      <h3>Pillar C: 打字内容消费 (5个模块) <span class="opt-in-badge">用户授权可选</span></h3>
+      <p>基于打字数据的下游智能消费 · 默认关闭 · 安全协议授权后开启 · 数据清洗→消费</p>
+    </div>
+  </div>
+
+  <!-- 设计理念 -->
+  <div class="solution-box" style="border-color:#ffe0b2; background:linear-gradient(135deg,#fff8e1,#fff3e0);">
+    <strong>🔐 核心原则：用户知情授权 + 数据先清洗再消费</strong>
+    <p style="font-size:13px; margin-top:6px;">
+      Pillar A/B 完全不依赖打字内容，<strong>Pillar C 是独立的可选分支</strong>。<br>
+      用户<strong>未授权时</strong>，Pillar C 所有模块不加载、不采集、不消耗任何资源。<br>
+      用户<strong>授权后</strong>，打字内容先经过「数据清洗管道」过滤敏感信息，再进入下游消费。<br>
+      <strong>数据流</strong>: 原始按键 → 敏感过滤 → 拼音转换 → 内容分段 → 日报/待办/回顾
+    </p>
+  </div>
+
+  <!-- C0: 安全协议弹窗 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num c">C0</div>
+      <div>
+        <div class="module-title">安全协议弹窗 Privacy Consent Dialog</div>
+        <span class="module-file">src/consent/privacy-consent.js</span>
+        <span class="tag tag-red">主进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>Pillar C 的入口守门员。用户首次触碰打字内容相关功能时弹出安全协议对话框，<strong>必须勾选确认才能开启</strong>。</p>
+
+    <div class="security-dialog">
+      <div class="sd-header">🔐 数据授权 — ChatCat 打字内容功能</div>
+      <div class="sd-body">
+        <p>要开启以下高级功能，需要你的明确授权：</p>
+        <ul style="margin:8px 0; padding-left:20px;">
+          <li><strong>智能日报</strong> — 基于打字内容生成「今天写了什么」</li>
+          <li><strong>待办提取</strong> — 从打字中自动识别TODO事项</li>
+          <li><strong>内容回顾</strong> — 可视化你的工作内容概要</li>
+        </ul>
+        <p style="margin-top:8px;">为此，ChatCat 需要记录你的<strong>键盘按键内容</strong>（而不仅是频率）。</p>
+      </div>
+      <div class="sd-check">
+        <input type="checkbox" checked disabled>
+        <span>我了解并同意：打字内容<strong>仅存储在本地</strong>，不会上传到任何服务器。
+        密码、token等敏感信息会被自动过滤。我可以随时在设置中关闭此功能。</span>
+      </div>
+      <div class="sd-check">
+        <input type="checkbox" checked disabled>
+        <span>我了解：关闭此功能后，已记录的本地文件将被<strong>保留但不再更新</strong>，
+        我可以手动删除历史记录。</span>
+      </div>
+      <div class="sd-actions">
+        <div class="sd-btn sd-btn-cancel">暂不开启</div>
+        <div class="sd-btn sd-btn-ok">✅ 同意并开启</div>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>状态</th><th>行为</th><th>存储</th></tr>
+      <tr><td>未授权 (默认)</td><td>Pillar C 所有模块不加载</td><td><code>contentConsentGranted: false</code></td></tr>
+      <tr><td>已授权</td><td>KeyboardRecorder 启动 + 清洗管道激活</td><td><code>contentConsentGranted: true</code> + 时间戳</td></tr>
+      <tr><td>撤回授权</td><td>设置页一键关闭 → 立即停止记录</td><td>标记为 false，本地文件保留</td></tr>
+    </table>
+    <p style="margin-top:8px;"><strong>触发时机</strong>: 用户首次点击日报增强/待办/内容回顾功能 或 在设置中手动开启</p>
+  </div>
+
+  <!-- C1: 敏感信息过滤 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num c">C1</div>
+      <div>
+        <div class="module-title">敏感信息过滤器 Sensitive Filter</div>
+        <span class="module-file">src/cleaner/sensitive-filter.js</span>
+        <span class="tag tag-blue">主进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>数据清洗管道的第一步。在原始按键记录写入文件<strong>之前</strong>，先过滤掉敏感行。</p>
+    <table>
+      <tr><th>过滤规则</th><th>匹配模式</th><th>处理方式</th></tr>
+      <tr><td>密码行</td><td>包含 <code>password</code> / <code>密码</code> / <code>pwd</code></td><td>整行替换为 <code>[FILTERED]</code></td></tr>
+      <tr><td>令牌行</td><td>包含 <code>token</code> / <code>secret</code> / <code>api_key</code> / <code>apikey</code></td><td>整行替换为 <code>[FILTERED]</code></td></tr>
+      <tr><td>纯密文行</td><td>全是 <code>•</code> / <code>*</code> / <code>●</code> 的行</td><td>整行丢弃</td></tr>
+      <tr><td>长无意义串</td><td>连续40+字符无空格（可能是hash/密钥）</td><td>截断并标记 <code>[HASH]</code></td></tr>
+    </table>
+    <div class="code-block"><span class="comment">// 过滤前</span>
+<span class="str">"export const API_KEY = 'sk-abc123def456...'"</span>
+<span class="comment">// 过滤后</span>
+<span class="str">"[FILTERED: 包含敏感关键词 api_key]"</span></div>
+    <p style="margin-top:8px;"><strong>原则</strong>: 宁可多过滤，不可少过滤。误伤率可接受，泄露不可接受。</p>
+  </div>
+
+  <!-- C2: 拼音转换增强 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num c">C2</div>
+      <div>
+        <div class="module-title">拼音→中文转换器 Text Converter</div>
+        <span class="module-file">src/skills/text-converter.js</span>
+        <span class="tag tag-blue">主进程</span> <span class="tag tag-purple">增强</span> <span class="tag tag-orange">AI</span>
+      </div>
+    </div>
+    <p>现有 <code>text-converter</code> Skill 已具备拼音→中文转换能力（基于 <code>PinyinDetector</code>）。<br>
+    Pillar C 增强: 与敏感过滤器串联，确保转换前已清洗；增加代码/命令行片段的智能保留。</p>
+    <table>
+      <tr><th>数据类型</th><th>转换策略</th><th>示例</th></tr>
+      <tr><td>拼音输入法文字</td><td>AI识别上下文→转中文</td><td><code>[拼音:daoju][选字:1]</code> → "道具"</td></tr>
+      <tr><td>英文代码</td><td>保持原样，不转换</td><td><code>const foo = bar;</code> → 原样保留</td></tr>
+      <tr><td>混合内容</td><td>分段处理</td><td>代码保留 + 注释转中文</td></tr>
+    </table>
+    <p style="margin-top:8px;"><strong>调度</strong>: 每10分钟自动批量转换 (已有) · <code>/convert</code> 命令手动触发</p>
+  </div>
+
+  <!-- C3: 内容分段器 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num c">C3</div>
+      <div>
+        <div class="module-title">内容分段器 Content Segmenter</div>
+        <span class="module-file">src/cleaner/content-segmenter.js</span>
+        <span class="tag tag-blue">主进程</span> <span class="tag tag-green">新建</span>
+      </div>
+    </div>
+    <p>清洗管道的最后一步：将已转换的干净文本按时间和类型分段，为下游消费提供结构化数据。</p>
+    <table>
+      <tr><th>分段维度</th><th>判断依据</th><th>输出标签</th></tr>
+      <tr><td>时间段</td><td>打字暂停 >5min 为分段点</td><td><code>segment.startTime</code> / <code>endTime</code></td></tr>
+      <tr><td>内容类型</td><td>代码特征(缩进/符号) vs 自然语言</td><td><code>type: code | text | chat</code></td></tr>
+      <tr><td>语言</td><td>中英文比例</td><td><code>lang: zh | en | mixed</code></td></tr>
+      <tr><td>密度</td><td>字符数 / 时间</td><td><code>density: high | medium | low</code></td></tr>
+    </table>
+    <div class="code-block"><span class="comment">// 分段器输出</span>
+[{ <span class="key">startTime</span>: <span class="str">'10:05'</span>, <span class="key">endTime</span>: <span class="str">'10:42'</span>,
+   <span class="key">type</span>: <span class="str">'code'</span>, <span class="key">lang</span>: <span class="str">'en'</span>, <span class="key">density</span>: <span class="str">'high'</span>,
+   <span class="key">charCount</span>: <span class="num">2840</span>, <span class="key">summary</span>: <span class="str">'连续编码37分钟'</span> },
+ { <span class="key">startTime</span>: <span class="str">'11:00'</span>, <span class="key">endTime</span>: <span class="str">'11:15'</span>,
+   <span class="key">type</span>: <span class="str">'text'</span>, <span class="key">lang</span>: <span class="str">'zh'</span>, <span class="key">density</span>: <span class="str">'medium'</span>,
+   <span class="key">charCount</span>: <span class="num">580</span>, <span class="key">summary</span>: <span class="str">'写了一段中文文档'</span> }]</div>
+  </div>
+
+  <!-- C4: 下游消费——日报增强+待办+回顾 -->
+  <div class="module-card">
+    <div class="module-header">
+      <div class="module-num c">C4</div>
+      <div>
+        <div class="module-title">下游消费 Content Consumers</div>
+        <span class="tag tag-purple">增强+新建</span> <span class="tag tag-orange">AI</span>
+      </div>
+    </div>
+    <p>数据清洗完成后的三个消费场景。<strong>与 Pillar A 的节奏数据互补</strong>，形成「节奏 + 内容」双维度洞察。</p>
+
+    <h3 style="border:none; margin-top:16px;">📊 消费场景一：日报增强</h3>
+    <div class="report-mockup">
+      <h4>🐱 增强日报 2026-03-17 <span class="opt-in-badge">内容增强版</span></h4>
+      <div class="report-section">
+        <div class="report-label">节奏概要 (来自 Pillar A)</div>
+        活跃 4h12m · 心流 37min · 总打字 2.8万次 · 最长连续 42min
+      </div>
+      <div class="report-section">
+        <div class="report-label">内容概要 (来自 Pillar C)</div>
+        📝 上午主要写了 signal-collector 模块的鼠标事件处理<br>
+        📝 下午修改了 rhythm-analyzer 的阈值配置<br>
+        💬 中间和同事讨论了一下接口设计方案
+      </div>
+      <div class="report-section">
+        <div class="report-label">🐱 猫咪说</div>
+        "今天你上午10点进入了心流写 signal-collector，37分钟高速输出 ✨
+        下午调了 rhythm-analyzer 的参数，看起来退格多了一些（卡住了？）
+        总共高效工作 4 小时 12 分钟，明天继续加油！"
+      </div>
+    </div>
+
+    <h3 style="border:none;">📋 消费场景二：待办提取</h3>
+    <p>从打字内容中自动识别 TODO/FIXME/待办/明天要 等关键词，提取为结构化待办。</p>
+    <div class="code-block"><span class="comment">// 从打字内容中提取</span>
+<span class="str">"// TODO: 明天要加上鼠标距离的归一化"</span>
+  <span class="arrow">→</span> { <span class="key">text</span>: <span class="str">'加上鼠标距离的归一化'</span>, <span class="key">source</span>: <span class="str">'code-comment'</span>, <span class="key">time</span>: <span class="str">'14:22'</span> }</div>
+
+    <h3 style="border:none;">📖 消费场景三：内容回顾</h3>
+    <p>「今天写了什么」可视化时间轴，每个分段显示类型/语言/密度。Settings面板新Tab「📝 回顾」。</p>
+
+    <table>
+      <tr><th>消费场景</th><th>数据源</th><th>AI用量</th></tr>
+      <tr><td>日报增强</td><td>Pillar A 节奏 + Pillar C 分段摘要</td><td>1次/天 (与 A5 合并调用)</td></tr>
+      <tr><td>待办提取</td><td>分段文本中的 TODO 关键词</td><td>0 (纯正则匹配)</td></tr>
+      <tr><td>内容回顾</td><td>分段器输出的结构化数据</td><td>0 (纯前端渲染)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 5. 分期交付 -->
+<div class="section" style="border-left-color: #9C27B0;">
+  <h2>🚀 分期交付 (6个Phase)</h2>
+  <div class="phase-timeline">
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 1: 行为节奏基础 <span class="phase-pillar pp-a">Pillar A</span></div>
+      <ol>
+        <li>鼠标信号化 <code>mouse-signal-collector.js</code></li>
+        <li>节奏分析器 <code>rhythm-analyzer.js</code> (五态识别)</li>
+        <li>组合信号引擎 <code>composite-signal-engine.js</code></li>
+        <li>增强 SignalCollector 集成鼠标数据</li>
+      </ol>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 2: 轻办公AI核心 <span class="phase-pillar pp-b">Pillar B</span></div>
+      <ol>
+        <li>Quick Panel 浮窗 (主进程+渲染)</li>
+        <li>全局热键注册 (Ctrl+Shift+Space)</li>
+        <li>文本处理器 (润色/总结/解释 三模式)</li>
+        <li>快捷问答 (多轮对话)</li>
+        <li>拖拽到猫交互</li>
+      </ol>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 3: 截图OCR <span class="phase-pillar pp-b">Pillar B</span></div>
+      <ol>
+        <li>截图引擎 (全屏遮罩+区域选择)</li>
+        <li>剪贴板图片检测</li>
+        <li>多模态AI调用 (GPT-4o/Gemini Vision)</li>
+        <li>OCR结果→文本处理串联</li>
+      </ol>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 4: 节奏仪表盘 + 场景 <span class="phase-pillar pp-a">Pillar A</span></div>
+      <ol>
+        <li>节奏仪表盘UI <code>rhythm-dashboard.js</code></li>
+        <li>index.html 新Tab「🎵 节奏」+ 样式</li>
+        <li>增强猫咪场景 <code>rhythm-scenes.js</code> (7个新场景)</li>
+        <li>实时状态展示 + 洞察卡片</li>
+      </ol>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 5: AI节奏画像 + 报告 <span class="phase-pillar pp-ab">A+B</span></div>
+      <ol>
+        <li>AI节奏日报 (纯数值→人话描述)</li>
+        <li>新增周报 Skill</li>
+        <li>反馈闭环 (记录推送响应率，自适应)</li>
+        <li>处理历史记录面板</li>
+      </ol>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-title">Phase 6: 打字内容消费 (可选) <span class="phase-pillar pp-c">Pillar C</span></div>
+      <ol>
+        <li>安全协议弹窗 <code>privacy-consent.js</code> (授权开关)</li>
+        <li>敏感信息过滤器 <code>sensitive-filter.js</code></li>
+        <li>内容分段器 <code>content-segmenter.js</code></li>
+        <li>增强 KeyboardRecorder + PinyinDetector 接入清洗管道</li>
+        <li>日报增强 (节奏+内容双维度)</li>
+        <li>待办提取 + 内容回顾面板</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- 6. 文件清单 -->
+<div class="section" style="border-left-color: #607D8B;">
+  <h2>📁 文件清单</h2>
+
+  <h3 style="color:#4CAF50;">Pillar A 新建文件 (4个)</h3>
+  <div class="file-grid">
+    <div class="file-item"><span class="file-icon">🟢</span> proactive/mouse-signal-collector.js</div>
+    <div class="file-item"><span class="file-icon">🟢</span> proactive/rhythm-analyzer.js</div>
+    <div class="file-item"><span class="file-icon">🟢</span> proactive/composite-signal-engine.js</div>
+    <div class="file-item"><span class="file-icon">🟢</span> widgets/rhythm-dashboard.js</div>
+  </div>
+
+  <h3 style="color:#E91E63;">Pillar B 新建文件 (5个)</h3>
+  <div class="file-grid">
+    <div class="file-item"><span class="file-icon">🔴</span> quick-panel/quick-panel-main.js</div>
+    <div class="file-item"><span class="file-icon">🔴</span> quick-panel/quick-panel.html</div>
+    <div class="file-item"><span class="file-icon">🔴</span> quick-panel/quick-panel-renderer.js</div>
+    <div class="file-item"><span class="file-icon">🔴</span> quick-panel/text-processor.js</div>
+    <div class="file-item"><span class="file-icon">🔴</span> quick-panel/screenshot-ocr.js</div>
+  </div>
+
+  <h3 style="color:#F57C00;">Pillar C 新建文件 (3个)</h3>
+  <div class="file-grid">
+    <div class="file-item"><span class="file-icon">🟠</span> consent/privacy-consent.js</div>
+    <div class="file-item"><span class="file-icon">🟠</span> cleaner/sensitive-filter.js</div>
+    <div class="file-item"><span class="file-icon">🟠</span> cleaner/content-segmenter.js</div>
+  </div>
+
+  <h3>共享 新建文件 (2个)</h3>
+  <div class="file-grid">
+    <div class="file-item"><span class="file-icon">🆕</span> skills/weekly-report/SKILL.md</div>
+    <div class="file-item"><span class="file-icon">🆕</span> proactive/scenes/rhythm-scenes.js</div>
+  </div>
+
+  <h3>修改文件 (10个)</h3>
+  <div class="file-grid">
+    <div class="file-item"><span class="file-icon">✏️</span> main.js</div>
+    <div class="file-item"><span class="file-icon">✏️</span> preload.js</div>
+    <div class="file-item"><span class="file-icon">✏️</span> src/renderer.js</div>
+    <div class="file-item"><span class="file-icon">✏️</span> src/index.html</div>
+    <div class="file-item"><span class="file-icon">✏️</span> src/styles.css</div>
+    <div class="file-item"><span class="file-icon">✏️</span> proactive/signal-collector.js</div>
+    <div class="file-item"><span class="file-icon">✏️</span> skills/daily-report/SKILL.md</div>
+    <div class="file-item"><span class="file-icon">🟠</span> recorder/keyboard-recorder.js <span class="tag tag-amber" style="font-size:10px;">Pillar C</span></div>
+    <div class="file-item"><span class="file-icon">🟠</span> skills/text-converter.js <span class="tag tag-amber" style="font-size:10px;">Pillar C</span></div>
+    <div class="file-item"><span class="file-icon">🟠</span> recorder/pinyin-detector.js <span class="tag tag-amber" style="font-size:10px;">Pillar C</span></div>
+  </div>
+
+  <div style="margin-top:16px; padding:12px; background:#f8f9fa; border-radius:10px; text-align:center; font-size:14px;">
+    <strong>总计: 14个新建 + 10个修改 = 24个文件</strong><br>
+    <span style="font-size:12px; color:#888;">其中 Pillar C: 3个新建 + 3个修改 (均为可选功能，默认不加载)</span>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

@@ -104,9 +104,10 @@ export class AIService {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
 
-          const data = trimmed.slice(6);
+          // Compatible with both "data: {json}" and "data:{json}"
+          const data = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5);
           if (data === '[DONE]') break;
 
           try {
@@ -137,11 +138,14 @@ export class AIService {
 
         // V1.1: Fire-and-forget memory extraction
         if (this._memoryManager) {
-          this._memoryManager.extractMemories(userMessage, fullResponse).catch(() => {});
+          this._memoryManager.extractMemories(userMessage, fullResponse).catch(err => {
+            console.error('[AIService] Memory extraction failed:', err);
+          });
         }
       }
 
     } catch (error) {
+      console.error('[AIService] Stream Error:', error);
       yield `\n[Error: ${error.message}]`;
       // Remove the failed user message from history
       this.conversationHistory.pop();
@@ -151,5 +155,42 @@ export class AIService {
   clearHistory() {
     this.conversationHistory = [];
     window.electronAPI.setStore('chatHistory', []);
+  }
+
+  /**
+   * Test API Connection with given credentials
+   */
+  async testConnection(apiUrl, apiKey, modelName) {
+    if (!apiKey) {
+      throw new Error('API Key is empty');
+    }
+    
+    const url = `${apiUrl}/chat/completions`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [{ role: 'user', content: 'hello' }],
+        max_tokens: 5,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      let errText = '';
+      try { errText = await response.text(); } catch {}
+      throw new Error(`HTTP ${response.status}: ${errText.substring(0, 100)}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices || !data.choices[0]) {
+      throw new Error('Invalid response format');
+    }
+
+    return true;
   }
 }

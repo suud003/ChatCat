@@ -271,6 +271,57 @@ export class ChatUI {
       reportDirBtn.addEventListener('click', pickDir);
       reportDirInput.addEventListener('click', pickDir);
     }
+
+    // V1.5: Test Connection Button
+    const testBtn = document.getElementById('test-connection-btn');
+    const testStatus = document.getElementById('test-connection-status');
+    if (testBtn && testStatus) {
+      testBtn.addEventListener('click', async () => {
+        const presetKey = this.presetSelect.value;
+        const preset = this.apiPresets ? this.apiPresets[presetKey] : null;
+        
+        let apiUrl = preset ? preset.url : '';
+        let selectedModel = this.modelSelect.value;
+        
+        if (presetKey === 'custom' || !preset || preset.needsUrl) {
+          apiUrl = this.apiUrlInput.value.trim();
+          // 如果自定义模型输入框是可见的，就使用自定义模型输入框的值，否则使用下拉框的值
+          selectedModel = this.modelCustomInput.style.display !== 'none' 
+            ? this.modelCustomInput.value.trim() 
+            : this.modelSelect.value;
+        }
+        
+        const apiKey = this.apiKeyInput.value.trim();
+        
+        if (!apiKey) {
+          testStatus.textContent = '❌ 请输入 API Key';
+          testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+          return;
+        }
+        
+        if (!apiUrl) {
+          testStatus.textContent = '❌ 请输入 API 地址';
+          testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+          return;
+        }
+        
+        testBtn.disabled = true;
+        testBtn.textContent = '测试中...';
+        testStatus.textContent = '';
+        
+        try {
+          await this.aiService.testConnection(apiUrl, apiKey, selectedModel);
+          testStatus.textContent = '✅ 连接成功';
+          testStatus.style.color = 'var(--text-success, #52c41a)';
+        } catch (err) {
+          testStatus.textContent = `❌ 失败: ${err.message}`;
+          testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = '测试连接';
+        }
+      });
+    }
   }
 
   populateModels(presetKey, savedModel, savedUrl) {
@@ -607,6 +658,7 @@ export class ChatUI {
         this.scrollToBottom();
       }
     } catch (err) {
+      console.error('[ChatUI] sendMessageStream failed:', err);
       msgEl.classList.add('error');
       msgEl.textContent = `错误：${err.message}`;
     }

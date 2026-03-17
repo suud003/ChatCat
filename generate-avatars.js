@@ -7,7 +7,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = process.env.GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
+const API_KEY = 'AIzaSyAzPhZXNsH87Sfg15-Zvx2Pwc3D8YNHnRg';
 const MODEL = 'gemini-3.1-flash-image-preview';
 const OUTPUT_DIR = path.join(__dirname, 'src', 'avatars');
 

@@ -485,6 +485,15 @@ async function init() {
   // Initialize connection UI from saved settings
   connectionUI.initFromSaved();
 
+  // Listen for pet position reset (from tray menu)
+  window.electronAPI.onResetPetPosition?.(() => {
+    const petContainer = document.getElementById('pet-container');
+    petContainer.style.left = '';
+    petContainer.style.top = '';
+    petContainer.style.bottom = '';
+    // Let CSS defaults take over (bottom: 100px; left: calc(50% - 150px))
+  });
+
   console.log('ChatCat Desktop Pet V1.4 initialized!');
 }
 
@@ -732,11 +741,49 @@ function setupDrag() {
       panel.style.right = 'auto';
       panel.style.transform = 'none';
     }
+
+    // Multi-monitor: tell main process the screen-coordinate of the cat center
+    // so it can move the window to the correct display if needed.
+    window.electronAPI.moveToDisplay(e.screenX, e.screenY);
   });
 
   document.addEventListener('mouseup', () => {
     isDragging = false;
     petContainer.style.cursor = 'grab';
+  });
+
+  // Listen for display-changed event from main process
+  // When the window moves to a new display, re-position the cat relative to the new window
+  window.electronAPI.onDisplayChanged?.((data) => {
+    const { bounds, prevBounds } = data;
+    // The window just moved from prevBounds to bounds.
+    // Translate the pet position: pet was at clientX relative to old window origin,
+    // now needs to be at an equivalent screen position relative to the new window origin.
+    const rect = petContainer.getBoundingClientRect();
+    // Pet's screen position was: prevBounds.x + rect.left, prevBounds.y + rect.top
+    // New client position should be: (prevScreenX - bounds.x), (prevScreenY - bounds.y)
+    const petScreenX = prevBounds.x + rect.left;
+    const petScreenY = prevBounds.y + rect.top;
+    const newClientX = petScreenX - bounds.x;
+    const newClientY = petScreenY - bounds.y;
+
+    petContainer.style.left = newClientX + 'px';
+    petContainer.style.top = newClientY + 'px';
+    petContainer.style.bottom = 'auto';
+
+    // Also reposition any visible panels
+    for (const id of panelIds) {
+      const panel = document.getElementById(id);
+      if (panel.classList.contains('hidden') || panel.classList.contains('maximized')) continue;
+      const panelRect = panel.getBoundingClientRect();
+      const panelScreenX = prevBounds.x + panelRect.left;
+      const panelScreenY = prevBounds.y + panelRect.top;
+      panel.style.left = (panelScreenX - bounds.x) + 'px';
+      panel.style.top = (panelScreenY - bounds.y) + 'px';
+      panel.style.bottom = 'auto';
+      panel.style.right = 'auto';
+      panel.style.transform = 'none';
+    }
   });
 }
 
