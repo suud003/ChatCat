@@ -92,7 +92,7 @@
           </div>
           <div class="setting-section-title">记忆管理</div>
           <div id="memory-list" class="memory-list">
-            <div class="memory-empty">暂无记忆</div>
+            <div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>
           </div>
           <div class="setting-actions">
             <button id="memory-clear-btn" class="memory-clear-btn">清除所有记忆</button>
@@ -165,6 +165,7 @@
         <!-- Pomodoro Tab -->
         <div id="tab-tools-pomodoro" class="tab-content active">
           <div id="pomodoro-display">
+            <img id="pomodoro-ill" src="illustrations/pomodoro-focus.png" class="ill-pomodoro" alt="">
             <div id="pomodoro-time">25:00</div>
             <div id="pomodoro-status">准备专注</div>
           </div>
@@ -208,7 +209,10 @@
         </div>
         <!-- Clipboard Tab -->
         <div id="tab-tools-clipboard" class="tab-content">
-          <div id="clipboard-empty" class="clipboard-empty">暂无剪贴板历史</div>
+          <div id="clipboard-empty" class="clipboard-empty">
+            <img src="illustrations/empty-clipboard.png" class="ill-empty" alt="">
+            <div>暂无剪贴板历史</div>
+          </div>
           <div id="clipboard-list" class="clipboard-list"></div>
           <div class="clipboard-controls">
             <button id="clipboard-clear-btn" class="clipboard-clear-btn">清除历史</button>
@@ -237,11 +241,13 @@
       <div id="fun-body">
         <!-- Login Screen (shown before authentication) -->
         <div id="fun-login-screen" class="fun-login-screen">
+          <img src="illustrations/welcome-hero.png" class="ill-hero" alt="">
           <div class="fun-login-title">🐱 进入猫猫世界</div>
           <div class="mp-row">
             <input type="text" id="fun-login-username" class="mp-input" placeholder="给自己取个名字" maxlength="20">
           </div>
           <div id="fun-login-server-section" class="mp-section hidden">
+            <img src="illustrations/login-multiplayer.png" class="ill-empty" style="width:60px;height:60px;margin:4px auto;" alt="">
             <div class="mp-row">
               <input type="text" id="fun-login-server" class="mp-input" placeholder="服务器地址（如 127.0.0.1:9527）">
             </div>
@@ -274,43 +280,73 @@
         </div>
         <!-- Pet Status Tab -->
         <div id="tab-fun-status" class="tab-content">
-          <div id="pet-status">
-            <div class="pet-status-coin-row">
-              <span class="pet-coin-label">🐱 猫猫币</span>
-              <span id="pet-affinity-value" class="pet-coin-value">0</span>
-              <span id="pet-cps-value" class="pet-cps-value">⚡ 0/s</span>
-            </div>
-            <div id="pet-status-level">
-              <span class="pet-status-label">Lv.</span>
-              <span id="pet-level-value">1</span>
-              <div class="pet-progress-bar">
-                <div id="pet-affinity-fill" class="pet-progress-fill"></div>
+          <!-- Hero card: mood illustration + coin + level -->
+          <div class="pet-hero-card">
+            <img id="pet-mood-ill" src="illustrations/pet-neutral.png" class="pet-mood-ill" alt="">
+            <div class="pet-hero-info">
+              <div class="pet-status-coin-row">
+                <span class="pet-coin-label">🐱 猫猫币</span>
+                <span id="pet-affinity-value" class="pet-coin-value">0</span>
               </div>
-              <span id="pet-level-next" class="pet-level-next"></span>
+              <div id="pet-status-level">
+                <span class="pet-status-label">Lv.</span>
+                <span id="pet-level-value">1</span>
+                <div class="pet-progress-bar">
+                  <div id="pet-affinity-fill" class="pet-progress-fill"></div>
+                </div>
+                <span id="pet-level-next" class="pet-level-next"></span>
+              </div>
+              <div class="pet-hero-cps">
+                <span id="pet-cps-value" class="pet-cps-value">⚡ 0/s</span>
+                <span id="pet-mood-value" class="pet-mood-badge">😊 正常</span>
+              </div>
             </div>
-            <div class="pet-status-row-compact">
-              <div><span class="pet-status-label">心情</span> <span id="pet-mood-value">😊 正常</span></div>
-              <div><span class="pet-status-label">连续</span> <span id="pet-streak-value">0 天</span></div>
-              <div><span class="pet-status-label">按键</span> <span id="flow-marker" class="flow-marker hidden">🔥</span> <span id="stat-typing">0</span></div>
+          </div>
+
+          <!-- Stats row: compact visual cards -->
+          <div class="pet-stat-cards">
+            <div class="pet-stat-card mood-card">
+              <span class="pet-stat-card-icon">💖</span>
+              <span class="pet-stat-card-label">心情</span>
+              <span id="pet-mood-text" class="pet-stat-card-value">正常</span>
             </div>
-            <div id="pet-status-prestige">
-              <span class="pet-status-label">❤️ 转生</span>
+            <div class="pet-stat-card streak-card">
+              <span class="pet-stat-card-icon">📅</span>
+              <span class="pet-stat-card-label">连续</span>
+              <span id="pet-streak-value" class="pet-stat-card-value">0 天</span>
+            </div>
+            <div class="pet-stat-card typing-card">
+              <span class="pet-stat-card-icon">⌨️</span>
+              <span class="pet-stat-card-label">按键</span>
+              <span class="pet-stat-card-value"><span id="flow-marker" class="flow-marker hidden">🔥</span> <span id="stat-typing">0</span></span>
+            </div>
+          </div>
+
+          <!-- Prestige row -->
+          <div id="pet-status-prestige" class="pet-prestige-card">
+            <img src="illustrations/prestige.png" class="pet-prestige-ill" alt="">
+            <div class="pet-prestige-info">
+              <span class="pet-prestige-label">❤️ 转生</span>
               <span id="pet-prestige-value">第0世</span>
-              <button id="prestige-btn" class="prestige-btn" disabled>转生 (加载中...)</button>
             </div>
+            <button id="prestige-btn" class="prestige-btn" disabled>转生 (加载中...)</button>
           </div>
-          <div id="pet-multiplier-breakdown">
-            <div class="multiplier-title">倍率明细</div>
+
+          <!-- Multiplier breakdown — visual bars -->
+          <div id="pet-multiplier-breakdown" class="pet-mult-card">
+            <div class="multiplier-title">✨ 倍率明细</div>
             <div class="multiplier-rows">
-              <div class="multiplier-row"><span>转生</span><span id="mult-prestige">×1.0</span></div>
-              <div class="multiplier-row"><span>心情</span><span id="mult-mood">×1.0</span></div>
-              <div class="multiplier-row"><span>登录</span><span id="mult-streak">×1.0</span></div>
-              <div class="multiplier-row"><span>道具</span><span id="mult-items">×1.0</span></div>
-              <div class="multiplier-row multiplier-total"><span>总计</span><span id="mult-total">×1.0</span></div>
+              <div class="multiplier-row"><span>❤️ 转生</span><div class="mult-bar"><div class="mult-bar-fill prestige-fill" id="mult-bar-prestige"></div></div><span id="mult-prestige">×1.0</span></div>
+              <div class="multiplier-row"><span>😊 心情</span><div class="mult-bar"><div class="mult-bar-fill mood-fill" id="mult-bar-mood"></div></div><span id="mult-mood">×1.0</span></div>
+              <div class="multiplier-row"><span>📅 登录</span><div class="mult-bar"><div class="mult-bar-fill streak-fill" id="mult-bar-streak"></div></div><span id="mult-streak">×1.0</span></div>
+              <div class="multiplier-row"><span>🎯 道具</span><div class="mult-bar"><div class="mult-bar-fill items-fill" id="mult-bar-items"></div></div><span id="mult-items">×1.0</span></div>
+              <div class="multiplier-row multiplier-total"><span>⚡ 总计</span><span id="mult-total">×1.0</span></div>
             </div>
           </div>
-          <div id="pet-upgrade-info">
-            <div class="upgrade-info-title">升级说明</div>
+
+          <!-- Upgrade info — collapsible -->
+          <details id="pet-upgrade-info" class="pet-upgrade-details">
+            <summary class="upgrade-info-title">📖 升级说明</summary>
             <div class="upgrade-info-content">
               <div class="upgrade-info-row"><span>⌨ 每次按键</span><span>+1 猫猫币</span></div>
               <div class="upgrade-info-row"><span>🔥 心流按键</span><span>+2（连续打字≥5分钟）</span></div>
@@ -320,11 +356,12 @@
               <div class="upgrade-info-row"><span>❤️ 转生</span><span>消耗猫猫币和转生石，永久+50%倍率，+1道具槽</span></div>
             </div>
             <div class="upgrade-info-levels" id="upgrade-level-list"></div>
-          </div>
+          </details>
         </div>
         <!-- Shop Tab -->
         <div id="tab-fun-shop" class="tab-content">
           <div class="base-status-bar">
+            <img src="illustrations/shop-header.png" class="shop-header-ill" alt="">
             <span>🐱 <span id="base-coins">0</span></span>
             <span>🎯 <span id="base-bonus">+0%</span></span>
             <span>📦 <span id="base-slots">0/3</span></span>
