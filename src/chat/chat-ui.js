@@ -384,13 +384,13 @@ export class ChatUI {
     if (!listEl) return;
     const mm = this.aiService._memoryManager;
     if (!mm) {
-      listEl.innerHTML = '<div class="memory-empty">暂无记忆</div>';
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
       return;
     }
 
     const memories = mm.getAll();
     if (memories.length === 0) {
-      listEl.innerHTML = '<div class="memory-empty">暂无记忆</div>';
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
       return;
     }
 

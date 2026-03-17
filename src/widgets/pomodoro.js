@@ -20,6 +20,7 @@ export class PomodoroTimer {
     this._workInput = document.getElementById('pomodoro-work-min');
     this._breakInput = document.getElementById('pomodoro-break-min');
     this._todayCount = document.getElementById('pomodoro-today-count');
+    this._illEl = document.getElementById('pomodoro-ill');
 
     // State
     this._running = false;
@@ -99,6 +100,7 @@ export class PomodoroTimer {
     this._breakInput.disabled = false;
     this._statusDisplay.textContent = '准备专注';
     this._statusDisplay.className = '';
+    if (this._illEl) this._illEl.src = 'illustrations/pomodoro-focus.png';
     this._updateDisplay();
   }
 
@@ -124,6 +126,7 @@ export class PomodoroTimer {
       this._remaining = this._getBreakSeconds();
       this._statusDisplay.textContent = '休息时间！🎉';
       this._statusDisplay.className = 'break';
+      if (this._illEl) this._illEl.src = 'illustrations/pomodoro-break.png';
       this._startBtn.textContent = '开始休息';
     } else {
       this._phase = 'work';
@@ -146,8 +149,10 @@ export class PomodoroTimer {
     if (this._phase === 'work') {
       this._statusDisplay.textContent = '专注中... 🎯';
       this._statusDisplay.className = 'working';
+      if (this._illEl) this._illEl.src = 'illustrations/pomodoro-focus.png';
     } else {
       this._statusDisplay.textContent = '休息时间~ ☕';
+      if (this._illEl) this._illEl.src = 'illustrations/pomodoro-break.png';
       this._statusDisplay.className = 'break';
     }
   }

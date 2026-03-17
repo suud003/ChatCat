@@ -31,7 +31,7 @@ export class LeaderboardUI {
           <button id="lb-refresh" class="lb-sort-btn">🔄</button>
         </div>
         <div id="lb-table-wrapper" class="lb-table-wrapper">
-          <div class="lb-empty">连接服务器后查看排行榜</div>
+          <div class="lb-empty"><img src="illustrations/empty-leaderboard.png" class="ill-empty" alt=""><div>连接服务器后查看排行榜</div></div>
         </div>
       </div>
     `;
@@ -76,7 +76,7 @@ export class LeaderboardUI {
     if (!wrapper) return;
 
     if (this._entries.length === 0) {
-      wrapper.innerHTML = '<div class="lb-empty">暂无数据</div>';
+      wrapper.innerHTML = '<div class="lb-empty"><img src="illustrations/empty-leaderboard.png" class="ill-empty" alt=""><div>暂无数据</div></div>';
       return;
     }
 

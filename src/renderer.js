@@ -822,7 +822,8 @@ function setupCharacterSelect(canvas) {
 
       card.innerHTML = `
         <div class="card-thumbnail cat-${preset.category}">
-          <span class="avatar-color-swatch" style="background:linear-gradient(135deg,${c.from},${c.to})"></span>
+          <img class="card-avatar-img" src="avatars/${preset.id}.png" alt="${preset.name}">
+          <span class="avatar-color-swatch" style="display:none;background:linear-gradient(135deg,${c.from},${c.to})"></span>
         </div>
         <div class="card-info">
           <div class="card-color-name">${preset.colorName || ''}</div>
@@ -830,6 +831,13 @@ function setupCharacterSelect(canvas) {
         </div>
         <div class="card-tooltip">${preset.description}</div>
       `;
+      // Fallback: if avatar image fails to load, show color swatch instead
+      const avatarImg = card.querySelector('.card-avatar-img');
+      const swatch = card.querySelector('.avatar-color-swatch');
+      avatarImg.addEventListener('error', () => {
+        avatarImg.style.display = 'none';
+        swatch.style.display = '';
+      });
       card.addEventListener('click', () => switchCharacter(preset));
       grid.appendChild(card);
     }
@@ -863,8 +871,8 @@ function setupCharacterSelect(canvas) {
       }
     }
     await window.electronAPI.setStore('character', preset.id);
-    // Push skin change to multiplayer immediately
-    _mpClient?.sendStateUpdate({ skinId: preset.id }, true);
+    // Push skin change to multiplayer immediately (if connected)
+    try { _mpClient?.sendStateUpdate({ skinId: preset.id }, true); } catch(e) {}
     renderGrid();
   }
 }
@@ -879,6 +887,8 @@ function setupPetStatusUI(affection, petBase) {
   const affinityVal = document.getElementById('pet-affinity-value');
   const cpsVal = document.getElementById('pet-cps-value');
   const moodEl = document.getElementById('pet-mood-value');
+  const moodTextEl = document.getElementById('pet-mood-text');
+  const moodIll = document.getElementById('pet-mood-ill');
   const streakEl = document.getElementById('pet-streak-value');
   const levelNextEl = document.getElementById('pet-level-next');
 
@@ -892,6 +902,12 @@ function setupPetStatusUI(affection, petBase) {
   const multStreak = document.getElementById('mult-streak');
   const multItems = document.getElementById('mult-items');
   const multTotal = document.getElementById('mult-total');
+
+  // Multiplier bar fills
+  const multBarPrestige = document.getElementById('mult-bar-prestige');
+  const multBarMood = document.getElementById('mult-bar-mood');
+  const multBarStreak = document.getElementById('mult-bar-streak');
+  const multBarItems = document.getElementById('mult-bar-items');
 
   // Flow marker
   const flowMarker = document.getElementById('flow-marker');
@@ -968,7 +984,15 @@ function setupPetStatusUI(affection, petBase) {
 
   function updateMoodDisplay() {
     const moods = { happy: '😊 开心', normal: '😐 正常', bored: '😴 无聊' };
-    moodEl.textContent = moods[affection.mood] || '😐 正常';
+    const moodTexts = { happy: '开心', normal: '正常', bored: '无聊' };
+    const moodImages = { happy: 'illustrations/pet-happy.png', normal: 'illustrations/pet-neutral.png', bored: 'illustrations/pet-bored.png' };
+    const moodColors = { happy: 'linear-gradient(135deg, #ff9a9e, #fad0c4)', normal: 'linear-gradient(135deg, #a8c0ff, #b8d0ff)', bored: 'linear-gradient(135deg, #bbb, #ddd)' };
+    if (moodEl) {
+      moodEl.textContent = moods[affection.mood] || '😐 正常';
+      moodEl.style.background = moodColors[affection.mood] || moodColors.normal;
+    }
+    if (moodTextEl) moodTextEl.textContent = moodTexts[affection.mood] || '正常';
+    if (moodIll) moodIll.src = moodImages[affection.mood] || moodImages.normal;
   }
 
   function updatePrestige() {
@@ -991,6 +1015,12 @@ function setupPetStatusUI(affection, petBase) {
     if (multStreak) multStreak.textContent = `×${bd.streak.toFixed(2)}`;
     if (multItems) multItems.textContent = `×${bd.items.toFixed(2)}`;
     if (multTotal) multTotal.textContent = `×${affection.totalMultiplier.toFixed(2)}`;
+
+    // Update multiplier bars — map multiplier to bar width (clamped to 100%)
+    if (multBarPrestige) multBarPrestige.style.width = `${Math.min(100, (bd.prestige - 1) * 20 + 10)}%`;
+    if (multBarMood) multBarMood.style.width = `${Math.min(100, bd.mood * 50)}%`;
+    if (multBarStreak) multBarStreak.style.width = `${Math.min(100, (bd.streak - 1) * 50 + 10)}%`;
+    if (multBarItems) multBarItems.style.width = `${Math.min(100, (bd.items - 1) * 10 + 10)}%`;
   }
 
   function updateFlowMarker() {

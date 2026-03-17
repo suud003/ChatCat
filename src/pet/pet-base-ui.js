@@ -151,33 +151,51 @@ export class PetBaseUI {
       if (isPrestigeMaterial) {
         // Special display for prestige materials
         card.innerHTML = `
-          <div class="base-item-header">
-            <span class="base-item-icon">${item.icon}</span>
-            <span class="base-item-name">${item.name}</span>
-            <span class="prestige-material-badge">${rarityConf.label}</span>
+          <div class="base-item-thumb">
+            <img class="base-item-img" src="shop-items/${item.id}.png" alt="${item.name}">
           </div>
-          <div class="base-item-stats">
-            <span>🐱 ${formatNumber(item.cost)}</span>
-            <span class="prestige-tier-hint">第${item.prestigeTier}世转生所需</span>
-            ${ownedCount > 0 ? `<span class="base-owned-badge">×${ownedCount}</span>` : ''}
+          <div class="base-item-body">
+            <div class="base-item-header">
+              <span class="base-item-icon">${item.icon}</span>
+              <span class="base-item-name">${item.name}</span>
+              <span class="prestige-material-badge">${rarityConf.label}</span>
+            </div>
+            <div class="base-item-stats">
+              <span>🐱 ${formatNumber(item.cost)}</span>
+              <span class="prestige-tier-hint">第${item.prestigeTier}世转生所需</span>
+              ${ownedCount > 0 ? `<span class="base-owned-badge">×${ownedCount}</span>` : ''}
+            </div>
+            <button class="base-buy-btn ${canBuy ? '' : 'disabled'}" ${canBuy ? '' : 'disabled'}>${slotsFull ? '槽位已满' : '购买'}</button>
           </div>
-          <button class="base-buy-btn ${canBuy ? '' : 'disabled'}" ${canBuy ? '' : 'disabled'}>${slotsFull ? '槽位已满' : '购买'}</button>
         `;
       } else {
         const bonusPct = `+${Math.round(item.multiplier * 100)}%`;
         card.innerHTML = `
-          <div class="base-item-header">
-            <span class="base-item-icon">${item.icon}</span>
-            <span class="base-item-name">${item.name}</span>
-            <span class="base-rarity-badge" style="background:${rarityConf.color}">${rarityConf.label}</span>
+          <div class="base-item-thumb">
+            <img class="base-item-img" src="shop-items/${item.id}.png" alt="${item.name}">
           </div>
-          <div class="base-item-stats">
-            <span>🐱 ${formatNumber(item.cost)}</span>
-            <span>🎯 ${bonusPct}</span>
-            ${ownedCount > 0 ? `<span class="base-owned-badge">×${ownedCount}</span>` : ''}
+          <div class="base-item-body">
+            <div class="base-item-header">
+              <span class="base-item-icon">${item.icon}</span>
+              <span class="base-item-name">${item.name}</span>
+              <span class="base-rarity-badge" style="background:${rarityConf.color}">${rarityConf.label}</span>
+            </div>
+            <div class="base-item-stats">
+              <span>🐱 ${formatNumber(item.cost)}</span>
+              <span>🎯 ${bonusPct}</span>
+              ${ownedCount > 0 ? `<span class="base-owned-badge">×${ownedCount}</span>` : ''}
+            </div>
+            <button class="base-buy-btn ${canBuy ? '' : 'disabled'}" ${canBuy ? '' : 'disabled'}>${slotsFull ? '槽位已满' : '购买'}</button>
           </div>
-          <button class="base-buy-btn ${canBuy ? '' : 'disabled'}" ${canBuy ? '' : 'disabled'}>${slotsFull ? '槽位已满' : '购买'}</button>
         `;
+      }
+
+      // Image fallback — hide img if not found, show icon only
+      const itemImg = card.querySelector('.base-item-img');
+      if (itemImg) {
+        itemImg.addEventListener('error', () => {
+          itemImg.style.display = 'none';
+        });
       }
 
       const buyBtn = card.querySelector('.base-buy-btn');
@@ -272,7 +290,7 @@ export class PetBaseUI {
     this._ownedList.innerHTML = '';
 
     if (this._base.ownedItems.length === 0) {
-      this._ownedList.innerHTML = '<div class="base-empty">还没有物品，去商店看看吧！</div>';
+      this._ownedList.innerHTML = '<div class="base-empty"><img src="illustrations/empty-inventory.png" class="ill-empty" alt=""><div>还没有物品，去商店看看吧！</div></div>';
       return;
     }
 
@@ -293,6 +311,7 @@ export class PetBaseUI {
 
       if (isPrestigeMaterial) {
         row.innerHTML = `
+          <img class="base-owned-img" src="shop-items/${item.id}.png" alt="">
           <span class="base-owned-icon">${item.icon}</span>
           <span class="base-owned-name">${item.name}</span>
           <span class="base-owned-count">×${owned.count}</span>
@@ -302,12 +321,19 @@ export class PetBaseUI {
       } else {
         const bonusPct = `+${Math.round(itemBonus * 100)}%`;
         row.innerHTML = `
+          <img class="base-owned-img" src="shop-items/${item.id}.png" alt="">
           <span class="base-owned-icon">${item.icon}</span>
           <span class="base-owned-name">${item.name}</span>
           <span class="base-owned-count">×${owned.count}</span>
           <span class="base-owned-cps">🎯${bonusPct}</span>
           <button class="base-sell-btn" title="售出1个，回收 ${formatNumber(sellPrice)} 🐱">售${formatNumber(sellPrice)}</button>
         `;
+      }
+
+      // Image fallback
+      const ownedImg = row.querySelector('.base-owned-img');
+      if (ownedImg) {
+        ownedImg.addEventListener('error', () => { ownedImg.style.display = 'none'; });
       }
 
       row.querySelector('.base-sell-btn').addEventListener('click', () => {

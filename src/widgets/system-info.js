@@ -31,7 +31,7 @@ export class SystemInfoWidget {
 
       this.infoEl.innerHTML = `
         <div class="time">${timeStr}</div>
-        <div style="font-size:10px; color:#aaa; margin-bottom:6px;">${dateStr}</div>
+        <div style="font-size:12px; color:#aaa; margin-bottom:6px;">${dateStr}</div>
         <div class="stat">
           <span>CPU ${cpuUsage.toFixed(0)}%</span>
           <span>MEM ${memPercent}%</span>
@@ -44,7 +44,7 @@ export class SystemInfoWidget {
             <div class="stat-bar-fill mem" style="width:${memPercent}%"></div>
           </div>
         </div>
-        <div style="font-size:10px; color:#aaa; margin-top:2px;">
+        <div style="font-size:12px; color:#aaa; margin-top:2px;">
           ${memGB}/${totalGB} GB
         </div>
       `;
