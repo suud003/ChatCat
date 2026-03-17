@@ -485,7 +485,9 @@ function setupShortcuts() {
 
 // Input hook setup
 let inputHook = null;
-function setupInputHook() {
+let permissionCheckTimer = null;
+
+async function startUioHook() {
   try {
     const { uIOhook, UiohookKey } = require('uiohook-napi');
     inputHook = uIOhook;
@@ -519,10 +521,77 @@ function setupInputHook() {
 
     uIOhook.start();
     console.log('Input hook started successfully');
+    
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('hook-status-changed', true);
+    }
   } catch (err) {
     console.warn('Failed to start input hook:', err.message);
     console.warn('Keyboard/mouse tracking will be limited to app window');
   }
+}
+
+async function setupInputHook() {
+  // On macOS, check if we should skip input hook to avoid crash when Accessibility permission is missing
+  if (process.platform === 'darwin') {
+    try {
+      const { systemPreferences, shell } = require('electron');
+      // Check if accessibility is trusted (macOS 10.9+)
+      const isTrusted = systemPreferences.isTrustedAccessibilityClient(false);
+      
+      if (!isTrusted) {
+        console.warn('Accessibility permission not granted. Skipping global input hook.');
+        
+        // Show dialog to prompt user
+        const { response } = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          buttons: ['暂不开启', '前往设置'],
+          defaultId: 1,
+          cancelId: 0,
+          title: '需要辅助功能权限',
+          message: 'ChatCat 需要辅助功能权限',
+          detail: '我们需要该权限来追踪键盘和鼠标事件，以实现桌宠的打字动画和工作数据统计功能。\n\n点击"前往设置"，在「隐私与安全性 → 辅助功能」中勾选 ChatCat/Terminal。'
+        });
+        
+        if (response === 1) {
+          // Trigger system prompt which also helps register the app in the preferences pane
+          systemPreferences.isTrustedAccessibilityClient(true);
+          // Open System Preferences to Accessibility pane
+          shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+          
+          // Poll for permission changes every 2 seconds for 1 minute
+          let attempts = 0;
+          const maxAttempts = 30; // 60 seconds
+          
+          permissionCheckTimer = setInterval(() => {
+            attempts++;
+            if (systemPreferences.isTrustedAccessibilityClient(false)) {
+              clearInterval(permissionCheckTimer);
+              console.log('Accessibility permission granted! Starting hook...');
+              startUioHook();
+              // Optional: notify user it was successful using OS Notification
+              const { Notification } = require('electron');
+              if (Notification.isSupported()) {
+                new Notification({
+                  title: 'ChatCat 权限已获取',
+                  body: '猫咪现在可以感知你的工作状态了喵！'
+                }).show();
+              }
+            } else if (attempts >= maxAttempts) {
+              clearInterval(permissionCheckTimer);
+              console.warn('Timeout waiting for accessibility permission.');
+            }
+          }, 2000);
+        }
+        return; // Don't start hook yet
+      }
+    } catch (err) {
+      console.warn('Failed to check accessibility permission:', err.message);
+    }
+  }
+
+  // If we have permission or not on macOS, start it
+  await startUioHook();
 }
 
 app.whenReady().then(() => {
@@ -583,6 +652,9 @@ app.on('before-quit', () => {
   isQuitting = true;
   if (clipboardTimer) {
     clearInterval(clipboardTimer);
+  }
+  if (permissionCheckTimer) {
+    clearInterval(permissionCheckTimer);
   }
   if (keyboardRecorder) {
     try { keyboardRecorder.stop(); } catch {}
