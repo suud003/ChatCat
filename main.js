@@ -89,14 +89,17 @@ let skillRegistry = null;
 let skillEngine = null;
 
 function createWindow() {
+  // Use the primary display for initial window placement.
+  // Multi-monitor support: renderer tracks cat's screen position and asks main
+  // process to move the window when the cat crosses screen boundaries.
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
-    x: 0,
-    y: 0,
+    x: primaryDisplay.workArea.x,
+    y: primaryDisplay.workArea.y,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -128,6 +131,31 @@ function createWindow() {
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+}
+
+/**
+ * Move the main window to the display that contains the given screen-coordinates.
+ * The renderer calls this via IPC when the cat is dragged near a screen edge.
+ */
+function moveWindowToDisplay(screenX, screenY) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const target = screen.getDisplayNearestPoint({ x: screenX, y: screenY });
+  const current = screen.getDisplayMatching(mainWindow.getBounds());
+
+  // Only move if the target display is different from the current one
+  if (target.id === current.id) return;
+
+  const { x, y, width, height } = target.workArea;
+  mainWindow.setBounds({ x, y, width, height });
+  console.log(`[Main] Moved window to display ${target.id}: (${x},${y}) ${width}x${height}`);
+
+  // Notify renderer about the display switch so it can adjust pet position
+  mainWindow.webContents.send('display-changed', {
+    displayId: target.id,
+    bounds: { x, y, width, height },
+    prevBounds: current.workArea
+  });
 }
 
 function createTray() {
@@ -173,9 +201,12 @@ function createTray() {
     {
       label: 'Reset Position',
       click: () => {
-        mainWindow.center();
-        const bounds = mainWindow.getBounds();
-        store.set('windowPosition', { x: bounds.x, y: bounds.y });
+        // Move window back to primary display
+        const primary = screen.getPrimaryDisplay();
+        const { x, y, width, height } = primary.workArea;
+        mainWindow.setBounds({ x, y, width, height });
+        // Notify renderer to reset pet to default position
+        mainWindow.webContents.send('reset-pet-position');
       }
     },
     { type: 'separator' },
@@ -271,6 +302,11 @@ ipcMain.on('window-drag', (_, { dx, dy }) => {
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+});
+
+// Multi-monitor: move window to the display containing the given screen point
+ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
+  moveWindowToDisplay(screenX, screenY);
 });
 
 // Recorder IPC handlers
