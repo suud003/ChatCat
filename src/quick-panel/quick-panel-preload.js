@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('qpAPI', {
 
   // 粘贴图片识别
   recognizeImage: (base64) => ipcRenderer.invoke('qp-recognize-image', base64),
+  reportPanelSize: (size) => ipcRenderer.send('qp-report-size', size),
 
   // 从外部自动传入图片识别（猫咪气泡点击触发）
   onAutoRecognizeImage: (cb) => ipcRenderer.on('qp-auto-recognize-image', (_, data) => cb(data)),

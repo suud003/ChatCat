@@ -34,6 +34,7 @@ import { PetBaseSystem } from './pet/pet-base-system.js';
 import { PetBaseUI } from './pet/pet-base-ui.js';
 import { getPrestigeMaterial } from './pet/pet-base-items.js';
 import { formatNumber } from './utils/format.js';
+import { capturePanelAnchor, applyPanelAnchorTransition } from './ui/panel-tab-transition.js';
 
 // V1.4 imports — Multiplayer
 import { MultiplayerClient } from './multiplayer/mp-client.js';
@@ -731,6 +732,14 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     let startX = 0;
     let scrollStart = 0;
     const DRAG_THRESHOLD = 4;
+    const canScrollTabs = () => tabsBar.scrollWidth > tabsBar.clientWidth + 1;
+    const centerTabInView = (tabEl, smooth = true) => {
+      if (!tabEl || !canScrollTabs()) return;
+      const targetLeft = tabEl.offsetLeft + tabEl.offsetWidth / 2 - tabsBar.clientWidth / 2;
+      const maxLeft = Math.max(0, tabsBar.scrollWidth - tabsBar.clientWidth);
+      const nextLeft = Math.min(Math.max(0, targetLeft), maxLeft);
+      tabsBar.scrollTo({ left: nextLeft, behavior: smooth ? 'smooth' : 'auto' });
+    };
 
     tabsBar.addEventListener('mousedown', (e) => {
       if (e.target.closest('.chat-ctrl-btn')) return;
@@ -753,6 +762,23 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     document.addEventListener('mouseup', () => {
       isDragging = false;
     });
+
+    // Mouse wheel support for horizontal tab scrolling when tabs overflow.
+    tabsBar.addEventListener('wheel', (e) => {
+      if (!canScrollTabs()) return;
+      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      tabsBar.scrollLeft += delta;
+      e.preventDefault();
+    }, { passive: false });
+
+    // Initial align: if there is an active tab, center it without animation.
+    const activeTab = tabsBar.querySelector('.panel-tab.active');
+    if (activeTab) {
+      centerTabInView(activeTab, false);
+    }
+
+    // Expose helper on element for reuse in click handler below.
+    tabsBar._centerTabInView = centerTabInView;
   }
 
   // Tab switching (suppress if it was a drag/reorder)
@@ -760,6 +786,10 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     tab.addEventListener('click', (e) => {
       if (e.target.closest('.chat-ctrl-btn')) return;
       if (tabDidDrag) { tabDidDrag = false; return; }
+      const beforeRect = capturePanelAnchor(container, {
+        isVisible: !container.classList.contains('hidden'),
+        isMaximized: isMaximized || container.classList.contains('maximized'),
+      });
       const tabId = tab.dataset.tab;
       header.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
       const body = container.querySelector(`#${containerId.replace('-container', '-body')}`);
@@ -767,6 +797,8 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
       tab.classList.add('active');
       const content = document.getElementById(`tab-${tabId}`);
       if (content) content.classList.add('active');
+      header.querySelector('.panel-tabs')?._centerTabInView?.(tab, true);
+      applyPanelAnchorTransition(container, beforeRect);
     });
   });
 

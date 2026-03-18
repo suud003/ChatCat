@@ -31,7 +31,7 @@ class QuickPanelManager {
     
     this._panelWindow = new BrowserWindow({
       width: 420,
-      height: 520,
+      height: 260,
       x: Math.round(width / 2 - 210),   // 屏幕居中
       y: Math.round(height * 0.3),       // 上方1/3位置
       frame: false,
@@ -148,7 +148,7 @@ class QuickPanelManager {
   _registerShortcuts() {
     // Quick Panel 开关
     const toggleRegistered = globalShortcut.register('CommandOrControl+Shift+Space', () => {
-      this.toggle();
+      this.toggle().catch(() => {});
     });
 
     if (!toggleRegistered) {
@@ -185,8 +185,8 @@ class QuickPanelManager {
 
   _setupIPC() {
     // Quick Panel 切换 (来自工具栏按钮)
-    ipcMain.on('qp-toggle', () => {
-      this.toggle();
+    ipcMain.on('qp-toggle', async () => {
+      await this.toggle();
     });
 
     ipcMain.handle('qp-show', async () => {
@@ -201,6 +201,12 @@ class QuickPanelManager {
 
     ipcMain.handle('qp-is-visible', () => {
       return { visible: this.isVisible() };
+    });
+
+    ipcMain.on('qp-report-size', (_, size) => {
+      const h = Number(size?.height);
+      if (!Number.isFinite(h) || h <= 0) return;
+      this._resizeWindowToContent(h);
     });
 
     // 查询快捷键注册状态
@@ -430,11 +436,11 @@ class QuickPanelManager {
     this._store.set('qpHistory', history);
   }
 
-  toggle() {
+  async toggle() {
     if (this._isVisible) {
       this.hide();
     } else {
-      this.show();
+      await this.show();
     }
   }
   
@@ -442,7 +448,15 @@ class QuickPanelManager {
     if (!this._panelWindow || this._panelWindow.isDestroyed()) {
       this._createPanel();
     }
+    if (!this._panelWindow.webContents.isLoadingMainFrame()) {
+      // no-op
+    } else {
+      await new Promise(resolve => {
+        this._panelWindow.webContents.once('did-finish-load', resolve);
+      });
+    }
 
+    // First positioning before show.
     await this._positionPanelAboveCat();
     
     const clipText = clipboard.readText();
@@ -456,6 +470,11 @@ class QuickPanelManager {
     this._panelWindow.show();
     this._panelWindow.focus();
     this._isVisible = true;
+
+    // Re-anchor after show to avoid falling back to initial center position.
+    this.syncToPetPosition(true);
+    setTimeout(() => this.syncToPetPosition(true), 80);
+    setTimeout(() => this.syncToPetPosition(true), 220);
   }
   
   hide() {
@@ -472,6 +491,25 @@ class QuickPanelManager {
       !this._panelWindow.isDestroyed() &&
       this._panelWindow.isVisible()
     );
+  }
+
+  _resizeWindowToContent(contentHeight) {
+    if (!this._panelWindow || this._panelWindow.isDestroyed()) return;
+    const current = this._panelWindow.getBounds();
+    const minH = 220;
+    const maxH = 520;
+    const nextH = this._clamp(Math.round(contentHeight), minH, maxH);
+    if (Math.abs(nextH - current.height) <= 2) return;
+
+    this._panelWindow.setBounds({
+      x: current.x,
+      y: current.y,
+      width: current.width,
+      height: nextH,
+    });
+
+    // Keep alignment stable after height change.
+    this.syncToPetPosition(true);
   }
 
   syncToPetPosition(force = false) {
