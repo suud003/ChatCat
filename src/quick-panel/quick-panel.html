@@ -86,8 +86,8 @@
     
     .result-area {
       -webkit-app-region: no-drag;
-      background: #fafbfc;
-      border: 1px solid #e8e8ec;
+      background: linear-gradient(135deg, #f3f0ff 0%, #faf8ff 100%);
+      border: 1.5px solid #d8d0f0;
       border-radius: 10px;
       padding: 12px;
       min-height: 60px;
@@ -97,6 +97,17 @@
       line-height: 1.6;
       color: #444;
       display: none;
+      position: relative;
+    }
+    .result-area::before {
+      content: '🐱 AI 回复';
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6c4ab6;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed #d8d0f0;
     }
     .result-area.visible { display: block; }
     .result-area .streaming-cursor {

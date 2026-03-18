@@ -110,6 +110,12 @@ class QuickPanelManager {
       return this._shortcutStatus || { toggle: false, screenshot: false };
     });
 
+    // 接收猫咪位置更新，同步 Quick Panel 位置
+    ipcMain.on('qp-update-pet-position', (_, pos) => {
+      this._lastPetScreenPos = pos; // { screenX, screenY, width, height }
+      this._repositionToNearPet();
+    });
+
     // 文本处理请求
     ipcMain.handle('qp-process-text', async (event, mode, text) => {
       const promptObj = this._textProcessor.buildPrompt(mode, text);
@@ -344,18 +350,50 @@ class QuickPanelManager {
     if (!this._panelWindow || this._panelWindow.isDestroyed()) {
       this._createPanel();
     }
-    
+
+    // Position near pet before showing
+    this._repositionToNearPet();
+
     const clipText = clipboard.readText();
     const clipImage = clipboard.readImage();
-    
+
     this._panelWindow.webContents.send('panel-show', {
       clipboardText: clipText || '',
       hasImage: !clipImage.isEmpty(),
     });
-    
+
     this._panelWindow.show();
     this._panelWindow.focus();
     this._isVisible = true;
+  }
+
+  /**
+   * Reposition QuickPanel to the upper-left of the pet cat.
+   */
+  _repositionToNearPet() {
+    if (!this._panelWindow || this._panelWindow.isDestroyed()) return;
+    if (!this._lastPetScreenPos) return;
+
+    const { screenX, screenY, width: petW } = this._lastPetScreenPos;
+    const [panelW, panelH] = this._panelWindow.getSize();
+
+    // Place to the upper-left of the pet
+    let x = Math.round(screenX - panelW - 10);
+    let y = Math.round(screenY - panelH + 100);
+
+    // Keep on screen
+    const display = screen.getDisplayNearestPoint({ x: screenX, y: screenY });
+    const { x: wX, y: wY, width: wW, height: wH } = display.workArea;
+
+    // If not enough space on the left, try upper-right
+    if (x < wX) {
+      x = Math.round(screenX + petW + 10);
+    }
+    // Clamp to screen bounds
+    x = Math.max(wX, Math.min(x, wX + wW - panelW));
+    y = Math.max(wY, Math.min(y, wY + wH - panelH));
+
+    this._panelWindow.setPosition(x, y);
   }
   
   hide() {

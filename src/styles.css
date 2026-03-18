@@ -1254,6 +1254,53 @@ body {
   50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(211, 47, 47, 0); }
 }
 
+/* Recorder inactive hint */
+.recorder-inactive-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 12px;
+  text-align: center;
+  color: #888;
+  gap: 6px;
+}
+
+.recorder-inactive-hint.hidden {
+  display: none;
+}
+
+.recorder-inactive-hint p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.recorder-inactive-hint .hint-desc {
+  font-size: 11px;
+  color: #aaa;
+  line-height: 1.4;
+}
+
+.recorder-goto-settings-btn {
+  margin-top: 8px;
+  padding: 6px 16px;
+  font-size: 12px;
+  background: rgba(255, 126, 103, 0.15);
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recorder-goto-settings-btn:hover {
+  background: rgba(255, 126, 103, 0.3);
+}
+
+.recorder-goto-settings-btn:active {
+  transform: scale(0.96);
+}
+
 /* Recorder bubble tail */
 #recorder-bubble-tail {
   position: absolute;
@@ -2298,6 +2345,7 @@ body {
 
 .cat-bubble .bubble-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
 }
@@ -2308,6 +2356,7 @@ body {
   border-radius: 10px;
   padding: 3px 10px;
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
 }
@@ -2319,6 +2368,17 @@ body {
 
 .bubble-action-btn:active {
   transform: scale(0.97);
+}
+
+.bubble-dismiss-btn {
+  background: transparent;
+  border-color: #aaa;
+  color: #999;
+}
+
+.bubble-dismiss-btn:hover {
+  background: #f5f5f5;
+  color: #666;
 }
 
 /* Bubble inline reply input */
@@ -2402,7 +2462,7 @@ body {
 }
 
 .cat-bubble.fade-out {
-  animation: catBubbleFadeOut 0.5s ease forwards;
+  animation: catBubbleFadeOut 2s ease forwards;
 }
 
 @keyframes catBubbleFadeIn {

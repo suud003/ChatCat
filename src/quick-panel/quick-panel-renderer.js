@@ -3,6 +3,7 @@ class QuickPanelUI {
     this._mode = 'polish';
     this._qaHistory = [];
     this._isProcessing = false;
+    this._historyVisible = false;
     
     this._inputArea = document.getElementById('input-area');
     this._resultArea = document.getElementById('result-area');
@@ -181,6 +182,7 @@ class QuickPanelUI {
     if (!text && this._mode !== 'screenshot' && !this._pastedImageBase64) return;
     
     this._isProcessing = true;
+    this._historyVisible = false;
     this._resultArea.innerHTML = '<span class="streaming-cursor"></span>';
     this._resultArea.classList.add('visible');
     this._statusBar.textContent = '⏳ 处理中...';
@@ -220,13 +222,22 @@ class QuickPanelUI {
   }
   
   async _showHistory() {
+    // Toggle: if history is already showing, hide it
+    if (this._historyVisible) {
+      this._resultArea.innerHTML = '';
+      this._resultArea.classList.remove('visible');
+      this._historyVisible = false;
+      return;
+    }
+
     const history = await window.qpAPI.getHistory();
     if (!history || history.length === 0) {
       this._resultArea.innerHTML = '<div style="color:#aaa;">暂无历史记录</div>';
       this._resultArea.classList.add('visible');
+      this._historyVisible = true;
       return;
     }
-    
+
     let html = '<div style="font-size:12px;"><strong>📋 最近处理记录</strong></div>';
     for (const item of history.slice(-10).reverse()) {
       const modeLabels = { polish: '✏️', summarize: '📋', explain: '🔍', ask: '💬', ocr: '📸' };
@@ -238,6 +249,7 @@ class QuickPanelUI {
     }
     this._resultArea.innerHTML = html;
     this._resultArea.classList.add('visible');
+    this._historyVisible = true;
   }
   
   _addCopyHandler() {

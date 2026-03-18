@@ -140,7 +140,21 @@ export class NotificationMgr {
         });
         actionsEl.appendChild(btn);
       }
-      if (nonReplyActions.length > 0) {
+
+      // Always add a dismiss/ignore button if none exists
+      const hasDismiss = nonReplyActions.some(a => a.action === 'dismiss' || a.action === 'snooze');
+      if (!hasDismiss) {
+        const dismissBtn = document.createElement('button');
+        dismissBtn.className = 'bubble-action-btn bubble-dismiss-btn';
+        dismissBtn.textContent = '忽略';
+        dismissBtn.addEventListener('click', () => {
+          this._handleAction(config, 'dismiss');
+          this._hideBubble(bubble);
+        });
+        actionsEl.appendChild(dismissBtn);
+      }
+
+      if (actionsEl.children.length > 0) {
         bubble.appendChild(actionsEl);
       }
 
@@ -176,10 +190,10 @@ export class NotificationMgr {
     if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
     if (bubble._removeTimer) clearTimeout(bubble._removeTimer);
 
-    // L3 stays until user clicks (no auto-hide), but timeout after 30s
+    // L3 stays until user clicks, auto-dismiss after 10s then 2s fade
     bubble._hideTimer = setTimeout(() => {
       this._hideBubble(bubble);
-    }, 30000);
+    }, 10000);
   }
 
   _hideBubble(bubble) {
@@ -190,7 +204,7 @@ export class NotificationMgr {
       bubble.classList.remove('fade-out', 'bubble-l3');
       bubble.innerHTML = '';
       bubble.textContent = '';
-    }, 500);
+    }, 2000);
   }
 
   async _handleAction(config, action) {

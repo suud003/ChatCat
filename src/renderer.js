@@ -86,7 +86,7 @@ let affectionSystem = null;
  * Show a floating cat bubble above the pet.
  * Supports both simple text and structured L2/L3 notifications.
  */
-function showCatBubble(text, duration = 5000) {
+function showCatBubble(text, duration = 10000) {
   const bubble = document.getElementById('cat-bubble');
   if (!bubble) return;
 
@@ -105,7 +105,7 @@ function showCatBubble(text, duration = 5000) {
     bubble._removeTimer = setTimeout(() => {
       bubble.classList.add('hidden');
       bubble.classList.remove('fade-out');
-    }, 500);
+    }, 2000);
   }, duration);
 }
 
@@ -117,6 +117,17 @@ function showNotification(config) {
   const bubble = document.getElementById('cat-bubble');
   const dot = document.getElementById('proactive-dot');
   if (!bubble) return;
+
+  // Helper: hide bubble with 2s fade-out
+  const hideBubbleWithFade = () => {
+    bubble.classList.add('fade-out');
+    if (bubble._removeTimer) clearTimeout(bubble._removeTimer);
+    bubble._removeTimer = setTimeout(() => {
+      bubble.classList.add('hidden');
+      bubble.classList.remove('fade-out', 'bubble-l3');
+      bubble.innerHTML = '';
+    }, 2000);
+  };
 
   switch (config.level) {
     case 'L0':
@@ -130,10 +141,10 @@ function showNotification(config) {
 
     case 'L2':
       // Bubble that auto-shrinks to dot
-      showCatBubble(config.message, 5000);
+      showCatBubble(config.message, 10000);
       setTimeout(() => {
         if (dot) dot.classList.remove('hidden');
-      }, 5500);
+      }, 12000); // 10s display + 2s fade
       break;
 
     case 'L3':
@@ -152,15 +163,11 @@ function showNotification(config) {
         actionsEl.className = 'bubble-actions';
         for (const act of config.actions) {
           const btn = document.createElement('button');
-          btn.className = 'bubble-action-btn';
+          btn.className = act.action === 'dismiss' ? 'bubble-action-btn bubble-dismiss-btn' : 'bubble-action-btn';
           btn.textContent = act.label;
           btn.addEventListener('click', () => {
-            bubble.classList.add('fade-out');
-            setTimeout(() => {
-              bubble.classList.add('hidden');
-              bubble.classList.remove('fade-out', 'bubble-l3');
-              bubble.innerHTML = '';
-            }, 400);
+            if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+            hideBubbleWithFade();
             if (config.onAction) config.onAction(act.action);
           });
           actionsEl.appendChild(btn);
@@ -168,16 +175,12 @@ function showNotification(config) {
         bubble.appendChild(actionsEl);
       }
 
-      // Auto-dismiss after 30s
+      // Auto-dismiss: 10s display + 2s fade
       if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+      if (bubble._removeTimer) clearTimeout(bubble._removeTimer);
       bubble._hideTimer = setTimeout(() => {
-        bubble.classList.add('fade-out');
-        setTimeout(() => {
-          bubble.classList.add('hidden');
-          bubble.classList.remove('fade-out', 'bubble-l3');
-          bubble.innerHTML = '';
-        }, 400);
-      }, 30000);
+        hideBubbleWithFade();
+      }, 10000);
       break;
 
     default:
@@ -597,6 +600,34 @@ async function init() {
     });
   });
 
+  // V2: Clipboard text detection — offer actions when user copies text
+  window.electronAPI.onClipboardUpdate((item) => {
+    const text = item?.text?.trim();
+    console.log('[ClipboardDetect] text length:', text?.length || 0);
+    if (!text || text.length < 10) return; // ignore very short copies
+
+    showNotification({
+      level: 'L3',
+      message: '🐱 检测到复制的文字，要我帮你处理吗？',
+      actions: [
+        { label: '✏️ 润色', action: 'polish' },
+        { label: '📋 总结', action: 'summarize' },
+        { label: '🔍 解释', action: 'explain' },
+        { label: '忽略', action: 'dismiss' }
+      ],
+      onAction: async (action) => {
+        if (action === 'dismiss') return;
+        showCatBubble('🐱 处理中...');
+        try {
+          const result = await window.electronAPI.qpProcessText(action, text);
+          displayResult(result, action);
+        } catch (err) {
+          showCatBubble('🐱 哎呀，处理出错了...');
+        }
+      }
+    });
+  });
+
   // V2: Quick Panel 快捷键注册状态监听
   window.electronAPI.onQpShortcutStatus?.((status) => {
     const msgs = [];
@@ -674,12 +705,17 @@ function showDragActionMenu(content) {
       menu.remove();
       if (!action) return;
 
-      showCatBubble('🐱 处理中...');
+      showCatBubble('🐱 处理中...请稍等');
       try {
         const result = await window.electronAPI.qpProcessText(action, content);
-        displayResult(result, action);
+        if (result) {
+          displayResult(result, action);
+        } else {
+          showCatBubble('🐱 没有得到处理结果，请检查API设置');
+        }
       } catch (err) {
-        showCatBubble('🐱 哎呀，处理出错了...');
+        console.error('[DragAction] qpProcessText failed:', err);
+        showCatBubble(`🐱 处理失败: ${err.message || '请检查API设置'}`);
       }
     });
   });
@@ -689,19 +725,44 @@ function showDragActionMenu(content) {
 
 function displayResult(result, mode) {
   if (!result) return;
-  if (result.length < 50) {
-    showCatBubble(result);
-  } else if (result.length < 500) {
+  const title = { polish: '✏️ 润色结果', summarize: '📋 总结', explain: '🔍 解释' }[mode] || '处理结果';
+
+  if (result.length < 80) {
+    // Short result: show in bubble with copy button
     showNotification({
-      level: 'L2',
-      title: { polish: '✏️ 润色结果', summarize: '📋 总结', explain: '🔍 解释' }[mode] || '处理结果',
-      message: result,
-      actions: [{ label: '📋 复制', action: 'copy' }],
+      level: 'L3',
+      message: `${title}\n${result}`,
+      actions: [
+        { label: '📋 复制', action: 'copy' },
+        { label: '忽略', action: 'dismiss' }
+      ],
       onAction: (action) => {
-        if (action === 'copy') navigator.clipboard.writeText(result);
+        if (action === 'copy') {
+          navigator.clipboard.writeText(result);
+          showCatBubble('✅ 已复制到剪贴板');
+        }
+      }
+    });
+  } else if (result.length < 500) {
+    // Medium result: show in L3 bubble with copy
+    showNotification({
+      level: 'L3',
+      message: `${title}\n${result}`,
+      actions: [
+        { label: '📋 复制', action: 'copy' },
+        { label: '忽略', action: 'dismiss' }
+      ],
+      onAction: (action) => {
+        if (action === 'copy') {
+          navigator.clipboard.writeText(result);
+          showCatBubble('✅ 已复制到剪贴板');
+        }
       }
     });
   } else {
+    // Long result: open in QuickPanel
+    navigator.clipboard.writeText(result);
+    showCatBubble('✅ 结果已复制到剪贴板');
     window.electronAPI.qpShowResult({ mode, result });
   }
 }
@@ -857,6 +918,7 @@ function setupToolbar(chatUI) {
         break;
       }
       case 'quick-panel':
+        _sendPetPositionToQP();
         window.electronAPI.qpToggle();
         break;
       case 'fun': {
@@ -867,6 +929,22 @@ function setupToolbar(chatUI) {
         break;
       }
     }
+  });
+}
+
+/**
+ * Send pet's screen position to QuickPanel for positioning
+ */
+function _sendPetPositionToQP() {
+  const petContainer = document.getElementById('pet-container');
+  if (!petContainer) return;
+  const rect = petContainer.getBoundingClientRect();
+  // Convert client coordinates to screen coordinates
+  const screenX = window.screenX + rect.left;
+  const screenY = window.screenY + rect.top;
+  window.electronAPI.qpUpdatePetPosition?.({
+    screenX, screenY,
+    width: rect.width, height: rect.height
   });
 }
 
@@ -957,6 +1035,9 @@ function setupDrag() {
     // Multi-monitor: tell main process the screen-coordinate of the cat center
     // so it can move the window to the correct display if needed.
     window.electronAPI.moveToDisplay(e.screenX, e.screenY);
+
+    // Sync QuickPanel position with pet during drag
+    _sendPetPositionToQP();
   });
 
   document.addEventListener('mouseup', () => {
@@ -1000,7 +1081,7 @@ function setupDrag() {
 }
 
 function setupClickThrough() {
-  const selectors = '#pet-container, #chat-container, #tools-container, #fun-container, .mini-cat';
+  const selectors = '#pet-container, #chat-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
 
   document.addEventListener('mouseenter', (e) => {
