@@ -1339,17 +1339,14 @@ function setupPetStatusUI(affection, petBase) {
 async function setupConsentToggle() {
   const isGranted = await window.electronAPI.consentCheck();
   
-  // Create toggle UI
+  // Create toggle UI using existing setting-group style (consistent with skill toggles)
   const toggle = document.createElement('div');
-  toggle.className = 'setting-item';
+  toggle.className = 'setting-group';
   toggle.innerHTML = `
-    <div class="setting-label">
-      <span>📝 打字内容智能分析</span>
-      <span class="setting-desc">开启后可生成基于内容的增强日报、待办提取和内容回顾</span>
-    </div>
-    <label class="switch">
+    <label>
       <input type="checkbox" id="consent-toggle" ${isGranted ? 'checked' : ''}>
-      <span class="slider"></span>
+      📝 打字内容智能分析
+      <span style="font-size:11px;color:#999;display:block;margin-top:2px;">开启后可生成基于内容的增强日报、待办提取和内容回顾</span>
     </label>
   `;
   
@@ -1368,14 +1365,14 @@ async function setupConsentToggle() {
     setupContentReviewTab();
   });
   
-  // Attach to privacy section in settings (assuming there's a privacy section, otherwise append to settings body)
-  const settingsBody = document.querySelector('.chat-settings-body');
-  if (settingsBody) {
+  // Attach to settings tab, before the save button
+  const settingsTab = document.getElementById('tab-settings');
+  const saveActions = settingsTab?.querySelector('.setting-actions-bottom');
+  if (settingsTab && saveActions) {
     const privacySection = document.createElement('div');
-    privacySection.className = 'setting-group';
-    privacySection.innerHTML = '<div class="setting-group-title">隐私与安全 (Pillar C)</div>';
+    privacySection.innerHTML = '<div class="setting-section-title">隐私与安全</div>';
     privacySection.appendChild(toggle);
-    settingsBody.appendChild(privacySection);
+    settingsTab.insertBefore(privacySection, saveActions);
   }
 }
 

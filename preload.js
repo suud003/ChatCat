@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onResetPetPosition: (callback) => ipcRenderer.on('reset-pet-position', () => callback()),
 
   // Recorder
+  // V2: recorderToggle 已废弃，仅返回状态。录制启停由隐私授权 (consent-request/consent-revoke) 控制
   recorderToggle: () => ipcRenderer.invoke('recorder-toggle'),
   recorderSetDir: () => ipcRenderer.invoke('recorder-set-dir'),
   recorderGetStatus: () => ipcRenderer.invoke('recorder-get-status'),

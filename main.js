@@ -319,15 +319,11 @@ ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
 });
 
 // Recorder IPC handlers
+// V2: recorder-toggle 已废弃，录制启停完全由隐私授权 (consent) 控制
+// 保留 handler 但仅返回状态，不再允许手动 toggle
 ipcMain.handle('recorder-toggle', () => {
   if (!keyboardRecorder) return { recording: false, outputDir: '' };
-  if (keyboardRecorder.recording) {
-    keyboardRecorder.stop();
-    store.set('recorderEnabled', false);
-  } else {
-    keyboardRecorder.start();
-    store.set('recorderEnabled', true);
-  }
+  // 不再手动切换，返回当前状态即可
   return { recording: keyboardRecorder.recording, outputDir: keyboardRecorder.outputDir };
 });
 
