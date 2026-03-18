@@ -4,3 +4,9 @@ dist/
 *.log
 server/data/
 test-instance-2/
+
+# macOS
+.DS_Store
+
+# CodeBuddy AI assistant local data
+.codebuddy/

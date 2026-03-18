@@ -1,15 +1,15 @@
 /**
  * AI Service - OpenAI-compatible API client with streaming support
  * V1.1: Dynamic system prompt via personality + memory integration, sentiment detection
+ * V2: Refactored to use centralized AIClientRenderer for HTTP calls
  */
 
 import { buildSystemPrompt, detectSentiment } from './personality.js';
+import { AIClientRenderer } from '../shared/ai-client-renderer.js';
 
 export class AIService {
   constructor() {
-    this.baseUrl = '';
-    this.apiKey = '';
-    this.modelName = '';
+    this._client = new AIClientRenderer();
     this.conversationHistory = [];
 
     // V1.1: personality & memory context
@@ -18,6 +18,10 @@ export class AIService {
     this._memoryManager = null;
     this.lastSentiment = 'neutral';
     this.lastFullResponse = '';
+
+    // V2: rhythm context
+    this._rhythmAnalyzer = null;
+    this._compositeEngine = null;
   }
 
   /**
@@ -29,14 +33,20 @@ export class AIService {
     this._memoryManager = memoryManager;
   }
 
+  /**
+   * V2: Set rhythm modules for activity context injection
+   */
+  setRhythmContext(rhythmAnalyzer, compositeEngine) {
+    this._rhythmAnalyzer = rhythmAnalyzer;
+    this._compositeEngine = compositeEngine;
+  }
+
   setPersonality(p) {
     this._personality = p || 'lively';
   }
 
   async loadConfig() {
-    this.baseUrl = await window.electronAPI.getStore('apiBaseUrl') || 'https://api.openai.com/v1';
-    this.apiKey = await window.electronAPI.getStore('apiKey') || '';
-    this.modelName = await window.electronAPI.getStore('modelName') || 'gpt-3.5-turbo';
+    await this._client.loadConfig();
 
     const history = await window.electronAPI.getStore('chatHistory');
     if (Array.isArray(history)) {
@@ -45,14 +55,54 @@ export class AIService {
   }
 
   isConfigured() {
-    return this.apiKey && this.apiKey.length > 0;
+    return this._client.isConfigured();
   }
+
+  /** Expose underlying client for modules that need direct access (e.g. MemoryManager) */
+  get client() {
+    return this._client;
+  }
+
+  // Backward-compatible getters for external code that reads these directly
+  get baseUrl() { return this._client.baseUrl; }
+  get apiKey() { return this._client.apiKey; }
+  get modelName() { return this._client.modelName; }
 
   _buildSystemPrompt() {
     const level = this._affectionSystem?.level || 1;
     const mood = this._affectionSystem?.mood || 'normal';
     const memories = this._memoryManager?.getTopMemories(10) || [];
-    return buildSystemPrompt(this._personality, level, mood, memories);
+    let prompt = buildSystemPrompt(this._personality, level, mood, memories);
+
+    // V2: Inject real-time rhythm data if available
+    if (this._rhythmAnalyzer || this._compositeEngine) {
+      prompt += '\n--- 实时数据上下文 ---\n';
+      prompt += '以下是主人当前的行为数据，你可以根据这些数据回答主人的问题：\n';
+
+      if (this._rhythmAnalyzer) {
+        const signals = this._rhythmAnalyzer.getCurrentSignals?.() || {};
+        const state = this._rhythmAnalyzer.currentState || 'idle';
+        const stateNames = {
+          flow: '心流状态', stuck: '卡壳状态', reading: '阅读思考',
+          chatting: '沟通模式', typing: '打字中', away: '离开', idle: '空闲'
+        };
+        prompt += `- 当前状态: ${stateNames[state] || state}\n`;
+        prompt += `- 打字速度: ${Math.round(signals.avgCPM || 0)} CPM (字符/分钟)\n`;
+        prompt += `- 退格率: ${Math.round((signals.deleteRate || 0) * 100)}%\n`;
+        prompt += `- 鼠标: ${signals.mouseActive ? '活跃' : '静止'}\n`;
+      }
+
+      if (this._compositeEngine) {
+        const fullData = this._compositeEngine.getTodayFullData?.() || {};
+        prompt += `- 今日打字时长: ${Math.round(fullData.totalTypingMin || 0)} 分钟\n`;
+        prompt += `- 今日心流时长: ${Math.round(fullData.totalFlowMin || 0)} 分钟\n`;
+        prompt += `- 今日按键数: ${this._compositeEngine.todayTypingCount || 0}\n`;
+      }
+
+      prompt += '你现在可以在回答中引用这些具体数据来回应主人的提问。\n';
+    }
+
+    return prompt;
   }
 
   async *sendMessageStream(userMessage) {
@@ -69,58 +119,15 @@ export class AIService {
     ];
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.modelName,
-          messages: messages,
-          stream: true,
-          max_tokens: 500,
-          temperature: 0.8
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API Error ${response.status}: ${errText.substring(0, 200)}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
       let fullResponse = '';
-      let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
-
-          // Compatible with both "data: {json}" and "data:{json}"
-          const data = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5);
-          if (data === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullResponse += content;
-              yield content;
-            }
-          } catch {
-            // Skip malformed JSON lines
-          }
-        }
+      for await (const chunk of this._client.stream({
+        messages,
+        temperature: 0.8,
+        maxTokens: 500,
+      })) {
+        fullResponse += chunk;
+        yield chunk;
       }
 
       // Save to history
@@ -161,36 +168,6 @@ export class AIService {
    * Test API Connection with given credentials
    */
   async testConnection(apiUrl, apiKey, modelName) {
-    if (!apiKey) {
-      throw new Error('API Key is empty');
-    }
-    
-    const url = `${apiUrl}/chat/completions`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: modelName,
-        messages: [{ role: 'user', content: 'hello' }],
-        max_tokens: 5,
-        stream: false
-      })
-    });
-
-    if (!response.ok) {
-      let errText = '';
-      try { errText = await response.text(); } catch {}
-      throw new Error(`HTTP ${response.status}: ${errText.substring(0, 100)}`);
-    }
-
-    const data = await response.json();
-    if (!data.choices || !data.choices[0]) {
-      throw new Error('Invalid response format');
-    }
-
-    return true;
+    return this._client.testConnection(apiUrl, apiKey, modelName);
   }
 }

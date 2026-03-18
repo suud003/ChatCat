@@ -45,6 +45,7 @@ export class ChatUI {
     this.apiKeyInput = document.getElementById('setting-api-key');
     this.opacityInput = document.getElementById('setting-opacity');
     this.opacityValue = document.getElementById('opacity-value');
+    this.visionModelInput = document.getElementById('setting-vision-model');
 
     // V1.1: personality selector
     this.personalitySelect = document.getElementById('setting-personality');
@@ -196,6 +197,11 @@ export class ChatUI {
       await window.electronAPI.setStore('apiKey', this.apiKeyInput.value);
       await window.electronAPI.setStore('opacity', parseFloat(this.opacityInput.value));
       await window.electronAPI.setStore('apiPreset', presetKey);
+
+      // V2 Pillar B: Save vision model
+      if (this.visionModelInput) {
+        await window.electronAPI.setStore('visionModel', this.visionModelInput.value.trim());
+      }
 
       // V1.1: Save personality
       if (this.personalitySelect) {
@@ -371,6 +377,11 @@ export class ChatUI {
     const savedUrl = await window.electronAPI.getStore('apiBaseUrl') || '';
     this.populateModels(savedPreset, savedModel, savedUrl);
 
+    // V2 Pillar B: Load vision model
+    if (this.visionModelInput) {
+      this.visionModelInput.value = await window.electronAPI.getStore('visionModel') || '';
+    }
+
     // V1.1: Load personality
     if (this.personalitySelect) {
       const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
@@ -510,6 +521,7 @@ export class ChatUI {
       apiKey: this.apiKeyInput?.value,
       opacity: this.opacityInput?.value,
       personality: this.personalitySelect?.value,
+      visionModel: this.visionModelInput?.value,
       skillTextConverter: document.getElementById('skill-text-converter')?.checked,
       skillDailyReport: document.getElementById('skill-daily-report')?.checked,
       skillTodoExtractor: document.getElementById('skill-todo-extractor')?.checked,
@@ -537,6 +549,7 @@ export class ChatUI {
       s.apiKey !== this.apiKeyInput?.value ||
       s.opacity !== this.opacityInput?.value ||
       s.personality !== this.personalitySelect?.value ||
+      s.visionModel !== this.visionModelInput?.value ||
       s.skillTextConverter !== document.getElementById('skill-text-converter')?.checked ||
       s.skillDailyReport !== document.getElementById('skill-daily-report')?.checked ||
       s.skillTodoExtractor !== document.getElementById('skill-todo-extractor')?.checked ||

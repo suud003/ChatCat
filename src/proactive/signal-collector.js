@@ -57,7 +57,7 @@ export class SignalCollector {
     this._workStartTime = Date.now();
 
     // Listen for global keydowns
-    window.electronAPI.onGlobalKeydown((data) => this._onKeydown(data));
+    this._removeGlobalKeydown = window.electronAPI.onGlobalKeydown((data) => this._onKeydown(data));
 
     // Periodic checks (every 30 seconds)
     this._checkTimer = setInterval(() => this._periodicCheck(), 30000);
@@ -69,12 +69,20 @@ export class SignalCollector {
     this._loadBaseline();
 
     // V1.5: Listen for clipboard updates
-    window.electronAPI.onClipboardUpdate((item) => this._onClipboardUpdate(item));
+    this._removeClipboardUpdate = window.electronAPI.onClipboardUpdate((item) => this._onClipboardUpdate(item));
   }
 
   destroy() {
     if (this._checkTimer) clearInterval(this._checkTimer);
     if (this._pauseTimer) clearTimeout(this._pauseTimer);
+    if (typeof this._removeGlobalKeydown === 'function') {
+      this._removeGlobalKeydown();
+      this._removeGlobalKeydown = null;
+    }
+    if (typeof this._removeClipboardUpdate === 'function') {
+      this._removeClipboardUpdate();
+      this._removeClipboardUpdate = null;
+    }
   }
 
   // --- EventEmitter ---
@@ -172,6 +180,11 @@ export class SignalCollector {
     const window = Math.min(this._speedWindowMs, Date.now() - this._typingTimestamps[0]);
     if (window <= 0) return 0;
     return Math.round((this._typingTimestamps.length / window) * 60000); // chars per minute
+  }
+
+  _getRecentDeleteRate() {
+    if (this._totalKeyCount <= 0) return 0;
+    return this._deleteCount / this._totalKeyCount;
   }
 
   _getContinuousWorkMinutes() {
@@ -389,6 +402,8 @@ export class SignalCollector {
   get typingSpeed() { return this._getTypingSpeed(); }
   get continuousWorkMinutes() { return this._getContinuousWorkMinutes(); }
   get speedBaseline() { return this._speedBaseline; }
+  get lastKeyTime() { return this._lastKeyTime; }
+  get deleteRate() { return this._getRecentDeleteRate(); }
 
   /** Reset work timer (e.g., after a break or pomodoro) */
   resetWorkTimer() {

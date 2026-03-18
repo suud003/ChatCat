@@ -9,6 +9,13 @@ const { SkillRegistry } = require('./src/skills/skill-registry');
 const { SkillEngine } = require('./src/skills/skill-engine');
 const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 
+const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
+const { AIClientMain } = require('./src/shared/ai-client-main');
+
+// V2 Pillar C Imports
+const { PrivacyConsentManager } = require('./src/consent/privacy-consent');
+const { ContentSegmenter } = require('./src/cleaner/content-segmenter');
+
 const store = new Store({
   defaults: {
     apiBaseUrl: 'https://api.openai.com/v1',
@@ -64,6 +71,8 @@ const store = new Store({
     skillsEnabled: { textConverter: true, dailyReport: true, todoExtractor: true },
     dailyReportHour: 18,
     dailyReportOutputDir: '',
+    // V2 Pillar B: Vision model for screenshot OCR
+    visionModel: '',
     todoRemindInterval: 30,
     // V1.3: Pet Base System
     petBaseOwned: [],
@@ -310,15 +319,11 @@ ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
 });
 
 // Recorder IPC handlers
+// V2: recorder-toggle 已废弃，录制启停完全由隐私授权 (consent) 控制
+// 保留 handler 但仅返回状态，不再允许手动 toggle
 ipcMain.handle('recorder-toggle', () => {
   if (!keyboardRecorder) return { recording: false, outputDir: '' };
-  if (keyboardRecorder.recording) {
-    keyboardRecorder.stop();
-    store.set('recorderEnabled', false);
-  } else {
-    keyboardRecorder.start();
-    store.set('recorderEnabled', true);
-  }
+  // 不再手动切换，返回当前状态即可
   return { recording: keyboardRecorder.recording, outputDir: keyboardRecorder.outputDir };
 });
 
@@ -349,6 +354,7 @@ ipcMain.handle('recorder-get-today-content', () => {
 
 // Clipboard polling
 let lastClipboardText = '';
+let lastClipboardImageHash = '';
 let clipboardTimer = null;
 
 function startClipboardPolling() {
@@ -365,6 +371,26 @@ function startClipboardPolling() {
         store.set('clipboardHistory', history);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('clipboard-update', item);
+        }
+      }
+      
+      const image = clipboard.readImage();
+      if (!image.isEmpty()) {
+        const size = image.getSize();
+        // Use a combination of dimensions and a small slice of the bitmap to avoid expensive toDataURL calls
+        const bmp = image.toBitmap();
+        const sampleBytes = bmp.length > 100 ? bmp.slice(bmp.length / 2, bmp.length / 2 + 100).toString('hex') : bmp.toString('hex');
+        const imageHash = `${size.width}x${size.height}_${sampleBytes}`;
+        
+        if (imageHash !== lastClipboardImageHash) {
+          lastClipboardImageHash = imageHash;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('clipboard-image-detected', {
+              width: image.getSize().width,
+              height: image.getSize().height,
+              timestamp: Date.now()
+            });
+          }
         }
       }
     } catch {}
@@ -549,7 +575,12 @@ async function startUioHook() {
       }
     });
 
+    let lastMousemoveTime = 0;
     uIOhook.on('mousemove', (e) => {
+      const now = Date.now();
+      if (now - lastMousemoveTime < 50) return; // 50ms节流 = 最高20fps
+      lastMousemoveTime = now;
+      
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('global-mousemove', { x: e.x, y: e.y });
       }
@@ -656,25 +687,88 @@ app.whenReady().then(() => {
     console.log(`[Renderer ${prefix}] ${message} (${sourceId}:${line})`);
   });
 
+  // V2: Unified AI Client (main process)
+  const aiClient = new AIClientMain(store);
+
+  // V2: Quick Panel
+  const quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient);
+  quickPanelManager.init();
+
   createTray();
   setupShortcuts();
   setupInputHook();
 
   // Initialize keyboard recorder
   keyboardRecorder = new KeyboardRecorder(mainWindow, store);
-  if (store.get('recorderEnabled') && keyboardRecorder.outputDir) {
+  
+  // V2 Pillar C: Setup Privacy Consent Manager & Content Segmenter
+  const consentManager = new PrivacyConsentManager(store, mainWindow);
+  consentManager.init();
+  const contentSegmenter = new ContentSegmenter(store);
+  
+  // Set initial content mode on recorder based on consent
+  const isContentEnabled = store.get('contentConsentGranted', false);
+  keyboardRecorder.setContentMode(isContentEnabled);
+  
+  // 授权状态联动记录器启停
+  // 注意: PrivacyConsentManager 通过 webContents.send() 发送事件到渲染进程,
+  // 不会触发 ipcMain.on()。所以这里提供一个回调函数直接在主进程内调用。
+  const onConsentChanged = (granted) => {
+    keyboardRecorder.setContentMode(granted);
+    
+    if (granted) {
+      // Auto-set a default directory if none exists
+      if (!keyboardRecorder.outputDir) {
+        const defaultDir = path.join(app.getPath('userData'), 'records');
+        if (!fs.existsSync(defaultDir)) {
+          fs.mkdirSync(defaultDir, { recursive: true });
+        }
+        keyboardRecorder.setOutputDir(defaultDir);
+      }
+      keyboardRecorder.start();
+      console.log('[Pillar C] Auto-started recording with consent. Dir:', keyboardRecorder.outputDir);
+    } else {
+      keyboardRecorder.stop();
+      console.log('[Pillar C] Auto-stopped recording due to consent revocation.');
+    }
+  };
+  consentManager.onConsentChanged = onConsentChanged;
+
+  if (isContentEnabled) {
+    // Auto-set a default directory if none exists
+    if (!keyboardRecorder.outputDir) {
+      const defaultDir = path.join(app.getPath('userData'), 'records');
+      if (!fs.existsSync(defaultDir)) {
+        fs.mkdirSync(defaultDir, { recursive: true });
+      }
+      keyboardRecorder.setOutputDir(defaultDir);
+    }
     keyboardRecorder.start();
+    console.log('[Pillar C] Auto-started recording on app launch (consent granted).');
   }
 
   // Initialize skills
   textConverter = new TextConverter(store, keyboardRecorder);
+  
+  // Listen for TextConverter conversion complete to trigger segmentation
+  textConverter.onConversionComplete = (date, convertedText) => {
+    if (store.get('contentConsentGranted', false)) {
+      try {
+        contentSegmenter.segment(convertedText, date);
+        console.log(`[Pillar C] Segments updated for ${date}`);
+      } catch (err) {
+        console.error('[Pillar C] Content Segmentation failed:', err);
+      }
+    }
+  };
+  
   dailyReport = new DailyReport(store);
   todoExtractor = new TodoExtractor(store);
 
   // Initialize SKILL.md-based skill system
   skillRegistry = new SkillRegistry(path.join(__dirname, 'src', 'skills', 'skills'));
   skillRegistry.init().then(() => {
-    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder);
+    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient);
     console.log('[Main] Skill system initialized');
   }).catch(err => {
     console.warn('[Main] Skill system init failed:', err.message);

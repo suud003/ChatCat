@@ -35,6 +35,7 @@ import { idleChatScene } from './scenes/idle-chat.js';
 // V1.5: New scene imports — P2
 import { catSelfReportFocusedScene, catSelfReportReturnScene, catSelfReportLateNightScene, catSelfReportMorningScene } from './scenes/cat-self-report.js';
 import { relationshipDeepenScene } from './scenes/relationship-deepen.js';
+import { rhythmScenes } from './scenes/rhythm-scenes.js';
 
 const ALL_SCENES = [
   dailyReportScene,
@@ -74,7 +75,8 @@ const ALL_SCENES = [
   catSelfReportReturnScene,
   catSelfReportLateNightScene,
   catSelfReportMorningScene,
-  relationshipDeepenScene
+  relationshipDeepenScene,
+  ...rhythmScenes
 ];
 
 export class ProactiveEngine {
@@ -92,6 +94,15 @@ export class ProactiveEngine {
     this._pomodoroTimer = null;
     this._todoList = null;
     this._aiService = null;
+  }
+
+  setRhythmModules(rhythmAnalyzer, compositeEngine) {
+    this._rhythmAnalyzer = rhythmAnalyzer;
+    this._compositeEngine = compositeEngine;
+  }
+
+  processExternalSignal(signalName, data) {
+    this._processSignal(signalName, data);
   }
 
   /**
@@ -219,7 +230,7 @@ export class ProactiveEngine {
 
       // Check condition
       const ctx = this._buildContext(data);
-      if (scene.condition && !scene.condition(ctx)) continue;
+      if (scene.condition && !(await scene.condition(ctx))) continue;
 
       matchingScenes.push(scene);
     }
@@ -261,6 +272,7 @@ export class ProactiveEngine {
 
   _buildContext(signalData) {
     return {
+      data: signalData, // Ensure data is mapped properly
       ...signalData,
       personality: this._personality,
       level: this._affectionSystem ? this._affectionSystem.level : 1,
@@ -269,7 +281,9 @@ export class ProactiveEngine {
       typingSpeed: this.signalCollector.typingSpeed,
       hour: new Date().getHours(),
       todoList: this._todoList,
-      affection: this._affectionSystem
+      affection: this._affectionSystem,
+      compositeEngine: this._compositeEngine,
+      rhythmAnalyzer: this._rhythmAnalyzer
     };
   }
 

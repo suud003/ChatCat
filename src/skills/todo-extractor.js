@@ -6,8 +6,13 @@
  */
 
 class TodoExtractor {
-  constructor(store) {
+  /**
+   * @param {import('electron-store')} store
+   * @param {import('../shared/ai-client-main').AIClientMain} aiClient
+   */
+  constructor(store, aiClient) {
     this._store = store;
+    this._aiClient = aiClient;
   }
 
   async execute() {
@@ -32,7 +37,26 @@ class TodoExtractor {
       '明天', '下周', '截止', 'deadline', '计划', '安排'
     ];
     const hasKeywords = todoKeywords.some(kw => newText.toLowerCase().includes(kw.toLowerCase()));
-    if (!hasKeywords) {
+    
+    // V2 Pillar C: 同时从分段数据中用正则提取候选
+    const candidates = [];
+    if (this._store.get('contentConsentGranted', false)) {
+      const segments = this._store.get(`segments_${today}`) || [];
+      for (const segment of segments) {
+        for (const line of (segment.lines || [])) {
+          if (this._isTodoCandidate(line)) {
+            candidates.push({
+              text: line,
+              time: segment.startTime,
+              type: segment.type,
+              source: 'content-segment'
+            });
+          }
+        }
+      }
+    }
+
+    if (!hasKeywords && candidates.length === 0) {
       // Update offset even if no keywords found
       this._store.set('todoExtractorLastOffset', convertedText.length);
       return { success: false, reason: 'no-keywords' };
@@ -52,6 +76,9 @@ class TodoExtractor {
 
 现有待办（避免重复）：
 ${existingTodos.slice(0, 10).map(t => `- ${t.text}`).join('\n')}
+
+待分析候选（来自正则匹配）：
+${candidates.map(c => `- [${c.time}] ${c.text}`).join('\n')}
 
 待分析文本：
 ${newText.substring(0, 2000)}
@@ -108,58 +135,19 @@ ${newText.substring(0, 2000)}
     }
   }
 
-  _getAIConfig() {
-    return {
-      apiBaseUrl: this._store.get('apiBaseUrl') || 'https://api.openai.com/v1',
-      apiKey: this._store.get('apiKey') || '',
-      modelName: this._store.get('modelName') || 'gpt-3.5-turbo'
-    };
+  _isTodoCandidate(line) {
+    const patterns = [
+      /\bTODO\b/i,
+      /\bFIXME\b/i,
+      /\bHACK\b/i,
+      /\bXXX\b/i,
+      /待办|明天要|记得|别忘了|需要|应该/,
+      /\/\/\s*(todo|fixme)/i,
+      /#\s*(todo|fixme)/i,
+    ];
+    return patterns.some(p => p.test(line));
   }
 
-  async _callAI(config, prompt) {
-    const { net } = require('electron');
-    const url = `${config.apiBaseUrl}/chat/completions`;
-
-    return new Promise((resolve, reject) => {
-      const postData = JSON.stringify({
-        model: config.modelName,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1000,
-        temperature: 0.3
-      });
-
-      const request = net.request({
-        method: 'POST',
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
-        }
-      });
-
-      let responseData = '';
-
-      request.on('response', (response) => {
-        response.on('data', (chunk) => { responseData += chunk.toString(); });
-        response.on('end', () => {
-          try {
-            const json = JSON.parse(responseData);
-            if (json.choices && json.choices[0]) {
-              resolve(json.choices[0].message.content);
-            } else {
-              reject(new Error('Invalid AI response'));
-            }
-          } catch (e) {
-            reject(new Error(`Parse error: ${e.message}`));
-          }
-        });
-      });
-
-      request.on('error', reject);
-      request.write(postData);
-      request.end();
-    });
-  }
 }
 
 module.exports = { TodoExtractor };

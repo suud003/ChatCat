@@ -10,7 +10,6 @@ export class TypeRecorder {
   constructor() {
     // DOM refs (inner content only)
     this._preview = document.getElementById('recorder-preview');
-    this._toggleBtn = document.getElementById('recorder-toggle-btn');
     this._dirBtn = document.getElementById('recorder-dir-btn');
     this._dirDisplay = document.getElementById('recorder-dir-display');
     this._statusDot = document.getElementById('recorder-status-dot');
@@ -23,11 +22,6 @@ export class TypeRecorder {
   }
 
   _setupEvents() {
-    this._toggleBtn.addEventListener('click', async () => {
-      const result = await window.electronAPI.recorderToggle();
-      this._updateRecordingState(result.recording);
-    });
-
     this._dirBtn.addEventListener('click', async () => {
       const result = await window.electronAPI.recorderSetDir();
       if (result.outputDir) {
@@ -43,6 +37,11 @@ export class TypeRecorder {
     if (status.outputDir) {
       this._dirDisplay.textContent = status.outputDir;
       this._dirDisplay.title = status.outputDir;
+    }
+    
+    // V2 Pillar C: 首次启动时如果已处于录制状态，立刻加载今日已有内容
+    if (status.recording) {
+      await this.loadTodayContent();
     }
   }
 
@@ -60,12 +59,26 @@ export class TypeRecorder {
         this._preview.scrollTop = this._preview.scrollHeight;
       }
     });
+
+    // 监听录制状态变化（start/stop 时 recorder 主动推送）
+    window.electronAPI.onRecorderStateChanged?.((data) => {
+      this._updateRecordingState(data.recording);
+    });
+
+    // 监听授权变化 (V2 Pillar C: 授权后加载历史数据并启动，撤销时清空并停止)
+    window.electronAPI.onConsentStatusChanged?.((data) => {
+      if (data.granted) {
+        this.loadTodayContent();
+        this._updateRecordingState(true);
+      } else {
+        this._preview.innerHTML = '';
+        this._updateRecordingState(false);
+      }
+    });
   }
 
   _updateRecordingState(recording) {
     this._recording = recording;
-    this._toggleBtn.textContent = recording ? '停止' : '录制';
-    this._toggleBtn.classList.toggle('recording', recording);
     this._statusDot.classList.toggle('recording', recording);
   }
 

@@ -210,6 +210,9 @@ async function createCharacter(canvas, charId) {
   return ch;
 }
 
+// Global reference so IPC listeners can trigger UI updates
+let typeRecorder = null;
+
 async function init() {
   const canvas = document.getElementById('pet-canvas');
 
@@ -252,7 +255,7 @@ async function init() {
 
   // V1.1: Memory Manager
   const memoryManager = new MemoryManager();
-  memoryManager.setAIService(aiService);
+  memoryManager.setAIClient(aiService.client);
   await memoryManager.init();
 
   // V1.1: Load personality and set context
@@ -284,7 +287,7 @@ async function init() {
   const widget = new SystemInfoWidget();
 
   // Type recorder (no longer standalone, lives in Tools panel tab)
-  const typeRecorder = new TypeRecorder();
+  typeRecorder = new TypeRecorder();
 
   // Pomodoro timer (lives in Tools panel tab)
   const pomodoro = new PomodoroTimer(affection);
@@ -298,7 +301,7 @@ async function init() {
   };
 
   // V1.1: Todo Parser
-  const todoParser = new TodoParser(aiService, todoList, showCatBubble);
+  const todoParser = new TodoParser(aiService.client, todoList, showCatBubble);
   chatUI.setTodoParser(todoParser);
 
   // V1.5: Skill Router — intercepts chat commands/keywords before AI
@@ -325,6 +328,81 @@ async function init() {
     aiService: aiService
   });
   proactiveEngine.setPersonality(savedPersonality);
+
+  // ========== V2 Pillar A: 行为节奏智能 ==========
+  
+  // A1: 鼠标信号化
+  const { MouseSignalCollector } = await import('./proactive/mouse-signal-collector.js');
+  const mouseSignalCollector = new MouseSignalCollector();
+  mouseSignalCollector.init();
+  
+  // A3: 组合信号引擎
+  const { CompositeSignalEngine } = await import('./proactive/composite-signal-engine.js');
+  const compositeEngine = new CompositeSignalEngine(proactiveEngine.signalCollector, mouseSignalCollector);
+  await compositeEngine.init();
+  
+  // A2: 节奏分析器
+  const { RhythmAnalyzer } = await import('./proactive/rhythm-analyzer.js');
+  const rhythmAnalyzer = new RhythmAnalyzer(proactiveEngine.signalCollector, mouseSignalCollector);
+  rhythmAnalyzer.init();
+
+  // A4: 节奏仪表盘
+  const { RhythmDashboard } = await import('./widgets/rhythm-dashboard.js');
+  const rhythmDashboardContainer = document.getElementById('tab-tools-rhythm');
+  if (rhythmDashboardContainer) {
+    const rhythmDashboard = new RhythmDashboard(rhythmDashboardContainer, rhythmAnalyzer, compositeEngine);
+    rhythmDashboard.init();
+  }
+  
+  // 注入到 ProactiveEngine
+  proactiveEngine.setRhythmModules(rhythmAnalyzer, compositeEngine);
+
+  // V2: 注入节奏数据到 AI Service，让聊天能访问实时统计
+  aiService.setRhythmContext(rhythmAnalyzer, compositeEngine);
+  
+  rhythmAnalyzer.on('rhythm-state-change', async (data) => {
+    proactiveEngine.processExternalSignal('rhythm-state-change', data);
+    
+    // Save on state change
+    const today = new Date().toISOString().split('T')[0];
+    const engineData = compositeEngine.getTodayFullData();
+    const summary = rhythmAnalyzer.getDailySummary();
+    await window.electronAPI.setStore(`rhythmData_${today}`, {
+      ...engineData,
+      ...summary,
+      date: today
+    });
+  });
+  rhythmAnalyzer.on('flow-ended', (data) => {
+    proactiveEngine.processExternalSignal('flow-ended', data);
+  });
+  compositeEngine.on('activity-tick', (data) => {
+    proactiveEngine.processExternalSignal('activity-tick', data);
+  });
+  
+  // Save more frequently (every 1 min)
+  setInterval(async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const data = compositeEngine.getTodayFullData();
+    const summary = rhythmAnalyzer.getDailySummary();
+    await window.electronAPI.setStore(`rhythmData_${today}`, {
+      ...data,
+      ...summary,
+      date: today
+    });
+  }, 60 * 1000);
+
+  // Hook for safe save on quit
+  window.electronAPI.onBeforeQuit(async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const data = compositeEngine.getTodayFullData();
+    const summary = rhythmAnalyzer.getDailySummary();
+    await window.electronAPI.setStore(`rhythmData_${today}`, {
+      ...data,
+      ...summary,
+      date: today
+    });
+  });
 
   // Wire proactive reply actions to open chat panel
   proactiveEngine.notificationMgr.onOpenChat = () => {
@@ -404,7 +482,10 @@ async function init() {
   setupToolbarHover();
   setupDrag();
   setupClickThrough();
+  setupDragReceive();
   setupCharacterSelect(canvas);
+  setupConsentToggle();
+  setupContentReviewTab();
 
   // V1.3: Pet Base System (shop & owned in fun panel tabs)
   const petBase = new PetBaseSystem();
@@ -494,7 +575,135 @@ async function init() {
     // Let CSS defaults take over (bottom: 100px; left: calc(50% - 150px))
   });
 
+  // V2: Clipboard image detection
+  window.electronAPI.onClipboardImageDetected((data) => {
+    showNotification({
+      level: 'L3',
+      message: `📸 检测到截图 (${data.width}×${data.height})，要识别内容吗？`,
+      actions: [
+        { label: '🔍 识别', action: 'ocr' },
+        { label: '忽略', action: 'ignore' }
+      ],
+      onAction: async (action) => {
+        if (action === 'ocr') {
+          showCatBubble('🐱 正在打开识图...', 2000);
+          try {
+            await window.electronAPI.recognizeClipboardImage();
+          } catch (err) {
+            showCatBubble(`😿 识别失败: ${err.message}`, 5000);
+          }
+        }
+      }
+    });
+  });
+
+  // V2: Quick Panel 快捷键注册状态监听
+  window.electronAPI.onQpShortcutStatus?.((status) => {
+    const msgs = [];
+    if (!status.toggle) msgs.push('⌘⇧Space (Quick Panel)');
+    if (!status.screenshot) msgs.push('⌘⇧S (截图OCR)');
+    if (msgs.length > 0) {
+      showCatBubble(`🐱 快捷键 ${msgs.join('、')} 注册失败，可能被系统占用。可点击工具栏 ⚡ 按钮使用~`, 8000);
+    }
+  });
+
   console.log('ChatCat Desktop Pet V1.4 initialized!');
+}
+
+/**
+ * V2 Pillar B: Drag & Drop Support
+ */
+function setupDragReceive() {
+  const petContainer = document.getElementById('pet-container');
+  if (!petContainer) return;
+
+  petContainer.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    petContainer.classList.add('drag-hover');
+  });
+
+  petContainer.addEventListener('dragleave', () => {
+    petContainer.classList.remove('drag-hover');
+  });
+
+  petContainer.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    petContainer.classList.remove('drag-hover');
+
+    let content = '';
+    if (e.dataTransfer.getData('text/plain')) {
+      content = e.dataTransfer.getData('text/plain');
+    } else if (e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('text/') || /\.(txt|md|js|py|html|css|json|ts)$/i.test(file.name)) {
+        content = await file.text();
+      } else {
+        showCatBubble('🐱 暂时只能处理文本文件哦～');
+        return;
+      }
+    }
+
+    if (content.trim()) {
+      showDragActionMenu(content);
+    }
+  });
+}
+
+function showDragActionMenu(content) {
+  const menu = document.createElement('div');
+  menu.className = 'drag-action-menu';
+  menu.innerHTML = `
+    <div class="dam-title">🐱 要我怎么处理？</div>
+    <button class="dam-btn" data-action="polish">✏️ 润色</button>
+    <button class="dam-btn" data-action="summarize">📋 总结</button>
+    <button class="dam-btn" data-action="explain">🔍 解释</button>
+    <button class="dam-btn dam-cancel">取消</button>
+  `;
+
+  document.body.appendChild(menu);
+  
+  // Position menu near the pet
+  const petRect = document.getElementById('pet-container').getBoundingClientRect();
+  menu.style.left = (petRect.left + petRect.width + 10) + 'px';
+  menu.style.top = petRect.top + 'px';
+
+  menu.querySelectorAll('.dam-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      menu.remove();
+      if (!action) return;
+
+      showCatBubble('🐱 处理中...');
+      try {
+        const result = await window.electronAPI.qpProcessText(action, content);
+        displayResult(result, action);
+      } catch (err) {
+        showCatBubble('🐱 哎呀，处理出错了...');
+      }
+    });
+  });
+
+  setTimeout(() => { if (menu.parentNode) menu.remove(); }, 10000);
+}
+
+function displayResult(result, mode) {
+  if (!result) return;
+  if (result.length < 50) {
+    showCatBubble(result);
+  } else if (result.length < 500) {
+    showNotification({
+      level: 'L2',
+      title: { polish: '✏️ 润色结果', summarize: '📋 总结', explain: '🔍 解释' }[mode] || '处理结果',
+      message: result,
+      actions: [{ label: '📋 复制', action: 'copy' }],
+      onAction: (action) => {
+        if (action === 'copy') navigator.clipboard.writeText(result);
+      }
+    });
+  } else {
+    window.electronAPI.qpShowResult({ mode, result });
+  }
 }
 
 /**
@@ -647,6 +856,9 @@ function setupToolbar(chatUI) {
         if (wasHidden) positionAbovePet(panel);
         break;
       }
+      case 'quick-panel':
+        window.electronAPI.qpToggle();
+        break;
       case 'fun': {
         const panel = document.getElementById('fun-container');
         const wasHidden = panel.classList.contains('hidden');
@@ -1120,6 +1332,155 @@ function setupPetStatusUI(affection, petBase) {
   // Slow refresh for mood/multiplier/streak (every 30s instead of 5s)
   setInterval(updateSlowElements, 30000);
 }
+
+/**
+ * V2 Pillar C: Setup Privacy Consent Toggle in Settings
+ */
+async function setupConsentToggle() {
+  const isGranted = await window.electronAPI.consentCheck();
+  
+  // Create toggle UI using existing setting-group style (consistent with skill toggles)
+  const toggle = document.createElement('div');
+  toggle.className = 'setting-group';
+  toggle.innerHTML = `
+    <label>
+      <input type="checkbox" id="consent-toggle" ${isGranted ? 'checked' : ''}>
+      📝 打字内容智能分析
+      <span style="font-size:11px;color:#999;display:block;margin-top:2px;">开启后可生成基于内容的增强日报、待办提取和内容回顾</span>
+    </label>
+  `;
+  
+  const toggleInput = toggle.querySelector('#consent-toggle');
+  toggleInput.addEventListener('change', async () => {
+    if (toggleInput.checked) {
+      // Turn on: prompt dialog
+      const accepted = await window.electronAPI.consentRequest();
+      toggleInput.checked = accepted;
+    } else {
+      // Turn off: revoke
+      await window.electronAPI.consentRevoke();
+    }
+    
+    // Refresh content review tab
+    setupContentReviewTab();
+  });
+  
+  // Attach to settings tab, before the save button
+  const settingsTab = document.getElementById('tab-settings');
+  const saveActions = settingsTab?.querySelector('.setting-actions-bottom');
+  if (settingsTab && saveActions) {
+    const privacySection = document.createElement('div');
+    privacySection.innerHTML = '<div class="setting-section-title">隐私与安全</div>';
+    privacySection.appendChild(toggle);
+    settingsTab.insertBefore(privacySection, saveActions);
+  }
+}
+
+/**
+ * V2 Pillar C: Setup Content Review Tab
+ * [暂停] 内容回顾功能暂时关闭展示，保留代码以备后续启用
+ */
+async function setupContentReviewTab() {
+  const container = document.getElementById('recorder-review-section');
+  if (!container) return;
+  container.innerHTML = '';
+  return;
+
+  /* --- 以下代码暂停使用 ---
+  const isGranted = await window.electronAPI.consentCheck();
+  
+  if (!isGranted) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:16px;">
+        <div style="font-size:24px;margin-bottom:8px;">📝</div>
+        <div style="font-size:13px;color:#888;margin-bottom:12px;">高级统计与回顾需要授权记录打字内容</div>
+        <button class="review-enable-btn" id="review-enable-btn" style="padding:6px 14px;border-radius:6px;border:none;background:#ff9800;color:white;cursor:pointer;font-size:12px;">🔐 了解并开启记录授权</button>
+      </div>
+    `;
+    const enableBtn = container.querySelector('#review-enable-btn');
+    if (enableBtn) {
+      enableBtn.addEventListener('click', async () => {
+        const accepted = await window.electronAPI.consentRequest();
+        if (accepted) {
+          setupContentReviewTab();
+        }
+      });
+    }
+    return;
+  }
+  
+  const today = new Date().toISOString().split('T')[0];
+  const segments = await window.electronAPI.getStore(`segments_${today}`) || [];
+  
+  renderTimeline(container, segments);
+  --- 暂停结束 --- */
+}
+
+function renderTimeline(container, segments) {
+  const typeIcons = { code: '🔧', text: '📝', chat: '💬' };
+  const densityLabels = { high: '高密度', medium: '中等', low: '低密度' };
+  
+  let html = '<div class="review-timeline">';
+  
+  for (const seg of segments) {
+    const icon = typeIcons[seg.type] || '📄';
+    html += `
+      <div class="review-segment type-${seg.type}">
+        <div class="seg-time">${seg.startTime.slice(0,5)} - ${seg.endTime.slice(0,5)}</div>
+        <div class="seg-content">
+          <span class="seg-icon">${icon}</span>
+          <span class="seg-type">${seg.summary}</span>
+          <span class="seg-density">${densityLabels[seg.density] || '未知'}</span>
+        </div>
+        <div class="seg-bar" style="width:${Math.min(100, seg.charCount / 30)}%"></div>
+      </div>
+    `;
+  }
+  
+  html += '</div>';
+  
+  const totalChars = segments.reduce((sum, s) => sum + s.charCount, 0);
+  const typeStats = {};
+  segments.forEach(s => { typeStats[s.type] = (typeStats[s.type] || 0) + 1; });
+  
+  html = `
+    <div class="review-header">
+      <div class="review-stat">📊 今日 ${segments.length} 段 · ${totalChars.toLocaleString()} 字</div>
+      <div class="review-stat-types">
+        ${typeStats.code ? `🔧 编码 ${typeStats.code} 段 ` : ''}
+        ${typeStats.text ? `📝 文字 ${typeStats.text} 段 ` : ''}
+        ${typeStats.chat ? `💬 聊天 ${typeStats.chat} 段` : ''}
+        <div style="font-size:10px; color:#aaa; margin-top:2px;">(数据基于后台周期性转换，首次可能存在数分钟延迟)</div>
+      </div>
+      <button id="review-revoke-btn" style="margin-left:auto;padding:4px 8px;border-radius:4px;border:1px solid #ccc;background:#f5f5f5;color:#666;font-size:12px;cursor:pointer;">关闭记录授权</button>
+    </div>
+  ` + html;
+  
+  container.innerHTML = html;
+
+  // 绑定撤销授权事件
+  const revokeBtn = container.querySelector('#review-revoke-btn');
+  if (revokeBtn) {
+    revokeBtn.addEventListener('click', async () => {
+      if (confirm('关闭后将不再记录打字内容，现有记录会被保留。确认关闭吗？')) {
+        await window.electronAPI.consentRevoke();
+        setupContentReviewTab();
+      }
+    });
+  }
+}
+
+// Listen for global consent status changes
+window.electronAPI.onConsentStatusChanged?.((data) => {
+  const toggleInput = document.getElementById('consent-toggle');
+  if (toggleInput) toggleInput.checked = data.granted;
+  setupContentReviewTab();
+  
+  // V2 Pillar C: 刷新记录器预览
+  if (data.granted && typeRecorder) {
+    typeRecorder.loadTodayContent();
+  }
+});
 
 // Start the app
 init().catch(err => {

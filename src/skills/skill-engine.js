@@ -8,10 +8,17 @@
  */
 
 class SkillEngine {
-  constructor(store, registry, keyboardRecorder) {
+  /**
+   * @param {import('electron-store')} store
+   * @param {import('./skill-registry').SkillRegistry} registry
+   * @param {import('../recorder/keyboard-recorder').KeyboardRecorder} keyboardRecorder
+   * @param {import('../shared/ai-client-main').AIClientMain} aiClient
+   */
+  constructor(store, registry, keyboardRecorder, aiClient) {
     this._store = store;
     this._registry = registry;
     this._recorder = keyboardRecorder;
+    this._aiClient = aiClient;
   }
 
   /**
@@ -37,7 +44,10 @@ class SkillEngine {
 
       console.log(`[SkillEngine] Skill ${skillId}: prompt length = ${prompt.length} chars`);
 
-      const result = await this._callAI(prompt, meta.temperature);
+      const result = await this._aiClient.complete({
+        prompt,
+        temperature: meta.temperature || 0.5,
+      });
 
       // Post-processing: text-converter writes result back to store
       if (skillId === 'text-converter' && result) {
@@ -133,50 +143,6 @@ class SkillEngine {
     }
 
     return parts.join('\n\n');
-  }
-
-  /**
-   * Single AI API call (non-streaming).
-   */
-  async _callAI(prompt, temperature = 0.5) {
-    const config = this._getAIConfig();
-    if (!config.apiKey) {
-      throw new Error('未配置 API Key，请在设置中配置');
-    }
-
-    const { net } = require('electron');
-    const url = `${config.apiBaseUrl}/chat/completions`;
-
-    const response = await net.fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify({
-        model: config.modelName,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: temperature
-      })
-    });
-
-    const json = await response.json();
-
-    if (json.choices && json.choices[0]) {
-      return json.choices[0].message.content;
-    } else if (json.error) {
-      throw new Error(json.error.message || 'AI API error');
-    } else {
-      throw new Error('Invalid AI response: ' + JSON.stringify(json).substring(0, 200));
-    }
-  }
-
-  _getAIConfig() {
-    return {
-      apiBaseUrl: this._store.get('apiBaseUrl') || 'https://api.openai.com/v1',
-      apiKey: this._store.get('apiKey') || '',
-      modelName: this._store.get('modelName') || 'gpt-3.5-turbo'
-    };
   }
 
   /**
