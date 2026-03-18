@@ -53,6 +53,7 @@ export class ChatUI {
     this.positionFn = null; // set by renderer.js for dynamic positioning
     this._settingsSnapshot = null; // snapshot for dirty-check
     this._currentTab = 'chat';
+    this._tabSwitchAnimTimer = null;
 
     this.setupEvents();
     this.setupDrag();
@@ -564,6 +565,9 @@ export class ChatUI {
   }
 
   switchTab(tabName) {
+    const shouldAnchor = this.isVisible && !this.isMaximized;
+    const beforeRect = shouldAnchor ? this.container.getBoundingClientRect() : null;
+
     // If leaving settings tab, check for unsaved changes
     if (this._currentTab === 'settings' && tabName !== 'settings') {
       if (this._isSettingsDirty()) {
@@ -583,12 +587,50 @@ export class ChatUI {
     this.tabSettings.classList.toggle('active', tabName === 'settings');
 
     if (tabName === 'settings') {
-      this.loadSettings();
+      // Keep bottom-right anchor on immediate tab switch, then re-anchor after async settings load.
+      this._anchorBottomRightAfterResize(beforeRect, true);
+      this.loadSettings().then(() => {
+        this._anchorBottomRightAfterResize(beforeRect, true);
+      });
+      return;
     }
     if (tabName === 'chat') {
+      this._anchorBottomRightAfterResize(beforeRect, true);
       this.inputEl.focus();
       this.scrollToBottom();
     }
+  }
+
+  _anchorBottomRightAfterResize(beforeRect, animate = false) {
+    if (!beforeRect || this.isMaximized || !this.isVisible) return;
+    if (!Number.isFinite(beforeRect.left) || !Number.isFinite(beforeRect.top)) return;
+
+    const afterRect = this.container.getBoundingClientRect();
+    const anchorRight = beforeRect.left + beforeRect.width;
+    const anchorBottom = beforeRect.top + beforeRect.height;
+
+    const nextLeft = Math.round(anchorRight - afterRect.width);
+    const nextTop = Math.round(anchorBottom - afterRect.height);
+
+    if (animate) {
+      this.container.classList.add('chat-tab-switch-anim');
+      this.container.classList.remove('chat-tab-rise');
+      // restart rise animation each switch
+      void this.container.offsetWidth;
+      this.container.classList.add('chat-tab-rise');
+
+      if (this._tabSwitchAnimTimer) clearTimeout(this._tabSwitchAnimTimer);
+      this._tabSwitchAnimTimer = setTimeout(() => {
+        this.container.classList.remove('chat-tab-switch-anim', 'chat-tab-rise');
+        this._tabSwitchAnimTimer = null;
+      }, 360);
+    }
+
+    this.container.style.left = `${nextLeft}px`;
+    this.container.style.top = `${nextTop}px`;
+    this.container.style.right = 'auto';
+    this.container.style.bottom = 'auto';
+    this.container.style.transform = 'none';
   }
 
   _snapshotSettings() {
