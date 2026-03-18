@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-win:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -17,6 +17,7 @@ jobs:
           cache: 'npm'
 
       - name: Sync version from tag
+        shell: bash
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
           npm pkg set version="$TAG"
