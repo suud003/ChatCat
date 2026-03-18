@@ -4,6 +4,7 @@
   "description": "ChatCat AI Desktop Pet - Sprite character with keyboard/mouse tracking and AI chat",
   "main": "main.js",
   "scripts": {
+    "install:deps": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1",
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder --win",

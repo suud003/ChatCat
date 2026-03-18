@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "deps: ensure installed",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/install.ps1",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File"
+          ]
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}
