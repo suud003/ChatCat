@@ -842,6 +842,47 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
 
 function setupToolbar(chatUI) {
   const toolbar = document.getElementById('toolbar');
+  const toolsPanel = document.getElementById('tools-container');
+  const funPanel = document.getElementById('fun-container');
+  const toolsCloseBtn = document.getElementById('tools-close');
+  const funCloseBtn = document.getElementById('fun-close');
+
+  const closeToolsPanel = () => {
+    if (!toolsPanel || toolsPanel.classList.contains('hidden')) return;
+    toolsCloseBtn?.click();
+  };
+
+  const closeFunPanel = () => {
+    if (!funPanel || funPanel.classList.contains('hidden')) return;
+    funCloseBtn?.click();
+  };
+
+  const closeQuickPanel = async () => {
+    try {
+      const status = await window.electronAPI.qpIsVisible?.();
+      if (status?.visible) {
+        await window.electronAPI.qpHide?.();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const closeOtherPanels = async (except) => {
+    if (except !== 'chat' && chatUI.isVisible) {
+      chatUI.hide();
+    }
+    if (except !== 'tools') {
+      closeToolsPanel();
+    }
+    if (except !== 'fun') {
+      closeFunPanel();
+    }
+    if (except !== 'quick-panel') {
+      await closeQuickPanel();
+    }
+  };
+
   toolbar.addEventListener('click', async (e) => {
     const btn = e.target.closest('.toolbar-btn');
     if (!btn) return;
@@ -850,24 +891,46 @@ function setupToolbar(chatUI) {
     const action = btn.dataset.action;
 
     switch (action) {
-      case 'chat':
-        chatUI.toggle();
-        break;
-      case 'tools': {
-        const panel = document.getElementById('tools-container');
-        const wasHidden = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        if (wasHidden) positionAbovePet(panel);
+      case 'chat': {
+        const shouldShow = !chatUI.isVisible;
+        if (!shouldShow) {
+          chatUI.hide();
+          break;
+        }
+        await closeOtherPanels('chat');
+        chatUI.show();
         break;
       }
-      case 'quick-panel':
-        window.electronAPI.qpToggle();
+      case 'tools': {
+        const shouldShow = toolsPanel.classList.contains('hidden');
+        if (!shouldShow) {
+          closeToolsPanel();
+          break;
+        }
+        await closeOtherPanels('tools');
+        toolsPanel.classList.remove('hidden');
+        positionAbovePet(toolsPanel);
         break;
+      }
+      case 'quick-panel': {
+        const status = await window.electronAPI.qpIsVisible?.();
+        if (status?.visible) {
+          await window.electronAPI.qpHide?.();
+          break;
+        }
+        await closeOtherPanels('quick-panel');
+        await window.electronAPI.qpShow?.();
+        break;
+      }
       case 'fun': {
-        const panel = document.getElementById('fun-container');
-        const wasHidden = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        if (wasHidden) positionAbovePet(panel);
+        const shouldShow = funPanel.classList.contains('hidden');
+        if (!shouldShow) {
+          closeFunPanel();
+          break;
+        }
+        await closeOtherPanels('fun');
+        funPanel.classList.remove('hidden');
+        positionAbovePet(funPanel);
         break;
       }
     }

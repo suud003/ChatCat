@@ -17,6 +17,7 @@ class QuickPanelManager {
     this._isVisible = false;
     this._textProcessor = new TextProcessor(store);
     this._screenshotOCR = new ScreenshotOCR(store, aiClient);
+    this._lastSyncAt = 0;
   }
 
   init() {
@@ -61,6 +62,89 @@ class QuickPanelManager {
     });
   }
 
+  _clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  async _positionPanelAboveCat() {
+    if (!this._panelWindow || this._panelWindow.isDestroyed()) return;
+    if (!this._mainWindow || this._mainWindow.isDestroyed()) return;
+
+    const panelBounds = this._panelWindow.getBounds();
+    const defaultDisplay = screen.getDisplayMatching(this._mainWindow.getBounds());
+    const defaultArea = defaultDisplay.workArea;
+
+    // Fallback: center-ish position in current display work area.
+    const fallback = {
+      x: Math.round(defaultArea.x + (defaultArea.width - panelBounds.width) / 2),
+      y: Math.round(defaultArea.y + defaultArea.height * 0.3),
+    };
+
+    try {
+      const petRect = await this._mainWindow.webContents.executeJavaScript(
+        `(() => {
+          const el = document.getElementById('pet-container');
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return {
+            left: r.left,
+            top: r.top,
+            right: r.left + r.width,
+            width: r.width,
+            height: r.height
+          };
+        })()`,
+        true
+      );
+
+      if (!petRect || !Number.isFinite(petRect.left) || !Number.isFinite(petRect.top)) {
+        this._panelWindow.setPosition(fallback.x, fallback.y);
+        return;
+      }
+
+      const mainBounds = this._mainWindow.getBounds();
+      const catCenterX = Math.round(mainBounds.x + petRect.left + petRect.width / 2);
+      const catTopY = Math.round(mainBounds.y + petRect.top);
+      const catRightX = Math.round(mainBounds.x + petRect.right);
+
+      const targetDisplay = screen.getDisplayNearestPoint({ x: catCenterX, y: catTopY });
+      const workArea = targetDisplay.workArea;
+      // Keep consistent with other panel feeling: panel sits above pet, and
+      // the panel's bottom-right side points toward the pet.
+      const desiredX = Math.round(catRightX - panelBounds.width + 24);
+      const desiredY = Math.round(catTopY - panelBounds.height - 18);
+
+      const minX = workArea.x + 10;
+      const maxX = workArea.x + workArea.width - panelBounds.width - 10;
+      const minY = workArea.y + 10;
+      const maxY = workArea.y + workArea.height - panelBounds.height - 10;
+
+      let safeX = this._clamp(desiredX, minX, maxX);
+      let safeY = this._clamp(desiredY, minY, maxY);
+
+      // If there isn't enough space above cat, move panel to side so it won't block pet dragging.
+      if (desiredY < minY) {
+        safeY = minY;
+        const gap = 18;
+        const catLeftScreen = Math.round(mainBounds.x + petRect.left);
+        const catRightScreen = Math.round(mainBounds.x + petRect.right);
+        const rightX = catRightScreen + gap;
+        const leftX = catLeftScreen - panelBounds.width - gap;
+
+        if (rightX <= maxX) {
+          safeX = rightX;
+        } else if (leftX >= minX) {
+          safeX = leftX;
+        }
+      }
+
+      this._panelWindow.setPosition(safeX, safeY);
+    } catch (err) {
+      console.warn('[QuickPanel] Failed to position above cat:', err.message);
+      this._panelWindow.setPosition(fallback.x, fallback.y);
+    }
+  }
+
   _registerShortcuts() {
     // Quick Panel 开关
     const toggleRegistered = globalShortcut.register('CommandOrControl+Shift+Space', () => {
@@ -103,6 +187,20 @@ class QuickPanelManager {
     // Quick Panel 切换 (来自工具栏按钮)
     ipcMain.on('qp-toggle', () => {
       this.toggle();
+    });
+
+    ipcMain.handle('qp-show', async () => {
+      await this.show();
+      return { visible: this.isVisible() };
+    });
+
+    ipcMain.handle('qp-hide', () => {
+      this.hide();
+      return { visible: this.isVisible() };
+    });
+
+    ipcMain.handle('qp-is-visible', () => {
+      return { visible: this.isVisible() };
     });
 
     // 查询快捷键注册状态
@@ -340,10 +438,12 @@ class QuickPanelManager {
     }
   }
   
-  show() {
+  async show() {
     if (!this._panelWindow || this._panelWindow.isDestroyed()) {
       this._createPanel();
     }
+
+    await this._positionPanelAboveCat();
     
     const clipText = clipboard.readText();
     const clipImage = clipboard.readImage();
@@ -363,6 +463,23 @@ class QuickPanelManager {
       this._panelWindow.hide();
     }
     this._isVisible = false;
+  }
+
+  isVisible() {
+    return !!(
+      this._isVisible &&
+      this._panelWindow &&
+      !this._panelWindow.isDestroyed() &&
+      this._panelWindow.isVisible()
+    );
+  }
+
+  syncToPetPosition(force = false) {
+    if (!this.isVisible()) return;
+    const now = Date.now();
+    if (!force && now - this._lastSyncAt < 80) return;
+    this._lastSyncAt = now;
+    this._positionPanelAboveCat().catch(() => {});
   }
 
   async _startScreenshot() {

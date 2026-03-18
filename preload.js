@@ -83,6 +83,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   qpProcessText: (mode, text) => ipcRenderer.invoke('qp-process-text', mode, text),
   qpShowResult: (data) => ipcRenderer.send('qp-show-result', data),
   qpToggle: () => ipcRenderer.send('qp-toggle'),
+  qpShow: () => ipcRenderer.invoke('qp-show'),
+  qpHide: () => ipcRenderer.invoke('qp-hide'),
+  qpIsVisible: () => ipcRenderer.invoke('qp-is-visible'),
   qpGetShortcutStatus: () => ipcRenderer.invoke('qp-get-shortcut-status'),
   onQpShortcutStatus: (cb) => ipcRenderer.on('qp-shortcut-status', (_, data) => cb(data)),
 
