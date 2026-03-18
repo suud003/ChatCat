@@ -1,0 +1,99 @@
+name: Nightly Smoke Build
+
+on:
+  schedule:
+    # 08:00 Beijing Time (UTC+8) = 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      date_bj: ${{ steps.detect.outputs.date_bj }}
+      tag_name: ${{ steps.detect.outputs.tag_name }}
+      version_name: ${{ steps.detect.outputs.version_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes in last 24 hours
+        id: detect
+        shell: bash
+        run: |
+          DATE_BJ=$(TZ='Asia/Shanghai' date +%Y%m%d)
+          COUNT=$(git rev-list --count --since='24 hours ago' HEAD)
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "date_bj=$DATE_BJ" >> "$GITHUB_OUTPUT"
+          echo "tag_name=nightly-$DATE_BJ-smoke" >> "$GITHUB_OUTPUT"
+          echo "version_name=0.0.0-nightly.$DATE_BJ" >> "$GITHUB_OUTPUT"
+          echo "Commits in last 24h: $COUNT"
+
+  build-win:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set nightly smoke version
+        shell: bash
+        run: |
+          npm pkg set version="${{ needs.check-changes.outputs.version_name }}"
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: Build Windows smoke package
+        run: npm run build -- --publish never
+
+      - name: Upload smoke artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-smoke-win
+          path: dist/
+          retention-days: 14
+
+  release:
+    needs: [check-changes, build-win]
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download smoke artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-smoke-win
+          path: dist
+
+      - name: Create nightly smoke release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-changes.outputs.tag_name }}
+          name: Nightly Smoke ${{ needs.check-changes.outputs.date_bj }}
+          files: dist/*
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Automated nightly smoke build.
+            Triggered because code changed in the past 24 hours.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
