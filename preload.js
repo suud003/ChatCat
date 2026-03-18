@@ -14,10 +14,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveToDisplay: (screenX, screenY) => ipcRenderer.send('move-to-display', { screenX, screenY }),
 
   // Events from main process
-  onGlobalKeydown: (callback) => ipcRenderer.on('global-keydown', (_, data) => callback(data)),
+  onGlobalKeydown: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('global-keydown', listener);
+    return () => ipcRenderer.removeListener('global-keydown', listener);
+  },
   onGlobalKeyup: (callback) => ipcRenderer.on('global-keyup', (_, data) => callback(data)),
-  onGlobalClick: (callback) => ipcRenderer.on('global-click', (_, data) => callback(data)),
-  onGlobalMousemove: (callback) => ipcRenderer.on('global-mousemove', (_, data) => callback(data)),
+  onGlobalClick: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('global-click', listener);
+    return () => ipcRenderer.removeListener('global-click', listener);
+  },
+  onGlobalMousemove: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('global-mousemove', listener);
+    return () => ipcRenderer.removeListener('global-mousemove', listener);
+  },
   onToggleChat: (callback) => ipcRenderer.on('toggle-chat', () => callback()),
   onOpenSettings: (callback) => ipcRenderer.on('open-settings', () => callback()),
   onBeforeQuit: (callback) => ipcRenderer.on('app-before-quit', () => callback()),
@@ -30,12 +42,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recorderGetStatus: () => ipcRenderer.invoke('recorder-get-status'),
   recorderGetTodayContent: () => ipcRenderer.invoke('recorder-get-today-content'),
   onRecorderUpdate: (callback) => ipcRenderer.on('recorder-update', (_, data) => callback(data)),
+  onRecorderStateChanged: (callback) => ipcRenderer.on('recorder-state-changed', (_, data) => callback(data)),
 
   // Clipboard
   clipboardGetHistory: () => ipcRenderer.invoke('clipboard-get-history'),
   clipboardCopy: (text) => ipcRenderer.invoke('clipboard-copy', text),
   clipboardClear: () => ipcRenderer.invoke('clipboard-clear'),
-  onClipboardUpdate: (callback) => ipcRenderer.on('clipboard-update', (_, data) => callback(data)),
+  onClipboardUpdate: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('clipboard-update', listener);
+    return () => ipcRenderer.removeListener('clipboard-update', listener);
+  },
 
   // Skills
   skillTrigger: (skillId) => ipcRenderer.invoke('skill-trigger', skillId),
@@ -57,5 +74,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mpStopServer: () => ipcRenderer.invoke('mp-stop-server'),
   mpGetServerStatus: () => ipcRenderer.invoke('mp-get-server-status'),
   mpSaveCredentials: (creds) => ipcRenderer.invoke('mp-save-credentials', creds),
-  mpGetCredentials: () => ipcRenderer.invoke('mp-get-credentials')
+  mpGetCredentials: () => ipcRenderer.invoke('mp-get-credentials'),
+
+  // V2 Pillar B
+  onClipboardImageDetected: (cb) => ipcRenderer.on('clipboard-image-detected', (_, data) => cb(data)),
+  recognizeClipboardImage: () => ipcRenderer.invoke('qp-recognize-clipboard-image'),
+  qpProcessText: (mode, text) => ipcRenderer.invoke('qp-process-text', mode, text),
+  qpShowResult: (data) => ipcRenderer.send('qp-show-result', data),
+  qpToggle: () => ipcRenderer.send('qp-toggle'),
+  qpGetShortcutStatus: () => ipcRenderer.invoke('qp-get-shortcut-status'),
+  onQpShortcutStatus: (cb) => ipcRenderer.on('qp-shortcut-status', (_, data) => cb(data)),
+
+  // V2 Pillar C
+  consentCheck: () => ipcRenderer.invoke('consent-check'),
+  consentRequest: () => ipcRenderer.invoke('consent-request'),
+  consentRevoke: () => ipcRenderer.invoke('consent-revoke'),
+  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data))
 });

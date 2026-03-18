@@ -24,11 +24,12 @@ export class MemoryManager {
   constructor() {
     this._memories = []; // { id, fact, category, timestamp }
     this._nextId = 1;
-    this._aiService = null;
+    this._aiClient = null;  // AIClientRenderer instance
   }
 
-  setAIService(aiService) {
-    this._aiService = aiService;
+  /** @param {import('../shared/ai-client-renderer').AIClientRenderer} aiClient */
+  setAIClient(aiClient) {
+    this._aiClient = aiClient;
   }
 
   async init() {
@@ -45,32 +46,18 @@ export class MemoryManager {
    */
   async extractMemories(userMsg, assistantResp) {
     if (!userMsg || userMsg.length <= 10) return;
-    if (!this._aiService || !this._aiService.isConfigured()) return;
+    if (!this._aiClient || !this._aiClient.isConfigured()) return;
 
     try {
-      const messages = [
-        { role: 'system', content: EXTRACT_SYSTEM_PROMPT },
-        { role: 'user', content: `User message: "${userMsg}"\nAssistant response: "${assistantResp}"` },
-      ];
-
-      const response = await fetch(`${this._aiService.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this._aiService.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this._aiService.modelName,
-          messages,
-          max_tokens: 200,
-          temperature: 0.3,
-        }),
+      const content = await this._aiClient.complete({
+        messages: [
+          { role: 'system', content: EXTRACT_SYSTEM_PROMPT },
+          { role: 'user', content: `User message: "${userMsg}"\nAssistant response: "${assistantResp}"` },
+        ],
+        temperature: 0.3,
+        maxTokens: 200,
       });
 
-      if (!response.ok) return;
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) return;
 
       // Parse JSON from response (handle markdown code blocks)

@@ -17,6 +17,15 @@ class PinyinDetector {
   }
 
   /**
+   * Reset detector state.
+   */
+  reset() {
+    this._pendingChars = [];
+    this._pendingTime = 0;
+    this._inComposition = false;
+  }
+
+  /**
    * Add a lowercase letter character to the buffer.
    * Returns { buffered: boolean, flushedText: string|null }
    */

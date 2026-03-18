@@ -1,0 +1,88 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-03-18T11:00:42.803Z
+provider: 
+---
+
+# ChatCat 开发规则
+
+## 项目架构
+
+ChatCat 是 Electron 桌面应用（宠物 + 生产力工具），分主进程 (`main.js`) 和渲染进程 (`src/renderer.js`)。
+
+三大功能支柱:
+- **Pillar A**: 行为节奏智能 — 键鼠频率推断工作状态，零内容采集
+- **Pillar B**: 轻办公 AI (Quick Panel) — 独立 BrowserWindow，截图OCR/文本处理/快捷问答
+- **Pillar C**: 打字内容消费 — 需隐私授权，键盘记录→敏感过滤→AI转换→分段→日报/待办
+
+## 关键文件速查
+
+| 需求 | 文件 |
+|---|---|
+| **AI 统一客户端 (主进程)** | `src/shared/ai-client-main.js` |
+| **AI 统一客户端 (渲染进程)** | `src/shared/ai-client-renderer.js` |
+| 设置面板 HTML | `src/index.html` (`#tab-settings`) |
+| 设置读取/保存/脏检查 | `src/chat/chat-ui.js` |
+| 预设定义 (API_PRESETS) | `src/renderer.js` (~第 45-77 行) |
+| electron-store 默认值 | `main.js` (~第 18-86 行, `new Store({ defaults })`) |
+| IPC 桥接 (渲染→主) | `preload.js` (`getStore`/`setStore` 等) |
+| store IPC handler | `main.js` (`get-store`/`set-store`) |
+| 设置面板样式 | `src/styles.css` (`.setting-group` ~第 582-701 行) |
+| Quick Panel 主逻辑 | `src/quick-panel/quick-panel-main.js` |
+| 截图 OCR | `src/quick-panel/screenshot-ocr.js` |
+| 隐私授权 | `src/consent/privacy-consent.js` |
+| 敏感过滤 | `src/cleaner/sensitive-filter.js` |
+| 技能引擎 | `src/skills/skill-engine.js` |
+| 内容回顾样式 | `src/styles-pillar-c.css` |
+
+## ⚠️ AI 请求统一架构
+
+**所有 AI API 调用必须通过统一客户端发出，禁止各模块单独手写 fetch/net.fetch/net.request！**
+
+- **主进程**: `AIClientMain` (`src/shared/ai-client-main.js`)
+  - `complete()` — 非流式 (skills)
+  - `stream()` — 流式 SSE (Quick Panel)
+  - `vision()` — 图片识别 (截图 OCR)
+  - 通过构造函数注入: `main.js` 创建 `aiClient = new AIClientMain(store)` 并传给各模块
+
+- **渲染进程**: `AIClientRenderer` (`src/shared/ai-client-renderer.js`)
+  - `complete()` — 非流式 (memory-manager, todo-parser)
+  - `stream()` — 流式 async generator (聊天)
+  - 由 `AIService` 内部创建，通过 `aiService.client` 暴露
+
+## ⚠️ 新增设置项 Checklist
+
+新增一个用户可配置的设置项，**必须同时修改 4 处**:
+
+1. **`src/index.html`** — 在 `#tab-settings` 中添加 HTML 表单元素 (给定唯一 id)
+2. **`src/chat/chat-ui.js`** — 4 个子步骤:
+   - 构造函数中 `document.getElementById()` 绑定 DOM 引用
+   - `loadSettings()` 中从 store 加载值填入 DOM
+   - `setupSettingsEvents()` 中保存按钮点击时调用 `setStore()` 保存
+   - `_snapshotSettings()` 和 `_isSettingsDirty()` 中加入新字段用于脏检查
+3. **`main.js`** — `new Store({ defaults })` 中添加默认值
+4. **(可选) `preload.js`** — 如需新 IPC 通道则添加
+
+## Tab 切换注意
+
+- **Chat 面板** 的 tab 切换由 `ChatUI.switchTab()` 独立实现，**不走** `setupTabbedPanel()`
+- **Tools / Fun 面板** 的 tab 切换由 `renderer.js` 中 `setupTabbedPanel()` 统一处理
+
+## 设计风格
+
+- 漫画风 (Manga Bubble): 白底 + `3px solid #222` 边框 + `22px` 圆角 + `3px 3px 0 #222` 阴影
+- 输入框: `16px` 圆角 + `2px solid #222` 边框 + `2px 2px 0 #222` 阴影
+- 保存按钮区: `position: sticky; bottom: 0`
+
+## 设置数据流
+
+```
+UI → 点击保存 → electronAPI.setStore(key, value) → ipcRenderer.invoke('set-store') → main.js ipcMain.handle → store.set()
+加载 → ChatUI.loadSettings() → electronAPI.getStore(key) → ipcRenderer.invoke('get-store') → store.get(key) → 填入 DOM
+```
+
+## 详细文档
+
+完整的架构说明和设置项清单见 `docs/dev-module-context.md`。

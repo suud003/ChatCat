@@ -1,0 +1,99 @@
+
+/* =========================================================================
+   V2 Pillar C: Content Review Tab Styles
+   ========================================================================= */
+
+#tab-content-review {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+}
+#tab-content-review.active {
+  display: flex;
+}
+
+.review-header {
+  padding: 12px;
+  background: #fff8e1;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 4px solid #ff9800;
+  flex-shrink: 0;
+}
+
+.review-stat {
+  font-weight: bold;
+  font-size: 14px;
+  color: #e65100;
+  margin-bottom: 4px;
+}
+
+.review-stat-types {
+  font-size: 12px;
+  color: #666;
+}
+
+.review-timeline {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-segment {
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 10px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-segment.type-code { border-left: 3px solid #2196f3; }
+.review-segment.type-text { border-left: 3px solid #4caf50; }
+.review-segment.type-chat { border-left: 3px solid #9c27b0; }
+
+.seg-time {
+  font-size: 11px;
+  color: #888;
+  font-family: monospace;
+}
+
+.seg-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.seg-icon {
+  font-size: 16px;
+}
+
+.seg-type {
+  flex-grow: 1;
+  color: #333;
+}
+
+.seg-density {
+  font-size: 11px;
+  background: #eee;
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: #666;
+}
+
+.seg-bar {
+  height: 4px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 2px;
+  align-self: flex-start;
+}
+.type-code .seg-bar { background: rgba(33, 150, 243, 0.5); }
+.type-text .seg-bar { background: rgba(76, 175, 80, 0.5); }
+.type-chat .seg-bar { background: rgba(156, 39, 176, 0.5); }

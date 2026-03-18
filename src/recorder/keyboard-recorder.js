@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PinyinDetector } = require('./pinyin-detector');
+const { SensitiveFilter } = require('../cleaner/sensitive-filter');
 
 // uiohook keycode → character/type mapping
 // Reference: https://github.com/nickvdyck/uiohook-napi (based on libuiohook keycodes)
@@ -57,6 +58,26 @@ class KeyboardRecorder {
     this._timeoutTimer = null;
     this._outputDir = store.get('recorderOutputDir') || '';
     this._lastDate = '';
+    
+    // V2 Pillar C: 敏感过滤器和内容模式开关
+    this._sensitiveFilter = new SensitiveFilter();
+    
+    // 加载自定义敏感词 (如果有的话)
+    const customKeywords = store.get('customSensitiveKeywords', []);
+    if (customKeywords.length > 0) {
+      this._sensitiveFilter.addCustomKeywords(customKeywords);
+    }
+    
+    this._contentMode = false; // 由主进程初始化时根据授权状态设置
+  }
+
+  setContentMode(enabled) {
+    this._contentMode = enabled;
+    if (!enabled) {
+      console.log('[KeyboardRecorder] 内容记录已关闭');
+    } else {
+      console.log('[KeyboardRecorder] 内容记录已开启，敏感过滤已激活');
+    }
   }
 
   /**
@@ -198,7 +219,30 @@ class KeyboardRecorder {
 
     if (this._buffer.length === 0) return;
 
-    const lines = this._buffer.splice(0);
+    let lines = this._buffer.splice(0);
+    
+    // V2 Pillar C: 敏感信息过滤 
+    // [暂存] 开发调试阶段，由于容易误杀正常代码和长文本，暂时关闭打字记录层的强制过滤。
+    // Filter模块保留，未来可能转移到 AI 分析前执行。
+    /*
+    if (this._contentMode) {
+      lines = lines.map(line => {
+        // [HH:MM:SS] content
+        const match = line.match(/^(\[\d{2}:\d{2}:\d{2}\]\s*)(.*)$/);
+        if (match) {
+          const prefix = match[1];
+          const content = match[2];
+          const filtered = this._sensitiveFilter.filterLine(content);
+          return filtered === null ? null : prefix + filtered;
+        }
+        const filtered = this._sensitiveFilter.filterLine(line);
+        return filtered === null ? null : filtered;
+      }).filter(Boolean); // 移除丢弃的行
+    }
+
+    if (lines.length === 0) return; // 全部被过滤
+    */
+
     const text = lines.join('\n') + '\n';
 
     // Write to file
@@ -236,6 +280,11 @@ class KeyboardRecorder {
     if (this._recording) return;
     this._recording = true;
 
+    // Reset detector state on start to prevent carrying over stale state
+    this._detector.reset();
+    this._currentLine = '';
+    this._buffer = [];
+
     // 5-second periodic flush
     this._flushTimer = setInterval(() => this.flush(), 5000);
     // 1-second pinyin timeout check
@@ -245,6 +294,9 @@ class KeyboardRecorder {
         this._appendToken(timeout.flushedText);
       }
     }, 1000);
+
+    // 通知渲染进程录制状态变化
+    this._notifyRecordingState(true);
   }
 
   /**
@@ -252,6 +304,10 @@ class KeyboardRecorder {
    */
   stop() {
     if (!this._recording) return;
+
+    // Final flush before stopping to make sure nothing is left in buffer
+    this.flush();
+
     this._recording = false;
 
     if (this._flushTimer) {
@@ -263,8 +319,17 @@ class KeyboardRecorder {
       this._timeoutTimer = null;
     }
 
-    // Final flush
-    this.flush();
+    // 通知渲染进程录制状态变化
+    this._notifyRecordingState(false);
+  }
+
+  /**
+   * Notify renderer about recording state changes.
+   */
+  _notifyRecordingState(recording) {
+    if (this._mainWindow && !this._mainWindow.isDestroyed()) {
+      this._mainWindow.webContents.send('recorder-state-changed', { recording });
+    }
   }
 
   /**

@@ -47,8 +47,13 @@ Rules:
 - Respond with ONLY the JSON object, no other text`;
 
 export class TodoParser {
-  constructor(aiService, todoList, showBubbleFn) {
-    this._aiService = aiService;
+  /**
+   * @param {import('../shared/ai-client-renderer').AIClientRenderer} aiClient
+   * @param {*} todoList
+   * @param {Function} showBubbleFn
+   */
+  constructor(aiClient, todoList, showBubbleFn) {
+    this._aiClient = aiClient;
     this._todoList = todoList;
     this._showBubble = showBubbleFn;
   }
@@ -114,32 +119,15 @@ export class TodoParser {
       const currentTime = now.toISOString();
       const prompt = EXTRACT_PROMPT.replace('{currentTime}', currentTime);
 
-      const messages = [
-        { role: 'system', content: prompt },
-        { role: 'user', content: userMsg },
-      ];
-
-      const response = await fetch(`${this._aiService.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this._aiService.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this._aiService.modelName,
-          messages,
-          max_tokens: 150,
-          temperature: 0.2,
-        }),
+      const content = await this._aiClient.complete({
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: userMsg },
+        ],
+        temperature: 0.2,
+        maxTokens: 150,
       });
 
-      if (!response.ok) {
-        console.warn('[TodoParser] API response not ok:', response.status);
-        return false;
-      }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) return false;
 
       let jsonStr = content;

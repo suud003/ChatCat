@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+      background: transparent;
+    }
+    .dialog {
+      background: #fff;
+      border: 2px solid #ffb74d;
+      border-radius: 16px;
+      padding: 28px;
+      margin: 10px;
+      box-shadow: 0 8px 32px rgba(255, 152, 0, 0.2);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #e65100;
+      margin-bottom: 16px;
+    }
+    .body {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.8;
+    }
+    .features {
+      margin: 12px 0;
+      padding-left: 20px;
+    }
+    .features li {
+      margin: 6px 0;
+    }
+    .features li strong { color: #333; }
+    
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: #fff8e1;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .check-item input[type="checkbox"] {
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+    
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn {
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-cancel {
+      background: #f5f5f5;
+      color: #888;
+    }
+    .btn-cancel:hover { background: #eee; }
+    .btn-accept {
+      background: linear-gradient(135deg, #FF9800, #F57C00);
+      color: #fff;
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-accept.enabled {
+      opacity: 1;
+      cursor: pointer;
+    }
+    .btn-accept.enabled:hover {
+      box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="dialog">
+    <div class="header">🔐 数据授权 — ChatCat 打字内容功能</div>
+    
+    <div class="body">
+      <p>要开启以下高级功能，需要你的明确授权：</p>
+      <ul class="features">
+        <li><strong>智能日报</strong> — 基于打字内容生成「今天写了什么」</li>
+        <li><strong>待办提取</strong> — 从打字中自动识别 TODO 事项</li>
+        <li><strong>内容回顾</strong> — 可视化你的工作内容概要</li>
+      </ul>
+      <p>为此，ChatCat 需要记录你的<strong>键盘按键内容</strong>（而不仅是频率）。</p>
+    </div>
+    
+    <div class="check-item">
+      <input type="checkbox" id="check1">
+      <label for="check1">我了解并同意：打字内容<strong>仅存储在本地</strong>，不会上传到任何服务器。
+      密码、token等敏感信息会被自动过滤。我可以随时在设置中关闭此功能。</label>
+    </div>
+    
+    <div class="check-item">
+      <input type="checkbox" id="check2">
+      <label for="check2">我了解：关闭此功能后，已记录的本地文件将被<strong>保留但不再更新</strong>，
+      我可以手动删除历史记录。</label>
+    </div>
+    
+    <div class="actions">
+      <button class="btn btn-cancel" id="btn-cancel">暂不开启</button>
+      <button class="btn btn-accept" id="btn-accept">✅ 同意并开启</button>
+    </div>
+  </div>
+  
+  <script src="./consent-dialog.js"></script>
+</body>
+</html>
