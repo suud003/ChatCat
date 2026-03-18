@@ -152,10 +152,7 @@ class AIClientMain {
     try {
       response = await net.fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-        },
+        headers: this._buildHeaders(config),
         body: JSON.stringify(body),
       });
     } catch (fetchErr) {
@@ -217,14 +214,39 @@ class AIClientMain {
       apiBaseUrl: this._store.get('apiBaseUrl') || 'https://api.openai.com/v1',
       apiKey:     this._store.get('apiKey') || '',
       modelName:  this._store.get('modelName') || 'gpt-3.5-turbo',
+      apiPreset:  this._store.get('apiPreset') || 'custom',
     };
   }
 
   /** Check that essential fields are present */
   _validateConfig(config) {
-    if (!config.apiBaseUrl || !config.apiKey) {
-      throw new Error('请先在设置中配置 API 地址和 API Key');
+    const missingBaseUrl = !config.apiBaseUrl;
+    const missingApiKey = this._requiresApiKey(config) && !config.apiKey;
+    if (missingBaseUrl || missingApiKey) {
+      throw new Error(missingBaseUrl
+        ? '请先在设置中配置 API 地址'
+        : '请先在设置中配置 API Key');
     }
+  }
+
+  _requiresApiKey(config = {}) {
+    const preset = config.apiPreset || 'custom';
+    const baseUrl = (config.apiBaseUrl || '').toLowerCase();
+    if (preset === 'ollama') return false;
+    if (baseUrl.includes('://127.0.0.1:11434') || baseUrl.includes('://localhost:11434')) {
+      return false;
+    }
+    return true;
+  }
+
+  _buildHeaders(config) {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (config.apiKey) {
+      headers.Authorization = `Bearer ${config.apiKey}`;
+    }
+    return headers;
   }
 
   // ─── HTTP helpers ──────────────────────────────────────────────
@@ -236,10 +258,7 @@ class AIClientMain {
   async _fetch(url, config, body) {
     const response = await net.fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
+      headers: this._buildHeaders(config),
       body: JSON.stringify(body),
     });
 
