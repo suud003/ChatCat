@@ -664,6 +664,8 @@ async function setupInputHook() {
 }
 
 app.whenReady().then(() => {
+  // 移除默认应用菜单栏
+  Menu.setApplicationMenu(null);
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
