@@ -237,10 +237,10 @@ class QuickPanelUI {
       this._historyVisible = true;
       return;
     }
-
-    let html = '<div style="font-size:12px;"><strong>📋 最近处理记录</strong></div>';
+    
+    let html = '<div style="font-size:12px;"><strong><img src="../icons/tab-clipboard.png" style="width:14px;height:14px;vertical-align:middle;" alt=""> 最近处理记录</strong></div>';
     for (const item of history.slice(-10).reverse()) {
-      const modeLabels = { polish: '✏️', summarize: '📋', explain: '🔍', ask: '💬', ocr: '📸' };
+      const modeLabels = { polish: '<img src="../icons/qp-polish.png" style="width:12px;height:12px;vertical-align:middle;">', summarize: '<img src="../icons/qp-summarize.png" style="width:12px;height:12px;vertical-align:middle;">', explain: '<img src="../icons/qp-explain.png" style="width:12px;height:12px;vertical-align:middle;">', ask: '<img src="../icons/qp-ask.png" style="width:12px;height:12px;vertical-align:middle;">', ocr: '<img src="../icons/qp-screenshot.png" style="width:12px;height:12px;vertical-align:middle;">' };
       const time = new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
       const preview = (item.result || '').slice(0, 60).replace(/\n/g, ' ');
       html += `<div style="margin:4px 0;padding:6px;background:#f5f5f7;border-radius:6px;font-size:11px;cursor:pointer;" data-idx="${item.timestamp}">

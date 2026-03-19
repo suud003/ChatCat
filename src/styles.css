@@ -6,6 +6,56 @@
   scrollbar-color: rgba(0,0,0,0.2) transparent;
 }
 
+/* ── Kawaii Cat Icons (替换 emoji) ── */
+.cat-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  object-fit: contain;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.cat-icon.icon-sm { width: 14px; height: 14px; }
+.cat-icon.icon-md { width: 18px; height: 18px; }
+.cat-icon.icon-lg { width: 24px; height: 24px; }
+.cat-icon.icon-xl { width: 32px; height: 32px; }
+
+/* Tab 按钮图标 */
+.panel-tab .cat-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 3px;
+}
+
+/* 状态卡片图标 */
+.pet-stat-card-icon .cat-icon {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
+/* 倍率行图标 */
+.multiplier-row .cat-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 3px;
+}
+
+/* 升级说明行图标 */
+.upgrade-info-row .cat-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 3px;
+}
+
+/* 商店状态栏图标 */
+.base-status-bar .cat-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
 /* Global custom scrollbar (Webkit/Electron) */
 ::-webkit-scrollbar {
   width: 6px;
@@ -706,7 +756,7 @@ body {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 240px;
+  width: 260px;
   height: 80px;
   z-index: 50;
   opacity: 0;
@@ -723,38 +773,59 @@ body {
   position: absolute;
   left: 50%;
   top: 40px;
-  margin-left: -18px;
-  margin-top: -18px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(30, 30, 40, 0.85);
+  margin-left: -22px;
+  margin-top: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(30, 30, 40, 0.88);
   backdrop-filter: blur(8px);
   color: #e0e0e0;
   font-size: 16px;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s, background 0.2s;
+  gap: 1px;
+  transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
   -webkit-app-region: no-drag;
 }
 
+.toolbar-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+
+.toolbar-btn .cat-icon {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
 /* Arc layout: 4 buttons */
-.toolbar-btn:nth-child(1) { transform: translate(-72px, -8px); }
-.toolbar-btn:nth-child(2) { transform: translate(-24px, -22px); }
-.toolbar-btn:nth-child(3) { transform: translate(24px, -22px); }
-.toolbar-btn:nth-child(4) { transform: translate(72px, -8px); }
+.toolbar-btn:nth-child(1) { transform: translate(-78px, -8px); }
+.toolbar-btn:nth-child(2) { transform: translate(-26px, -22px); }
+.toolbar-btn:nth-child(3) { transform: translate(26px, -22px); }
+.toolbar-btn:nth-child(4) { transform: translate(78px, -8px); }
 
 .toolbar-btn:hover {
   background: rgba(79, 172, 254, 0.5);
+  box-shadow: 0 0 12px rgba(79, 172, 254, 0.3);
 }
 
-.toolbar-btn:nth-child(1):hover { transform: translate(-72px, -8px) scale(1.15); }
-.toolbar-btn:nth-child(2):hover { transform: translate(-24px, -22px) scale(1.15); }
-.toolbar-btn:nth-child(3):hover { transform: translate(24px, -22px) scale(1.15); }
-.toolbar-btn:nth-child(4):hover { transform: translate(72px, -8px) scale(1.15); }
+.toolbar-btn:hover .toolbar-label {
+  color: #fff;
+}
+
+.toolbar-btn:nth-child(1):hover { transform: translate(-78px, -8px) scale(1.12); }
+.toolbar-btn:nth-child(2):hover { transform: translate(-26px, -22px) scale(1.12); }
+.toolbar-btn:nth-child(3):hover { transform: translate(26px, -22px) scale(1.12); }
+.toolbar-btn:nth-child(4):hover { transform: translate(78px, -8px) scale(1.12); }
 
 
 /* Character Select Panel - Manga Bubble Style */

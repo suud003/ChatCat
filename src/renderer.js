@@ -1309,7 +1309,7 @@ function setupPetStatusUI(affection, petBase) {
     // Overlay bar
     if (overlayLevel) overlayLevel.textContent = `Lv.${affection.level}`;
     if (overlayFill) overlayFill.style.width = progress;
-    if (overlayCoins) overlayCoins.textContent = `🐱 ${formatNumber(affection.affinity)}`;
+    if (overlayCoins) overlayCoins.innerHTML = `<img src="icons/stat-coin.png" class="cat-icon icon-sm" alt=""> ${formatNumber(affection.affinity)}`;
   }
 
   /** Full update — called less frequently for slow-changing values */
@@ -1323,12 +1323,12 @@ function setupPetStatusUI(affection, petBase) {
   }
 
   function updateMoodDisplay() {
-    const moods = { happy: '😊 开心', normal: '😐 正常', bored: '😴 无聊' };
+    const moods = { happy: '<img src="icons/stat-heart.png" class="cat-icon icon-sm" alt=""> 开心', normal: '<img src="icons/stat-heart.png" class="cat-icon icon-sm" alt=""> 正常', bored: '<img src="icons/rhythm-away.png" class="cat-icon icon-sm" alt=""> 无聊' };
     const moodTexts = { happy: '开心', normal: '正常', bored: '无聊' };
     const moodImages = { happy: 'illustrations/pet-happy.png', normal: 'illustrations/pet-neutral.png', bored: 'illustrations/pet-bored.png' };
     const moodColors = { happy: 'linear-gradient(135deg, #ff9a9e, #fad0c4)', normal: 'linear-gradient(135deg, #a8c0ff, #b8d0ff)', bored: 'linear-gradient(135deg, #bbb, #ddd)' };
     if (moodEl) {
-      moodEl.textContent = moods[affection.mood] || '😐 正常';
+      moodEl.innerHTML = moods[affection.mood] || '<img src="icons/stat-heart.png" class="cat-icon icon-sm" alt=""> 正常';
       moodEl.style.background = moodColors[affection.mood] || moodColors.normal;
     }
     if (moodTextEl) moodTextEl.textContent = moodTexts[affection.mood] || '正常';
@@ -1342,7 +1342,7 @@ function setupPetStatusUI(affection, petBase) {
       const tier = affection.prestigeTier;
       const mat = getPrestigeMaterial(tier);
       const matName = mat ? `${mat.icon} ${mat.name}` : '转生石';
-      prestigeBtn.textContent = `✨ 转生 (${formatNumber(cost)}🐱 + ${matName})`;
+      prestigeBtn.innerHTML = `<img src="icons/stat-sparkle.png" class="cat-icon icon-sm" alt=""> 转生 (${formatNumber(cost)}<img src="icons/stat-coin.png" class="cat-icon icon-sm" alt=""> + ${matName})`;
       // Enable if coins sufficient (material check happens on click)
       prestigeBtn.disabled = !affection.canPrestige;
     }
@@ -1426,7 +1426,7 @@ async function setupConsentToggle() {
   toggle.innerHTML = `
     <label>
       <input type="checkbox" id="consent-toggle" ${isGranted ? 'checked' : ''}>
-      📝 打字内容智能分析
+      <img src="icons/tab-recorder.png" class="cat-icon" alt=""> 打字内容智能分析
       <span style="font-size:11px;color:#999;display:block;margin-top:2px;">开启后可生成基于内容的增强日报、待办提取和内容回顾</span>
     </label>
   `;
@@ -1473,9 +1473,9 @@ async function setupContentReviewTab() {
   if (!isGranted) {
     container.innerHTML = `
       <div style="text-align:center;padding:16px;">
-        <div style="font-size:24px;margin-bottom:8px;">📝</div>
+        <div style="font-size:24px;margin-bottom:8px;"><img src="icons/tab-recorder.png" style="width:32px;height:32px;" alt=""></div>
         <div style="font-size:13px;color:#888;margin-bottom:12px;">高级统计与回顾需要授权记录打字内容</div>
-        <button class="review-enable-btn" id="review-enable-btn" style="padding:6px 14px;border-radius:6px;border:none;background:#ff9800;color:white;cursor:pointer;font-size:12px;">🔐 了解并开启记录授权</button>
+        <button class="review-enable-btn" id="review-enable-btn" style="padding:6px 14px;border-radius:6px;border:none;background:#ff9800;color:white;cursor:pointer;font-size:12px;">了解并开启记录授权</button>
       </div>
     `;
     const enableBtn = container.querySelector('#review-enable-btn');
@@ -1498,13 +1498,13 @@ async function setupContentReviewTab() {
 }
 
 function renderTimeline(container, segments) {
-  const typeIcons = { code: '🔧', text: '📝', chat: '💬' };
+  const typeIcons = { code: '<img src="icons/toolbar-tools.png" class="cat-icon icon-sm" alt="">', text: '<img src="icons/tab-todo.png" class="cat-icon icon-sm" alt="">', chat: '<img src="icons/toolbar-chat.png" class="cat-icon icon-sm" alt="">' };
   const densityLabels = { high: '高密度', medium: '中等', low: '低密度' };
   
   let html = '<div class="review-timeline">';
   
   for (const seg of segments) {
-    const icon = typeIcons[seg.type] || '📄';
+    const icon = typeIcons[seg.type] || '<img src="icons/tab-todo.png" class="cat-icon icon-sm" alt="">';
     html += `
       <div class="review-segment type-${seg.type}">
         <div class="seg-time">${seg.startTime.slice(0,5)} - ${seg.endTime.slice(0,5)}</div>
@@ -1526,11 +1526,11 @@ function renderTimeline(container, segments) {
   
   html = `
     <div class="review-header">
-      <div class="review-stat">📊 今日 ${segments.length} 段 · ${totalChars.toLocaleString()} 字</div>
+      <div class="review-stat"><img src="icons/tab-sysinfo.png" class="cat-icon icon-sm" alt=""> 今日 ${segments.length} 段 · ${totalChars.toLocaleString()} 字</div>
       <div class="review-stat-types">
-        ${typeStats.code ? `🔧 编码 ${typeStats.code} 段 ` : ''}
-        ${typeStats.text ? `📝 文字 ${typeStats.text} 段 ` : ''}
-        ${typeStats.chat ? `💬 聊天 ${typeStats.chat} 段` : ''}
+        ${typeStats.code ? `<img src="icons/toolbar-tools.png" class="cat-icon icon-sm" alt=""> 编码 ${typeStats.code} 段 ` : ''}
+        ${typeStats.text ? `<img src="icons/tab-todo.png" class="cat-icon icon-sm" alt=""> 文字 ${typeStats.text} 段 ` : ''}
+        ${typeStats.chat ? `<img src="icons/toolbar-chat.png" class="cat-icon icon-sm" alt=""> 聊天 ${typeStats.chat} 段` : ''}
         <div style="font-size:10px; color:#aaa; margin-top:2px;">(数据基于后台周期性转换，首次可能存在数分钟延迟)</div>
       </div>
       <button id="review-revoke-btn" style="margin-left:auto;padding:4px 8px;border-radius:4px;border:1px solid #ccc;background:#f5f5f5;color:#666;font-size:12px;cursor:pointer;">关闭记录授权</button>
