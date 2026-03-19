@@ -24,6 +24,8 @@ export class QuickPanelInlineUI {
         document.querySelectorAll('#quick-container .quick-mode-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         this._mode = btn.dataset.mode;
+        // 切换模式时清除上一次的结果、图片预览和状态
+        this._resetPanel();
         if (this._mode === 'screenshot') {
           window.electronAPI.qpStartScreenshot?.();
         }
@@ -136,11 +138,19 @@ export class QuickPanelInlineUI {
     this._historyVisible = false;
     this._mode = data.mode;
     this._syncModeButtons();
+    // 清除粘贴图片的 base64 引用（防止重复发送），但保留预览图供用户查看
+    this._pastedImageBase64 = null;
     this._resultArea.innerHTML = this._escapeHtml(data.result);
     this._setResultVisible(true);
-    this._statusBar.textContent = '✅ 完成 · 点击结果可复制';
-    this._addCopyHandler();
-    this._addFeedbackButtons();
+
+    const isLoading = data.result && data.result.includes('正在识别');
+    if (isLoading) {
+      this._statusBar.textContent = '⏳ 正在识别图片内容...';
+    } else {
+      this._statusBar.textContent = '✅ 完成 · 点击结果可复制';
+      this._addCopyHandler();
+      this._addFeedbackButtons();
+    }
   }
 
   async _send() {
@@ -298,6 +308,22 @@ export class QuickPanelInlineUI {
     if (!this._previewEl) return;
     this._previewEl.innerHTML = '';
     this._previewEl.classList.remove('visible');
+  }
+
+  /**
+   * 切换模式时重置面板：清除上一次的结果、图片预览和处理状态
+   */
+  _resetPanel() {
+    // 清除结果区
+    this._resultArea.innerHTML = '';
+    this._setResultVisible(false);
+    // 清除图片预览
+    this._pastedImageBase64 = null;
+    this._clearPreview();
+    // 重置状态
+    this._isProcessing = false;
+    this._historyVisible = false;
+    this._statusBar.textContent = 'ESC 关闭 · Ctrl+Enter 发送';
   }
 
   _syncModeButtons() {
