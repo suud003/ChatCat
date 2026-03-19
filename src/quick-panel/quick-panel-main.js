@@ -531,8 +531,9 @@ class QuickPanelManager {
   _resizeWindowToContent(contentHeight) {
     if (!this._panelWindow || this._panelWindow.isDestroyed()) return;
     const current = this._panelWindow.getBounds();
+    const display = screen.getDisplayMatching(current);
     const minH = 220;
-    const maxH = 520;
+    const maxH = Math.max(minH, Math.min(680, display.workArea.height - 20));
     const nextH = this._clamp(Math.round(contentHeight), minH, maxH);
     if (Math.abs(nextH - current.height) <= 2) return;
 
