@@ -167,7 +167,7 @@ export class AIService {
   /**
    * Test API Connection with given credentials
    */
-  async testConnection(apiUrl, apiKey, modelName) {
-    return this._client.testConnection(apiUrl, apiKey, modelName);
+  async testConnection(apiUrl, apiKey, modelName, options = {}) {
+    return this._client.testConnection(apiUrl, apiKey, modelName, options);
   }
 }

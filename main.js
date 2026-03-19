@@ -96,6 +96,7 @@ let todoExtractor = null;
 let embeddedServer = null;
 let skillRegistry = null;
 let skillEngine = null;
+let quickPanelManager = null;
 
 function createWindow() {
   // Use the primary display for initial window placement.
@@ -316,6 +317,7 @@ ipcMain.on('set-ignore-mouse', (_, ignore) => {
 // Multi-monitor: move window to the display containing the given screen point
 ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
   moveWindowToDisplay(screenX, screenY);
+  quickPanelManager?.syncToPetPosition();
 });
 
 // Recorder IPC handlers
@@ -691,7 +693,7 @@ app.whenReady().then(() => {
   const aiClient = new AIClientMain(store);
 
   // V2: Quick Panel
-  const quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient);
+  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient);
   quickPanelManager.init();
 
   createTray();

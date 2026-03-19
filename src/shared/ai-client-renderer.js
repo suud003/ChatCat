@@ -14,6 +14,7 @@ export class AIClientRenderer {
     this.baseUrl = '';
     this.apiKey = '';
     this.modelName = '';
+    this.apiPreset = 'custom';
   }
 
   /** Load config from electron-store via IPC */
@@ -21,17 +22,20 @@ export class AIClientRenderer {
     this.baseUrl = await window.electronAPI.getStore('apiBaseUrl') || 'https://api.openai.com/v1';
     this.apiKey = await window.electronAPI.getStore('apiKey') || '';
     this.modelName = await window.electronAPI.getStore('modelName') || 'gpt-3.5-turbo';
+    this.apiPreset = await window.electronAPI.getStore('apiPreset') || 'custom';
   }
 
   /** Manually set config (used by AIService which manages its own config) */
-  setConfig(baseUrl, apiKey, modelName) {
+  setConfig(baseUrl, apiKey, modelName, apiPreset = 'custom') {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     this.modelName = modelName;
+    this.apiPreset = apiPreset;
   }
 
   isConfigured() {
-    return this.apiKey && this.apiKey.length > 0;
+    if (!this.baseUrl) return false;
+    return this._requiresApiKey() ? !!this.apiKey : true;
   }
 
   // ─── Public API ────────────────────────────────────────────────
@@ -114,15 +118,23 @@ export class AIClientRenderer {
   /**
    * Test API connection with given credentials (non-streaming).
    */
-  async testConnection(apiUrl, apiKey, modelName) {
-    if (!apiKey) throw new Error('API Key is empty');
+  async testConnection(apiUrl, apiKey, modelName, options = {}) {
+    const requiresApiKey = this._requiresApiKey({
+      baseUrl: apiUrl,
+      apiPreset: options.preset,
+    });
+    if (requiresApiKey && !apiKey) throw new Error('API Key is empty');
+
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
 
     const response = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model: modelName,
         messages: [{ role: 'user', content: 'hello' }],
@@ -147,16 +159,33 @@ export class AIClientRenderer {
   // ─── Internal helpers ──────────────────────────────────────────
 
   _buildHeaders() {
-    return {
+    const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
     };
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+    return headers;
   }
 
   _validateConfig() {
-    if (!this.baseUrl || !this.apiKey) {
-      throw new Error('请先在设置中配置 API 地址和 API Key');
+    const missingBaseUrl = !this.baseUrl;
+    const missingApiKey = this._requiresApiKey() && !this.apiKey;
+    if (missingBaseUrl || missingApiKey) {
+      throw new Error(missingBaseUrl
+        ? '请先在设置中配置 API 地址'
+        : '请先在设置中配置 API Key');
     }
+  }
+
+  _requiresApiKey(config = {}) {
+    const preset = config.apiPreset ?? this.apiPreset;
+    const baseUrl = (config.baseUrl ?? this.baseUrl ?? '').toLowerCase();
+    if (preset === 'ollama') return false;
+    if (baseUrl.includes('://127.0.0.1:11434') || baseUrl.includes('://localhost:11434')) {
+      return false;
+    }
+    return true;
   }
 
   /**

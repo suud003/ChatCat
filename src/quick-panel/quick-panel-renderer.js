@@ -8,6 +8,9 @@ class QuickPanelUI {
     this._inputArea = document.getElementById('input-area');
     this._resultArea = document.getElementById('result-area');
     this._statusBar = document.getElementById('status-bar');
+    this._panelEl = document.querySelector('.panel');
+    this._lastReportedHeight = 0;
+    this._resizeRaf = 0;
     
     this._init();
   }
@@ -25,6 +28,7 @@ class QuickPanelUI {
         sel.removeAllRanges();
         sel.addRange(range);
       }
+      this._scheduleReportPanelSize();
     });
 
     window.qpAPI.onDisplayDirectResult((data) => {
@@ -39,6 +43,7 @@ class QuickPanelUI {
         this._statusBar.textContent = '✅ 完成 · 点击结果可复制';
         this._addCopyHandler();
         this._addFeedbackButtons();
+        this._scheduleReportPanelSize();
     });
     
     document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -52,6 +57,7 @@ class QuickPanelUI {
              window.qpAPI.startScreenshot();
           }
         }
+        this._scheduleReportPanelSize();
       });
     });
     
@@ -122,6 +128,7 @@ class QuickPanelUI {
       if (cursor) cursor.remove();
       this._resultArea.innerHTML += this._escapeHtml(chunk) + '<span class="streaming-cursor"></span>';
       this._resultArea.scrollTop = this._resultArea.scrollHeight;
+      this._scheduleReportPanelSize();
     });
     
     window.qpAPI.onStreamEnd((result) => {
@@ -143,6 +150,7 @@ class QuickPanelUI {
 
       this._addCopyHandler();
       this._addFeedbackButtons();
+      this._scheduleReportPanelSize();
     });
     
     window.qpAPI.onStreamError((err) => {
@@ -150,6 +158,7 @@ class QuickPanelUI {
       if (cursor) cursor.remove();
       this._resultArea.innerHTML += `<div style="color:#e53935;">❌ ${err}</div>`;
       this._isProcessing = false;
+      this._scheduleReportPanelSize();
     });
 
     // 外部自动传入图片识别（从猫咪气泡触发）
@@ -171,7 +180,13 @@ class QuickPanelUI {
       });
       this._mode = 'screenshot';
       this._statusBar.textContent = '⏳ 正在自动识别剪贴板图片...';
+      this._scheduleReportPanelSize();
     });
+
+    // Keep BrowserWindow tightly fit to visible panel size.
+    const ro = new ResizeObserver(() => this._scheduleReportPanelSize());
+    if (this._panelEl) ro.observe(this._panelEl);
+    this._scheduleReportPanelSize();
   }
   
   async _send() {
@@ -319,6 +334,24 @@ class QuickPanelUI {
           window.qpAPI.sendFeedback({ mode: this._mode, rating, timestamp: Date.now() });
           this._statusBar.textContent = '✅ 感谢反馈！';
       }
+  }
+
+  _scheduleReportPanelSize() {
+    if (this._resizeRaf) cancelAnimationFrame(this._resizeRaf);
+    this._resizeRaf = requestAnimationFrame(() => {
+      this._resizeRaf = 0;
+      this._reportPanelSize();
+    });
+  }
+
+  _reportPanelSize() {
+    if (!this._panelEl || !window.qpAPI?.reportPanelSize) return;
+    const rect = this._panelEl.getBoundingClientRect();
+    const contentHeight = Math.ceil(rect.height + 20); // include body margin
+    if (!Number.isFinite(contentHeight)) return;
+    if (Math.abs(contentHeight - this._lastReportedHeight) < 2) return;
+    this._lastReportedHeight = contentHeight;
+    window.qpAPI.reportPanelSize({ height: contentHeight });
   }
 
   _escapeHtml(str) {

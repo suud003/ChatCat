@@ -4,6 +4,7 @@
  */
 
 import { PERSONALITIES } from './personality.js';
+import { capturePanelAnchor, applyPanelAnchorTransition } from '../ui/panel-tab-transition.js';
 
 export class ChatUI {
   constructor(aiService, character, apiPresets) {
@@ -157,8 +158,19 @@ export class ChatUI {
   }
 
   setupSettingsEvents() {
-    this.presetSelect.addEventListener('change', () => {
-      this.populateModels(this.presetSelect.value, null, '');
+    this.presetSelect.addEventListener('change', async () => {
+      await this.populateModels(this.presetSelect.value, null, '');
+    });
+
+    this.apiUrlInput.addEventListener('change', async () => {
+      // Only refresh model list automatically for custom-url Ollama setup.
+      if (this.presetSelect.value === 'ollama') {
+        await this.populateModels(
+          this.presetSelect.value,
+          this.modelSelect.style.display !== 'none' ? this.modelSelect.value : this.modelCustomInput.value.trim(),
+          this.apiUrlInput.value.trim()
+        );
+      }
     });
 
     this.opacityInput.addEventListener('input', () => {
@@ -185,7 +197,9 @@ export class ChatUI {
       if (preset && !preset.needsUrl) {
         // Preset with fixed URL
         apiUrl = preset.url;
-        selectedModel = (preset.models && preset.models.length > 0) ? this.modelSelect.value : this.modelCustomInput.value.trim();
+        selectedModel = this.modelSelect.style.display !== 'none'
+          ? this.modelSelect.value
+          : this.modelCustomInput.value.trim();
       } else {
         // Custom or needsUrl (like openclaw)
         apiUrl = this.apiUrlInput.value.trim();
@@ -287,7 +301,9 @@ export class ChatUI {
         const preset = this.apiPresets ? this.apiPresets[presetKey] : null;
         
         let apiUrl = preset ? preset.url : '';
-        let selectedModel = this.modelSelect.value;
+        let selectedModel = this.modelSelect.style.display !== 'none'
+          ? this.modelSelect.value
+          : this.modelCustomInput.value.trim();
         
         if (presetKey === 'custom' || !preset || preset.needsUrl) {
           apiUrl = this.apiUrlInput.value.trim();
@@ -298,8 +314,9 @@ export class ChatUI {
         }
         
         const apiKey = this.apiKeyInput.value.trim();
+        const requiresApiKey = presetKey !== 'ollama';
         
-        if (!apiKey) {
+        if (requiresApiKey && !apiKey) {
           testStatus.textContent = '❌ 请输入 API Key';
           testStatus.style.color = 'var(--text-danger, #ff4d4f)';
           return;
@@ -316,7 +333,7 @@ export class ChatUI {
         testStatus.textContent = '';
         
         try {
-          await this.aiService.testConnection(apiUrl, apiKey, selectedModel);
+          await this.aiService.testConnection(apiUrl, apiKey, selectedModel, { preset: presetKey });
           testStatus.textContent = '✅ 连接成功';
           testStatus.style.color = 'var(--text-success, #52c41a)';
         } catch (err) {
@@ -330,7 +347,7 @@ export class ChatUI {
     }
   }
 
-  populateModels(presetKey, savedModel, savedUrl) {
+  async populateModels(presetKey, savedModel, savedUrl) {
     const preset = this.apiPresets[presetKey];
 
     // Show/hide URL input: visible for custom and presets with needsUrl
@@ -340,6 +357,42 @@ export class ChatUI {
       this.apiUrlInput.value = savedUrl;
     } else if (!needsUrl) {
       this.apiUrlInput.value = preset ? preset.url : '';
+    }
+
+    if (presetKey === 'ollama') {
+      const baseUrl = (needsUrl ? this.apiUrlInput.value : (preset?.url || '')).trim();
+
+      this.modelSelect.style.display = '';
+      this.modelCustomInput.style.display = 'none';
+      this.modelSelect.innerHTML = '';
+      const loadingOpt = document.createElement('option');
+      loadingOpt.value = '';
+      loadingOpt.textContent = '正在读取本地 Ollama 模型...';
+      this.modelSelect.appendChild(loadingOpt);
+      this.modelSelect.value = '';
+
+      const models = await this._fetchOllamaModels(baseUrl);
+      if (models.length > 0) {
+        this.modelSelect.innerHTML = '';
+        for (const m of models) {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          this.modelSelect.appendChild(opt);
+        }
+        if (savedModel && models.includes(savedModel)) {
+          this.modelSelect.value = savedModel;
+        } else {
+          this.modelSelect.value = models[0];
+        }
+      } else {
+        // Fallback to manual model input if local list is unavailable.
+        this.modelSelect.style.display = 'none';
+        this.modelCustomInput.style.display = '';
+        this.modelCustomInput.placeholder = '未检测到本地模型，可手动输入（如 llama3.2:3b）';
+        this.modelCustomInput.value = savedModel || preset?.model || '';
+      }
+      return;
     }
 
     if (preset && preset.models && preset.models.length > 0) {
@@ -360,7 +413,7 @@ export class ChatUI {
     } else {
       this.modelSelect.style.display = 'none';
       this.modelCustomInput.style.display = '';
-      this.modelCustomInput.value = savedModel || '';
+      this.modelCustomInput.value = savedModel || preset?.model || '';
     }
   }
 
@@ -375,7 +428,7 @@ export class ChatUI {
 
     const savedModel = await window.electronAPI.getStore('modelName') || '';
     const savedUrl = await window.electronAPI.getStore('apiBaseUrl') || '';
-    this.populateModels(savedPreset, savedModel, savedUrl);
+    await this.populateModels(savedPreset, savedModel, savedUrl);
 
     // V2 Pillar B: Load vision model
     if (this.visionModelInput) {
@@ -441,6 +494,33 @@ export class ChatUI {
     this._snapshotSettings();
   }
 
+  _resolveOllamaTagsUrl(baseUrl) {
+    const cleaned = (baseUrl || '').trim().replace(/\/+$/, '');
+    if (!cleaned) return '';
+    if (cleaned.endsWith('/v1')) {
+      return `${cleaned.slice(0, -3)}/api/tags`;
+    }
+    return `${cleaned}/api/tags`;
+  }
+
+  async _fetchOllamaModels(baseUrl) {
+    const tagsUrl = this._resolveOllamaTagsUrl(baseUrl);
+    if (!tagsUrl) return [];
+
+    try {
+      const response = await fetch(tagsUrl, { method: 'GET' });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const models = Array.isArray(data.models) ? data.models : [];
+      return models
+        .map(item => item?.name)
+        .filter(name => typeof name === 'string' && name.trim())
+        .map(name => name.trim());
+    } catch {
+      return [];
+    }
+  }
+
   _renderMemoryList() {
     const listEl = document.getElementById('memory-list');
     if (!listEl) return;
@@ -485,6 +565,11 @@ export class ChatUI {
   }
 
   switchTab(tabName) {
+    const beforeRect = capturePanelAnchor(this.container, {
+      isVisible: this.isVisible,
+      isMaximized: this.isMaximized,
+    });
+
     // If leaving settings tab, check for unsaved changes
     if (this._currentTab === 'settings' && tabName !== 'settings') {
       if (this._isSettingsDirty()) {
@@ -504,9 +589,15 @@ export class ChatUI {
     this.tabSettings.classList.toggle('active', tabName === 'settings');
 
     if (tabName === 'settings') {
-      this.loadSettings();
+      // Keep bottom-right anchor on immediate tab switch, then re-anchor after async settings load.
+      applyPanelAnchorTransition(this.container, beforeRect);
+      this.loadSettings().then(() => {
+        applyPanelAnchorTransition(this.container, beforeRect);
+      });
+      return;
     }
     if (tabName === 'chat') {
+      applyPanelAnchorTransition(this.container, beforeRect);
       this.inputEl.focus();
       this.scrollToBottom();
     }

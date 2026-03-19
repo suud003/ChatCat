@@ -34,6 +34,7 @@ import { PetBaseSystem } from './pet/pet-base-system.js';
 import { PetBaseUI } from './pet/pet-base-ui.js';
 import { getPrestigeMaterial } from './pet/pet-base-items.js';
 import { formatNumber } from './utils/format.js';
+import { capturePanelAnchor, applyPanelAnchorTransition } from './ui/panel-tab-transition.js';
 
 // V1.4 imports — Multiplayer
 import { MultiplayerClient } from './multiplayer/mp-client.js';
@@ -68,6 +69,10 @@ const API_PRESETS = {
   gemini: {
     url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',
     models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview']
+  },
+  ollama: {
+    url: 'http://127.0.0.1:11434/v1', model: 'llama3.2:3b',
+    models: []
   },
   openclaw: {
     url: '', model: '',
@@ -788,6 +793,14 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     let startX = 0;
     let scrollStart = 0;
     const DRAG_THRESHOLD = 4;
+    const canScrollTabs = () => tabsBar.scrollWidth > tabsBar.clientWidth + 1;
+    const centerTabInView = (tabEl, smooth = true) => {
+      if (!tabEl || !canScrollTabs()) return;
+      const targetLeft = tabEl.offsetLeft + tabEl.offsetWidth / 2 - tabsBar.clientWidth / 2;
+      const maxLeft = Math.max(0, tabsBar.scrollWidth - tabsBar.clientWidth);
+      const nextLeft = Math.min(Math.max(0, targetLeft), maxLeft);
+      tabsBar.scrollTo({ left: nextLeft, behavior: smooth ? 'smooth' : 'auto' });
+    };
 
     tabsBar.addEventListener('mousedown', (e) => {
       if (e.target.closest('.chat-ctrl-btn')) return;
@@ -810,6 +823,23 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     document.addEventListener('mouseup', () => {
       isDragging = false;
     });
+
+    // Mouse wheel support for horizontal tab scrolling when tabs overflow.
+    tabsBar.addEventListener('wheel', (e) => {
+      if (!canScrollTabs()) return;
+      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      tabsBar.scrollLeft += delta;
+      e.preventDefault();
+    }, { passive: false });
+
+    // Initial align: if there is an active tab, center it without animation.
+    const activeTab = tabsBar.querySelector('.panel-tab.active');
+    if (activeTab) {
+      centerTabInView(activeTab, false);
+    }
+
+    // Expose helper on element for reuse in click handler below.
+    tabsBar._centerTabInView = centerTabInView;
   }
 
   // Tab switching (suppress if it was a drag/reorder)
@@ -817,6 +847,10 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
     tab.addEventListener('click', (e) => {
       if (e.target.closest('.chat-ctrl-btn')) return;
       if (tabDidDrag) { tabDidDrag = false; return; }
+      const beforeRect = capturePanelAnchor(container, {
+        isVisible: !container.classList.contains('hidden'),
+        isMaximized: isMaximized || container.classList.contains('maximized'),
+      });
       const tabId = tab.dataset.tab;
       header.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
       const body = container.querySelector(`#${containerId.replace('-container', '-body')}`);
@@ -824,6 +858,8 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
       tab.classList.add('active');
       const content = document.getElementById(`tab-${tabId}`);
       if (content) content.classList.add('active');
+      header.querySelector('.panel-tabs')?._centerTabInView?.(tab, true);
+      applyPanelAnchorTransition(container, beforeRect);
     });
   });
 
@@ -899,6 +935,47 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
 
 function setupToolbar(chatUI) {
   const toolbar = document.getElementById('toolbar');
+  const toolsPanel = document.getElementById('tools-container');
+  const funPanel = document.getElementById('fun-container');
+  const toolsCloseBtn = document.getElementById('tools-close');
+  const funCloseBtn = document.getElementById('fun-close');
+
+  const closeToolsPanel = () => {
+    if (!toolsPanel || toolsPanel.classList.contains('hidden')) return;
+    toolsCloseBtn?.click();
+  };
+
+  const closeFunPanel = () => {
+    if (!funPanel || funPanel.classList.contains('hidden')) return;
+    funCloseBtn?.click();
+  };
+
+  const closeQuickPanel = async () => {
+    try {
+      const status = await window.electronAPI.qpIsVisible?.();
+      if (status?.visible) {
+        await window.electronAPI.qpHide?.();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const closeOtherPanels = async (except) => {
+    if (except !== 'chat' && chatUI.isVisible) {
+      chatUI.hide();
+    }
+    if (except !== 'tools') {
+      closeToolsPanel();
+    }
+    if (except !== 'fun') {
+      closeFunPanel();
+    }
+    if (except !== 'quick-panel') {
+      await closeQuickPanel();
+    }
+  };
+
   toolbar.addEventListener('click', async (e) => {
     const btn = e.target.closest('.toolbar-btn');
     if (!btn) return;
@@ -907,25 +984,46 @@ function setupToolbar(chatUI) {
     const action = btn.dataset.action;
 
     switch (action) {
-      case 'chat':
-        chatUI.toggle();
-        break;
-      case 'tools': {
-        const panel = document.getElementById('tools-container');
-        const wasHidden = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        if (wasHidden) positionAbovePet(panel);
+      case 'chat': {
+        const shouldShow = !chatUI.isVisible;
+        if (!shouldShow) {
+          chatUI.hide();
+          break;
+        }
+        await closeOtherPanels('chat');
+        chatUI.show();
         break;
       }
-      case 'quick-panel':
-        _sendPetPositionToQP();
-        window.electronAPI.qpToggle();
+      case 'tools': {
+        const shouldShow = toolsPanel.classList.contains('hidden');
+        if (!shouldShow) {
+          closeToolsPanel();
+          break;
+        }
+        await closeOtherPanels('tools');
+        toolsPanel.classList.remove('hidden');
+        positionAbovePet(toolsPanel);
         break;
+      }
+      case 'quick-panel': {
+        const status = await window.electronAPI.qpIsVisible?.();
+        if (status?.visible) {
+          await window.electronAPI.qpHide?.();
+          break;
+        }
+        await closeOtherPanels('quick-panel');
+        await window.electronAPI.qpShow?.();
+        break;
+      }
       case 'fun': {
-        const panel = document.getElementById('fun-container');
-        const wasHidden = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        if (wasHidden) positionAbovePet(panel);
+        const shouldShow = funPanel.classList.contains('hidden');
+        if (!shouldShow) {
+          closeFunPanel();
+          break;
+        }
+        await closeOtherPanels('fun');
+        funPanel.classList.remove('hidden');
+        positionAbovePet(funPanel);
         break;
       }
     }
