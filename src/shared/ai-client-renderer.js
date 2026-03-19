@@ -15,6 +15,7 @@ export class AIClientRenderer {
     this.apiKey = '';
     this.modelName = '';
     this.apiPreset = 'custom';
+    this.enableThinking = false;
   }
 
   /** Load config from electron-store via IPC */
@@ -23,14 +24,16 @@ export class AIClientRenderer {
     this.apiKey = await window.electronAPI.getStore('apiKey') || '';
     this.modelName = await window.electronAPI.getStore('modelName') || 'gpt-3.5-turbo';
     this.apiPreset = await window.electronAPI.getStore('apiPreset') || 'custom';
+    this.enableThinking = await window.electronAPI.getStore('enableThinking') === true;
   }
 
   /** Manually set config (used by AIService which manages its own config) */
-  setConfig(baseUrl, apiKey, modelName, apiPreset = 'custom') {
+  setConfig(baseUrl, apiKey, modelName, apiPreset = 'custom', enableThinking = false) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     this.modelName = modelName;
     this.apiPreset = apiPreset;
+    this.enableThinking = enableThinking === true;
   }
 
   isConfigured() {
@@ -60,6 +63,7 @@ export class AIClientRenderer {
       temperature,
       max_tokens: maxTokens,
     };
+    await this._applyThinkingOptions(body);
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -100,6 +104,7 @@ export class AIClientRenderer {
       max_tokens: maxTokens,
       temperature,
     };
+    await this._applyThinkingOptions(body);
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -132,13 +137,15 @@ export class AIClientRenderer {
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
+    const testMessage = (options.testMessage || '请回复：连接测试通过').trim();
+    const startAt = performance.now();
     const response = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: modelName,
-        messages: [{ role: 'user', content: 'hello' }],
-        max_tokens: 5,
+        messages: [{ role: 'user', content: testMessage }],
+        max_tokens: 128,
         stream: false,
       }),
     });
@@ -153,7 +160,9 @@ export class AIClientRenderer {
     if (!data.choices || !data.choices[0]) {
       throw new Error('Invalid response format');
     }
-    return true;
+    const latencyMs = Math.round(performance.now() - startAt);
+    const output = data.choices?.[0]?.message?.content || '';
+    return { ok: true, latencyMs, output };
   }
 
   // ─── Internal helpers ──────────────────────────────────────────
@@ -176,6 +185,26 @@ export class AIClientRenderer {
         ? '请先在设置中配置 API 地址'
         : '请先在设置中配置 API Key');
     }
+  }
+
+  async _applyThinkingOptions(body) {
+    if (!this.enableThinking) return;
+    const baseUrl = String(this.baseUrl || '').toLowerCase();
+    const modelName = String(body.model || '').toLowerCase();
+    const isDashScope = baseUrl.includes('dashscope.aliyuncs.com') || baseUrl.includes('aliyuncs.com');
+    const isGptOss = modelName.includes('gpt-oss');
+
+    if (isDashScope && !isGptOss) {
+      const rawBudget = Number(await window.electronAPI.getStore('thinkingBudgetTokens'));
+      body.enable_thinking = true;
+      body.thinking_budget = Number.isFinite(rawBudget) && rawBudget > 0 ? Math.floor(rawBudget) : 1024;
+      return;
+    }
+
+    const rawEffort = await window.electronAPI.getStore('thinkingEffort');
+    const effort = String(rawEffort || 'medium').toLowerCase();
+    const allowed = new Set(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    body.reasoning_effort = allowed.has(effort) ? effort : 'medium';
   }
 
   _requiresApiKey(config = {}) {

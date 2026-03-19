@@ -43,6 +43,7 @@ class AIClientMain {
       temperature,
       max_tokens: maxTokens,
     };
+    this._applyThinkingOptions(body);
 
     const url = `${config.apiBaseUrl}/chat/completions`;
     console.log(`[AIClient] complete: model=${body.model}, url=${url}`);
@@ -83,6 +84,7 @@ class AIClientMain {
       temperature,
       max_tokens: maxTokens,
     };
+    this._applyThinkingOptions(body);
 
     const url = `${config.apiBaseUrl}/chat/completions`;
     console.log(`[AIClient] stream: model=${body.model}, url=${url}, input=${messages.length} msgs`);
@@ -247,6 +249,27 @@ class AIClientMain {
       headers.Authorization = `Bearer ${config.apiKey}`;
     }
     return headers;
+  }
+
+  _applyThinkingOptions(body) {
+    const enabled = this._store.get('enableThinking') === true;
+    if (!enabled) return;
+    const config = this._getConfig();
+    const baseUrl = String(config.apiBaseUrl || '').toLowerCase();
+    const modelName = String(body.model || '').toLowerCase();
+    const isDashScope = baseUrl.includes('dashscope.aliyuncs.com') || baseUrl.includes('aliyuncs.com');
+    const isGptOss = modelName.includes('gpt-oss');
+
+    if (isDashScope && !isGptOss) {
+      const rawBudget = Number(this._store.get('thinkingBudgetTokens') || 1024);
+      body.enable_thinking = true;
+      body.thinking_budget = Number.isFinite(rawBudget) && rawBudget > 0 ? Math.floor(rawBudget) : 1024;
+      return;
+    }
+
+    const effort = String(this._store.get('thinkingEffort') || 'medium').toLowerCase();
+    const allowed = new Set(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    body.reasoning_effort = allowed.has(effort) ? effort : 'medium';
   }
 
   // ─── HTTP helpers ──────────────────────────────────────────────

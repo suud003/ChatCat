@@ -41,6 +41,7 @@ export class ChatUI {
     this.presetSelect = document.getElementById('setting-preset');
     this.modelSelect = document.getElementById('setting-model');
     this.modelCustomInput = document.getElementById('setting-model-custom');
+    this.enableThinkingInput = document.getElementById('setting-enable-thinking');
     this.apiUrlInput = document.getElementById('setting-api-url');
     this.urlGroup = document.getElementById('url-group');
     this.apiKeyInput = document.getElementById('setting-api-key');
@@ -208,6 +209,7 @@ export class ChatUI {
 
       await window.electronAPI.setStore('apiBaseUrl', apiUrl);
       await window.electronAPI.setStore('modelName', selectedModel);
+      await window.electronAPI.setStore('enableThinking', this.enableThinkingInput?.checked === true);
       await window.electronAPI.setStore('apiKey', this.apiKeyInput.value);
       await window.electronAPI.setStore('opacity', parseFloat(this.opacityInput.value));
       await window.electronAPI.setStore('apiPreset', presetKey);
@@ -295,6 +297,8 @@ export class ChatUI {
     // V1.5: Test Connection Button
     const testBtn = document.getElementById('test-connection-btn');
     const testStatus = document.getElementById('test-connection-status');
+    const testMetrics = document.getElementById('test-connection-metrics');
+    const testMessageInput = document.getElementById('test-message-input');
     if (testBtn && testStatus) {
       testBtn.addEventListener('click', async () => {
         const presetKey = this.presetSelect.value;
@@ -331,14 +335,28 @@ export class ChatUI {
         testBtn.disabled = true;
         testBtn.textContent = '测试中...';
         testStatus.textContent = '';
+        if (testMetrics) testMetrics.textContent = '';
         
         try {
-          await this.aiService.testConnection(apiUrl, apiKey, selectedModel, { preset: presetKey });
-          testStatus.textContent = '✅ 连接成功';
+          const testMessage = testMessageInput?.value?.trim() || '请回复：连接测试通过';
+          const probe = await this.aiService.testConnection(apiUrl, apiKey, selectedModel, {
+            preset: presetKey,
+            testMessage,
+          });
+          const latencyMs = Math.max(0, Number(probe?.latencyMs || 0));
+          const evalText = this._evaluateConnectionProbe(testMessage, probe?.output || '');
+          testStatus.textContent = `✅ 连接成功 · ${latencyMs}ms`;
           testStatus.style.color = 'var(--text-success, #52c41a)';
+          if (testMetrics) {
+            testMetrics.textContent = `测评: ${evalText}`;
+            testMetrics.style.color = '#888';
+          }
         } catch (err) {
           testStatus.textContent = `❌ 失败: ${err.message}`;
           testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+          if (testMetrics) {
+            testMetrics.textContent = '';
+          }
         } finally {
           testBtn.disabled = false;
           testBtn.textContent = '测试连接';
@@ -417,6 +435,15 @@ export class ChatUI {
     }
   }
 
+  _evaluateConnectionProbe(testMessage, output) {
+    const text = String(output || '').trim();
+    if (!text) return '无有效回复';
+    if (/error|invalid|forbidden|unauthorized|错误|失败/i.test(text)) return '返回异常内容';
+    if (text.length < 2) return '回复过短';
+    const hint = testMessage && text.includes(testMessage.slice(0, 4)) ? '（偏复述）' : '';
+    return `回复正常，${text.length}字${hint}`;
+  }
+
   async loadSettings() {
     this.apiKeyInput.value = await window.electronAPI.getStore('apiKey') || '';
     const opacity = await window.electronAPI.getStore('opacity') || 1;
@@ -429,6 +456,9 @@ export class ChatUI {
     const savedModel = await window.electronAPI.getStore('modelName') || '';
     const savedUrl = await window.electronAPI.getStore('apiBaseUrl') || '';
     await this.populateModels(savedPreset, savedModel, savedUrl);
+    if (this.enableThinkingInput) {
+      this.enableThinkingInput.checked = await window.electronAPI.getStore('enableThinking') === true;
+    }
 
     // V2 Pillar B: Load vision model
     if (this.visionModelInput) {

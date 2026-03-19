@@ -77,11 +77,18 @@
             <input type="text" id="setting-model-custom" placeholder="model-name" style="display:none;">
           </div>
           <div class="setting-group">
+            <label><input type="checkbox" id="setting-enable-thinking"> 启用 Thinking（模型需支持）</label>
+          </div>
+          <div class="setting-group">
             <label>API密钥</label>
             <input type="password" id="setting-api-key" placeholder="sk-...">
             <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
               <button id="test-connection-btn" class="chat-tool-btn" style="padding: 4px 12px; font-size: 12px; background: rgba(255, 126, 103, 0.2); border: 1px solid var(--primary); border-radius: 4px; color: var(--primary); cursor: pointer; transition: all 0.2s;">测试连接</button>
               <span id="test-connection-status" style="font-size: 12px;"></span>
+            </div>
+            <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+              <input type="text" id="test-message-input" placeholder="测试消息（默认：请回复“连接测试通过”）" style="flex: 1;">
+              <span id="test-connection-metrics" style="font-size: 12px; color: #888;"></span>
             </div>
           </div>
           <div class="setting-group">
