@@ -35,6 +35,7 @@ import { PetBaseUI } from './pet/pet-base-ui.js';
 import { getPrestigeMaterial } from './pet/pet-base-items.js';
 import { formatNumber } from './utils/format.js';
 import { capturePanelAnchor, applyPanelAnchorTransition } from './ui/panel-tab-transition.js';
+import { QuickPanelInlineUI } from './quick-panel/quick-panel-inline-ui.js';
 
 // V1.4 imports — Multiplayer
 import { MultiplayerClient } from './multiplayer/mp-client.js';
@@ -83,6 +84,7 @@ const API_PRESETS = {
 
 // Active character reference
 let activeCharacter = null;
+let quickPanelUI = null;
 
 // Affection system reference (used by pet status UI)
 let affectionSystem = null;
@@ -483,8 +485,25 @@ async function init() {
   // V1.1: Clipboard Widget
   const clipboardWidget = new ClipboardWidget(aiService, showCatBubble);
 
+  const toolsPanel = document.getElementById('tools-container');
+  const funPanel = document.getElementById('fun-container');
+  quickPanelUI = new QuickPanelInlineUI({
+    positionFn: positionAbovePet,
+    beforeShow: async () => {
+      if (chatUI.isVisible) chatUI.hide();
+      if (toolsPanel && !toolsPanel.classList.contains('hidden')) {
+        document.getElementById('tools-close')?.click();
+      }
+      if (funPanel && !funPanel.classList.contains('hidden')) {
+        document.getElementById('fun-close')?.click();
+      }
+    }
+  });
+  quickPanelUI.init();
+
   // Setup UI
-  setupToolbar(chatUI);
+  setupToolbar(chatUI, quickPanelUI);
+  setupTabbedPanel('quick-container', 'quick-bubble-header', 'quick-close', 'quick-maximize');
   setupTabbedPanel('tools-container', 'tools-bubble-header', 'tools-close', 'tools-maximize');
   setupTabbedPanel('fun-container', 'fun-bubble-header', 'fun-close', 'fun-maximize');
   setupToolbarHover();
@@ -768,7 +787,7 @@ function displayResult(result, mode) {
     // Long result: open in QuickPanel
     navigator.clipboard.writeText(result);
     showCatBubble('✅ 结果已复制到剪贴板');
-    window.electronAPI.qpShowResult({ mode, result });
+    quickPanelUI?.showDirectResult({ mode, result }).catch(() => {});
   }
 }
 
@@ -933,12 +952,14 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
   }
 }
 
-function setupToolbar(chatUI) {
+function setupToolbar(chatUI, quickPanel) {
   const toolbar = document.getElementById('toolbar');
   const toolsPanel = document.getElementById('tools-container');
   const funPanel = document.getElementById('fun-container');
+  const quickContainer = document.getElementById('quick-container');
   const toolsCloseBtn = document.getElementById('tools-close');
   const funCloseBtn = document.getElementById('fun-close');
+  const quickCloseBtn = document.getElementById('quick-close');
 
   const closeToolsPanel = () => {
     if (!toolsPanel || toolsPanel.classList.contains('hidden')) return;
@@ -950,15 +971,9 @@ function setupToolbar(chatUI) {
     funCloseBtn?.click();
   };
 
-  const closeQuickPanel = async () => {
-    try {
-      const status = await window.electronAPI.qpIsVisible?.();
-      if (status?.visible) {
-        await window.electronAPI.qpHide?.();
-      }
-    } catch {
-      // ignore
-    }
+  const closeQuickPanel = () => {
+    if (!quickContainer || quickContainer.classList.contains('hidden')) return;
+    quickCloseBtn?.click();
   };
 
   const closeOtherPanels = async (except) => {
@@ -972,7 +987,7 @@ function setupToolbar(chatUI) {
       closeFunPanel();
     }
     if (except !== 'quick-panel') {
-      await closeQuickPanel();
+      closeQuickPanel();
     }
   };
 
@@ -1006,13 +1021,12 @@ function setupToolbar(chatUI) {
         break;
       }
       case 'quick-panel': {
-        const status = await window.electronAPI.qpIsVisible?.();
-        if (status?.visible) {
-          await window.electronAPI.qpHide?.();
+        if (quickPanel?.isVisible()) {
+          quickPanel.hide();
           break;
         }
         await closeOtherPanels('quick-panel');
-        await window.electronAPI.qpShow?.();
+        await quickPanel?.show();
         break;
       }
       case 'fun': {
@@ -1027,22 +1041,6 @@ function setupToolbar(chatUI) {
         break;
       }
     }
-  });
-}
-
-/**
- * Send pet's screen position to QuickPanel for positioning
- */
-function _sendPetPositionToQP() {
-  const petContainer = document.getElementById('pet-container');
-  if (!petContainer) return;
-  const rect = petContainer.getBoundingClientRect();
-  // Convert client coordinates to screen coordinates
-  const screenX = window.screenX + rect.left;
-  const screenY = window.screenY + rect.top;
-  window.electronAPI.qpUpdatePetPosition?.({
-    screenX, screenY,
-    width: rect.width, height: rect.height
   });
 }
 
@@ -1070,6 +1068,12 @@ function positionAbovePet(panel) {
 function setupToolbarHover() {
   const petContainer = document.getElementById('pet-container');
   const toolbar = document.getElementById('toolbar');
+  const toolbarState = (window.__catToolbarState ||= {
+    hoveringPet: false,
+    hoveringToolbar: false,
+    isDraggingPet: false,
+    syncToolbarVisibility: null,
+  });
   let hideTimeout = null;
 
   function showToolbar() {
@@ -1077,22 +1081,53 @@ function setupToolbarHover() {
     toolbar.classList.add('visible');
   }
 
-  function hideToolbar() {
+  function hideToolbarIfAllowed() {
     clearTimeout(hideTimeout);
+    if (toolbarState.hoveringPet || toolbarState.hoveringToolbar || toolbarState.isDraggingPet) {
+      toolbar.classList.add('visible');
+      return;
+    }
     hideTimeout = setTimeout(() => {
+      if (toolbarState.hoveringPet || toolbarState.hoveringToolbar || toolbarState.isDraggingPet) return;
       toolbar.classList.remove('visible');
     }, 400);
   }
 
-  petContainer.addEventListener('mouseenter', showToolbar);
-  petContainer.addEventListener('mouseleave', hideToolbar);
-  toolbar.addEventListener('mouseenter', showToolbar);
-  toolbar.addEventListener('mouseleave', hideToolbar);
+  toolbarState.syncToolbarVisibility = () => {
+    if (toolbarState.hoveringPet || toolbarState.hoveringToolbar || toolbarState.isDraggingPet) {
+      showToolbar();
+    } else {
+      hideToolbarIfAllowed();
+    }
+  };
+
+  petContainer.addEventListener('mouseenter', () => {
+    toolbarState.hoveringPet = true;
+    toolbarState.syncToolbarVisibility?.();
+  });
+  petContainer.addEventListener('mouseleave', () => {
+    toolbarState.hoveringPet = false;
+    toolbarState.syncToolbarVisibility?.();
+  });
+  toolbar.addEventListener('mouseenter', () => {
+    toolbarState.hoveringToolbar = true;
+    toolbarState.syncToolbarVisibility?.();
+  });
+  toolbar.addEventListener('mouseleave', () => {
+    toolbarState.hoveringToolbar = false;
+    toolbarState.syncToolbarVisibility?.();
+  });
 }
 
 function setupDrag() {
   const petContainer = document.getElementById('pet-container');
-  const panelIds = ['chat-container', 'tools-container', 'fun-container'];
+  const toolbarState = (window.__catToolbarState ||= {
+    hoveringPet: false,
+    hoveringToolbar: false,
+    isDraggingPet: false,
+    syncToolbarVisibility: null,
+  });
+  const panelIds = ['chat-container', 'tools-container', 'quick-container', 'fun-container'];
   let isDragging = false;
   let lastX, lastY;
 
@@ -1100,6 +1135,8 @@ function setupDrag() {
     if (e.target.closest('#toolbar') || e.target.closest('.toolbar-btn')) return;
     if (e.button === 0) {
       isDragging = true;
+      toolbarState.isDraggingPet = true;
+      toolbarState.syncToolbarVisibility?.();
       lastX = e.screenX;
       lastY = e.screenY;
       // Snapshot current position into style.left/top for parseFloat tracking
@@ -1134,11 +1171,11 @@ function setupDrag() {
     // so it can move the window to the correct display if needed.
     window.electronAPI.moveToDisplay(e.screenX, e.screenY);
 
-    // Sync QuickPanel position with pet during drag
-    _sendPetPositionToQP();
   });
 
   document.addEventListener('mouseup', () => {
+    toolbarState.isDraggingPet = false;
+    toolbarState.syncToolbarVisibility?.();
     isDragging = false;
     petContainer.style.cursor = 'grab';
   });
@@ -1175,11 +1212,12 @@ function setupDrag() {
       panel.style.right = 'auto';
       panel.style.transform = 'none';
     }
+
   });
 }
 
 function setupClickThrough() {
-  const selectors = '#pet-container, #chat-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
+  const selectors = '#pet-container, #chat-container, #tools-container, #quick-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
 
   document.addEventListener('mouseenter', (e) => {

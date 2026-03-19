@@ -317,7 +317,6 @@ ipcMain.on('set-ignore-mouse', (_, ignore) => {
 // Multi-monitor: move window to the display containing the given screen point
 ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
   moveWindowToDisplay(screenX, screenY);
-  quickPanelManager?.syncToPetPosition();
 });
 
 // Recorder IPC handlers

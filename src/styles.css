@@ -1591,6 +1591,271 @@ body {
 }
 
 /* ============================================================ */
+/*  Quick Panel (Office Assistant)                              */
+/* ============================================================ */
+
+#quick-container {
+  position: absolute;
+  width: 400px;
+  z-index: 60;
+  -webkit-app-region: no-drag;
+  will-change: left, top;
+  animation: bubblePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#quick-bubble {
+  position: relative;
+  background: #fff;
+  border: 3px solid #222;
+  border-radius: 22px;
+  box-shadow: 3px 3px 0 #222;
+  overflow: visible;
+}
+
+#quick-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 2px;
+  cursor: grab;
+}
+
+#quick-bubble-header:active {
+  cursor: grabbing;
+}
+
+#quick-body {
+  padding: 8px 14px 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#quick-bubble-tail {
+  position: absolute;
+  bottom: -18px;
+  right: 24px;
+  width: 28px;
+  height: 22px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#quick-bubble-tail::before {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 22px;
+  background: #fff;
+  border-right: 3px solid #222;
+  border-bottom: 3px solid #222;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.quick-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #222;
+  min-width: 0;
+}
+
+.quick-input-area {
+  background: #f8f8f8;
+  border: 2px solid #222;
+  border-radius: 16px;
+  box-shadow: 2px 2px 0 #222;
+  padding: 8px 12px;
+  min-height: 60px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 13px;
+  outline: none;
+  color: #222;
+  user-select: text;
+  cursor: text;
+}
+
+.quick-input-area:empty::before {
+  content: attr(data-placeholder);
+  color: #aaa;
+}
+
+.quick-input-area:focus {
+  border-color: #0066cc;
+}
+
+.quick-paste-image-preview {
+  display: none;
+  padding: 8px;
+  background: #f8f8fa;
+  border: 1px solid #e8e8ec;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.quick-paste-image-preview.visible {
+  display: block;
+}
+
+.quick-mode-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.quick-mode-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #888;
+}
+
+.quick-mode-btn:hover {
+  color: #555;
+  background: #f0f0f0;
+}
+
+.quick-mode-btn.active {
+  color: #222;
+  background: #f0f0f0;
+  border-color: #222;
+}
+
+.quick-result-area {
+  background: #fafafa;
+  border: 2px solid #e6e6e6;
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+  display: none;
+  user-select: text;
+  max-height: 420px;
+}
+
+.quick-result-area.visible {
+  display: block;
+  min-height: 150px;
+}
+
+.quick-result-area .streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #222;
+  animation: blink 0.8s infinite;
+}
+
+.quick-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #ececec;
+}
+
+.quick-actions-group {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.quick-status-bar {
+  font-size: 11px;
+  color: #888;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.quick-action-btn {
+  background: #222;
+  color: #fff;
+  border: 2px solid #222;
+  border-radius: 12px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.quick-action-btn:hover {
+  transform: scale(1.04);
+}
+
+.quick-action-btn-secondary {
+  background: #fff;
+  color: #555;
+  border-color: #ccc;
+  box-shadow: none;
+}
+
+.quick-action-btn-secondary:hover {
+  background: #f4f4f4;
+}
+
+#quick-close:hover {
+  background: #f5576c;
+  color: #fff;
+  border-color: #f5576c;
+}
+
+#quick-container.maximized {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  animation: none;
+  z-index: 100;
+  display: flex;
+  align-items: stretch;
+}
+
+#quick-container.maximized #quick-bubble {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+#quick-container.maximized #quick-bubble-header {
+  padding: 10px 14px 6px;
+  border-bottom: 2px solid #eee;
+}
+
+#quick-container.maximized #quick-body {
+  flex: 1;
+  max-height: none;
+  padding: 10px 16px 12px;
+}
+
+#quick-container.maximized #quick-result-area {
+  flex: 1;
+  max-height: none;
+}
+
+#quick-container.maximized #quick-bubble-tail {
+  display: none;
+}
+
+/* ============================================================ */
 /*  Pomodoro Timer (inside Tools panel)                         */
 /* ============================================================ */
 

@@ -243,6 +243,40 @@
     </div>
   </div>
 
+  <!-- Quick Panel: Office Assistant (same DOM panel system as others) -->
+  <div id="quick-container" class="hidden">
+    <div id="quick-bubble">
+      <div id="quick-bubble-header">
+        <div class="quick-panel-title">
+          <img src="icons/toolbar-quick.png" class="cat-icon" alt="">
+          办公
+        </div>
+        <button id="quick-maximize" class="chat-ctrl-btn" title="最大化">□</button>
+        <button id="quick-close" class="chat-ctrl-btn" title="关闭">×</button>
+      </div>
+      <div id="quick-body">
+        <div id="quick-input-area" class="quick-input-area" contenteditable="true" data-placeholder="输入问题或粘贴文本/图片..."></div>
+        <div id="quick-paste-image-preview" class="quick-paste-image-preview"></div>
+        <div class="quick-mode-buttons">
+          <button class="quick-mode-btn" data-mode="ask"><img src="icons/qp-ask.png" class="cat-icon" alt=""> 问答</button>
+          <button class="quick-mode-btn active" data-mode="polish"><img src="icons/qp-polish.png" class="cat-icon" alt=""> 润色</button>
+          <button class="quick-mode-btn" data-mode="summarize"><img src="icons/qp-summarize.png" class="cat-icon" alt=""> 总结</button>
+          <button class="quick-mode-btn" data-mode="explain"><img src="icons/qp-explain.png" class="cat-icon" alt=""> 解释</button>
+          <button class="quick-mode-btn" data-mode="screenshot"><img src="icons/qp-screenshot.png" class="cat-icon" alt=""> 识图</button>
+        </div>
+        <div id="quick-result-area" class="quick-result-area"></div>
+        <div class="quick-actions">
+          <span id="quick-status-bar" class="quick-status-bar">ESC 关闭 · Ctrl+Enter 发送</span>
+          <div class="quick-actions-group">
+            <button id="quick-history" class="quick-action-btn quick-action-btn-secondary"><img src="icons/tab-clipboard.png" class="cat-icon" alt=""> 历史</button>
+            <button id="quick-send" class="quick-action-btn"><img src="icons/toolbar-quick.png" class="cat-icon" alt=""> 发送</button>
+          </div>
+        </div>
+      </div>
+      <div id="quick-bubble-tail"></div>
+    </div>
+  </div>
+
   <!-- Fun Panel: Character | Pet Status | Shop | Items (Manga Bubble with Tabs) -->
   <div id="fun-container" class="hidden">
     <div id="fun-bubble">
