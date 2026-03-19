@@ -948,12 +948,19 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
       container.style.top = (origTop + (e.clientY - startY)) + 'px';
     });
 
-    document.addEventListener('mouseup', () => { isDragging = false; });
+    document.addEventListener('mouseup', () => {
+      const wasDragging = isDragging;
+      isDragging = false;
+      if (wasDragging) {
+        _captureSharedPanelOffset(container);
+      }
+    });
   }
 }
 
 function setupToolbar(chatUI, quickPanel) {
   const toolbar = document.getElementById('toolbar');
+  const chatPanel = document.getElementById('chat-container');
   const toolsPanel = document.getElementById('tools-container');
   const funPanel = document.getElementById('fun-container');
   const quickContainer = document.getElementById('quick-container');
@@ -977,6 +984,20 @@ function setupToolbar(chatUI, quickPanel) {
   };
 
   const closeOtherPanels = async (except) => {
+    const panelMap = {
+      chat: chatPanel,
+      tools: toolsPanel,
+      'quick-panel': quickContainer,
+      fun: funPanel
+    };
+    for (const [key, panel] of Object.entries(panelMap)) {
+      if (key === except) continue;
+      if (panel && !panel.classList.contains('hidden')) {
+        _captureSharedPanelOffset(panel);
+        break;
+      }
+    }
+
     if (except !== 'chat' && chatUI.isVisible) {
       chatUI.hide();
     }
@@ -1049,20 +1070,53 @@ function setupToolbar(chatUI, quickPanel) {
  */
 function positionAbovePet(panel) {
   if (panel.classList.contains('maximized')) return;
-  if (panel.style.left && panel.style.top) return;
 
   const petContainer = document.getElementById('pet-container');
   const petRect = petContainer.getBoundingClientRect();
   const panelWidth = panel.offsetWidth || 280;
+  const panelHeight = panel.offsetHeight || 220;
+  const { dx, dy } = _getSharedPanelOffset();
 
-  const left = petRect.left + (petRect.width / 2) - (panelWidth / 2);
-  const top = petRect.top - panel.offsetHeight - 20;
+  const baseLeft = petRect.left + (petRect.width / 2) - (panelWidth / 2);
+  const baseTop = petRect.top - panelHeight - 20;
+  const left = baseLeft + dx;
+  const top = baseTop + dy;
+  const maxLeft = Math.max(10, window.innerWidth - panelWidth - 10);
+  const maxTop = Math.max(10, window.innerHeight - panelHeight - 10);
 
-  panel.style.left = Math.max(10, left) + 'px';
-  panel.style.top = Math.max(10, top) + 'px';
+  panel.style.left = Math.min(maxLeft, Math.max(10, left)) + 'px';
+  panel.style.top = Math.min(maxTop, Math.max(10, top)) + 'px';
   panel.style.bottom = 'auto';
   panel.style.right = 'auto';
   panel.style.transform = 'none';
+}
+
+function _getSharedPanelOffset() {
+  const state = (window.__panelAnchorState ||= { dx: 0, dy: 0 });
+  const dx = Number(state.dx || 0);
+  const dy = Number(state.dy || 0);
+  return {
+    dx: Number.isFinite(dx) ? dx : 0,
+    dy: Number.isFinite(dy) ? dy : 0,
+  };
+}
+
+function _captureSharedPanelOffset(panel) {
+  if (!panel || panel.classList.contains('hidden') || panel.classList.contains('maximized')) return;
+  const petContainer = document.getElementById('pet-container');
+  if (!petContainer) return;
+
+  const petRect = petContainer.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  const baseLeft = petRect.left + (petRect.width / 2) - (panelRect.width / 2);
+  const baseTop = petRect.top - panelRect.height - 20;
+  const dx = panelRect.left - baseLeft;
+  const dy = panelRect.top - baseTop;
+
+  window.__panelAnchorState = {
+    dx: Number.isFinite(dx) ? dx : 0,
+    dy: Number.isFinite(dy) ? dy : 0,
+  };
 }
 
 function setupToolbarHover() {

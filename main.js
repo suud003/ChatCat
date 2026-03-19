@@ -101,6 +101,20 @@ let skillRegistry = null;
 let skillEngine = null;
 let quickPanelManager = null;
 
+// Ensure only one ChatCat instance is running.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!mainWindow.isVisible()) mainWindow.show();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
+
 function createWindow() {
   // Use the primary display for initial window placement.
   // Multi-monitor support: renderer tracks cat's screen position and asks main
@@ -140,8 +154,8 @@ function createWindow() {
     }
   });
 
-  // Open devtools in dev mode
-  if (process.argv.includes('--dev')) {
+  // Open devtools only when explicitly opted in.
+  if (process.env.CHATCAT_OPEN_DEVTOOLS === '1') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 }
@@ -664,6 +678,21 @@ async function setupInputHook() {
   // If we have permission or not on macOS, start it
   await startUioHook();
 }
+
+function quitAppNow(reason) {
+  if (isQuitting) return;
+  isQuitting = true;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('app-before-quit');
+    }
+  } catch {}
+  console.log(`[Main] Quit requested: ${reason}`);
+  setTimeout(() => app.quit(), 80);
+}
+
+process.on('SIGINT', () => quitAppNow('SIGINT'));
+process.on('SIGTERM', () => quitAppNow('SIGTERM'));
 
 app.whenReady().then(() => {
   // 移除默认应用菜单栏
