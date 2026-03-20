@@ -19,6 +19,7 @@ const TRIGGER_TYPES = {
   SKILL: 'skill',
   MEMORY: 'memory',
   VISION: 'vision',
+  PROACTIVE: 'proactive',
 };
 
 const VALID_TYPES = new Set(Object.values(TRIGGER_TYPES));

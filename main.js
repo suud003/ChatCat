@@ -12,9 +12,11 @@ const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
 const { AIClientMain } = require('./src/shared/ai-client-main');
 
-// AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer)
+// AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer + Phase 3: trigger bus)
 const aiRuntimeDefs = require('./src/ai-runtime');
 const { AIRuntime, AITrigger } = aiRuntimeDefs;
+const { TriggerBus } = require('./src/ai-runtime/trigger-bus');
+const { ScheduledTriggerRegistry } = require('./src/ai-runtime/scheduled-trigger-registry');
 
 // V2 Pillar C Imports
 const { PrivacyConsentManager } = require('./src/consent/privacy-consent');
@@ -310,6 +312,26 @@ ipcMain.handle('ai-runtime-get-registries', () => {
     }),
     profiles: ModelProfiles.listProfilesDetailed(),
   };
+});
+
+// Phase 3: TriggerBus IPC handlers
+ipcMain.handle('trigger-bus-submit', (_, triggerData, options = {}) => {
+  const trigger = AITrigger.create(
+    triggerData.type,
+    triggerData.sceneId,
+    triggerData.payload || {}
+  );
+  // triggerBus is initialized in app.whenReady — safe since renderer can't call until window is loaded
+  const result = global._triggerBus.submit(trigger, options);
+  return result;
+});
+
+ipcMain.handle('trigger-bus-get-result', async (_, correlationId) => {
+  return global._triggerBus.getResult(correlationId);
+});
+
+ipcMain.handle('trigger-bus-get-status', (_, correlationId) => {
+  return global._triggerBus.getStatus(correlationId);
 });
 
 ipcMain.handle('get-system-info', () => {
@@ -714,9 +736,21 @@ app.whenReady().then(() => {
   // Phase 2: Unified AI Runtime (main process execution engine)
   const aiRuntime = new AIRuntime(aiClient, { store });
 
+  // Phase 3: TriggerBus (central AI call coordinator)
+  const triggerBus = new TriggerBus(aiRuntime, { maxConcurrent: 3 });
+  const scheduledRegistry = new ScheduledTriggerRegistry(triggerBus, { store });
+  // Expose to IPC handlers (defined at module scope)
+  global._triggerBus = triggerBus;
+  global._scheduledRegistry = scheduledRegistry;
+
   // V2: Quick Panel (now with AIRuntime)
   quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient, aiRuntime);
   quickPanelManager.init();
+
+  // Phase 3: Wire TriggerBus webContents for IPC push
+  triggerBus.setWebContents(mainWindow.webContents);
+  triggerBus.start();
+  scheduledRegistry.start();
 
   createTray();
   setupShortcuts();
@@ -808,6 +842,13 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Phase 3: Stop TriggerBus and ScheduledTriggerRegistry
+  if (global._triggerBus) {
+    try { global._triggerBus.stop(); } catch {}
+  }
+  if (global._scheduledRegistry) {
+    try { global._scheduledRegistry.stop(); } catch {}
+  }
   if (clipboardTimer) {
     clearInterval(clipboardTimer);
   }

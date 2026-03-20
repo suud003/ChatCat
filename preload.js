@@ -97,4 +97,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Phase 2: AI Runtime registry mirror
   getAIRegistries: () => ipcRenderer.invoke('ai-runtime-get-registries'),
+
+  // Phase 3: TriggerBus IPC
+  triggerBusSubmit: (triggerData, options) => ipcRenderer.invoke('trigger-bus-submit', triggerData, options),
+  triggerBusGetResult: (correlationId) => ipcRenderer.invoke('trigger-bus-get-result', correlationId),
+  triggerBusGetStatus: (correlationId) => ipcRenderer.invoke('trigger-bus-get-status', correlationId),
+
+  // Phase 3: TriggerBus push events (Main → Renderer)
+  onTriggerChunk: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-chunk', listener);
+    return () => ipcRenderer.removeListener('trigger-chunk', listener);
+  },
+  onTriggerCompleted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-completed', listener);
+    return () => ipcRenderer.removeListener('trigger-completed', listener);
+  },
+  onTriggerError: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-error', listener);
+    return () => ipcRenderer.removeListener('trigger-error', listener);
+  },
+  onTriggerStarted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-started', listener);
+    return () => ipcRenderer.removeListener('trigger-started', listener);
+  },
 });

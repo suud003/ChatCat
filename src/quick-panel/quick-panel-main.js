@@ -220,11 +220,15 @@ class QuickPanelManager {
       try {
         const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_TEXT, `quick.${mode}`, { mode, text });
         const result = await this._aiRuntime.runStream(trigger, (chunk) => {
-          this._sendToRenderer('qp-stream-chunk', chunk);
+          if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+            this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+          }
         });
         
         this._saveToHistory(mode, text, result);
-        this._sendToRenderer('qp-stream-end', result);
+        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+          this._panelWindow.webContents.send('qp-stream-end', result);
+        }
         
         return result;
       } catch (err) {
@@ -241,14 +245,18 @@ class QuickPanelManager {
       try {
         const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_ASK, 'quick.ask', { question, history });
         const result = await this._aiRuntime.runStream(trigger, (chunk) => {
-          this._sendToRenderer('qp-stream-chunk', chunk);
+          if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+            this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+          }
         });
         
         const lastMsg = Array.isArray(history) && history.length > 0
           ? history[history.length - 1].content
           : question;
         this._saveToHistory('ask', lastMsg, result);
-        this._sendToRenderer('qp-stream-end', result);
+        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+          this._panelWindow.webContents.send('qp-stream-end', result);
+        }
         
         return result;
       } catch (err) {

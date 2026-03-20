@@ -4,6 +4,8 @@
  * V2: Refactored to use centralized AIClientRenderer for HTTP calls
  * V3: Phase 2 — chat streaming now delegates to AIRuntimeRenderer for unified
  *     model config management. Prompt building stays here.
+ * V4: Phase 3 — chat streaming delegates to TriggerBusRenderer for unified
+ *     trigger bus architecture. Falls back to Phase 2 path if bus unavailable.
  *
  * Scene: chat.default / chat.followup (AI Runtime SceneRegistry)
  * Model config sourced from AI Runtime ModelProfiles 'chat-stream' via AIRuntimeRenderer.
@@ -24,6 +26,7 @@ export class AIService {
   constructor() {
     this._client = new AIClientRenderer();
     this._runtime = null;  // AIRuntimeRenderer, set via setRuntime()
+    this._triggerBus = null;  // TriggerBusRenderer, set via setTriggerBus()
     this.conversationHistory = [];
 
     // V1.1: personality & memory context
@@ -44,6 +47,14 @@ export class AIService {
    */
   setRuntime(runtime) {
     this._runtime = runtime;
+  }
+
+  /**
+   * Phase 3: Set TriggerBusRenderer for unified trigger bus.
+   * @param {import('../ai-runtime/trigger-bus-renderer').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   /**
@@ -138,8 +149,23 @@ export class AIService {
     try {
       let fullResponse = '';
 
-      // Phase 2: Delegate to AIRuntimeRenderer if available
-      if (this._runtime && this._runtime.isReady()) {
+      // Phase 3: Delegate to TriggerBusRenderer (preferred path)
+      if (this._triggerBus) {
+        const trigger = {
+          type: 'chat',
+          sceneId: 'chat.default',
+          payload: {
+            systemPrompt: this._buildSystemPrompt(),
+            history: this.conversationHistory,
+          },
+        };
+
+        for await (const chunk of this._triggerBus.submitAndStream(trigger, { priority: 'HIGH' })) {
+          fullResponse += chunk;
+          yield chunk;
+        }
+      } else if (this._runtime && this._runtime.isReady()) {
+        // Phase 2 fallback: AIRuntimeRenderer
         const trigger = AIRuntimeRenderer.createTrigger('chat', 'chat.default', {
           systemPrompt: this._buildSystemPrompt(),
           history: this.conversationHistory,
@@ -150,7 +176,7 @@ export class AIService {
           yield chunk;
         }
       } else {
-        // Fallback: direct client call (pre-Phase 2 behavior)
+        // Legacy fallback: direct client call (pre-Phase 2 behavior)
         const messages = [
           { role: 'system', content: this._buildSystemPrompt() },
           ...this.conversationHistory

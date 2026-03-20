@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatCat AI 数据链路可视化</title>
+  <style>
+    :root {
+      --bg: #faf8f5;
+      --surface: #ffffff;
+      --text: #2a211b;
+      --muted: #7a675a;
+      --border: #e8ddd3;
+      --accent: #c2410c;
+      --accent-dim: #fff0e8;
+      --blue: #2563eb;
+      --green: #15803d;
+      --purple: #7c3aed;
+      --shadow: 0 8px 20px rgba(74, 45, 23, 0.08);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #fff9f4 0%, #faf8f5 35%, #f8f6f2 100%);
+    }
+
+    .container {
+      width: min(1240px, 94vw);
+      margin: 24px auto 48px;
+    }
+
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(24px, 3vw, 34px);
+      letter-spacing: 0.2px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .badge {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: #5f4b3d;
+      background: #fff;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-top: 14px;
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .muted { color: var(--muted); }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .node {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .node.main { border-left: 4px solid var(--blue); }
+    .node.renderer { border-left: 4px solid var(--green); }
+    .node.store { border-left: 4px solid var(--purple); }
+    .node.api { border-left: 4px solid var(--accent); }
+
+    .node ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      line-height: 1.6;
+    }
+
+    .flow-svg-wrap {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      overflow: auto;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: #5f4b3d;
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .tab-btn.active {
+      border-color: #f0b08f;
+      background: var(--accent-dim);
+      color: #8b3007;
+      font-weight: 600;
+    }
+
+    .tab {
+      display: none;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .tab.active { display: block; }
+
+    .step-list {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.7;
+    }
+
+    .step-list code {
+      background: #f8f3ee;
+      border: 1px solid #f0e4d8;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      vertical-align: top;
+      text-align: left;
+      line-height: 1.55;
+    }
+
+    th {
+      background: #fdf7f2;
+      font-weight: 600;
+    }
+
+    .foot {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .kpi-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .kpi-num {
+      font-size: 24px;
+      font-weight: 700;
+      color: #8b3007;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .kpi-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 960px) {
+      .arch-grid { grid-template-columns: 1fr; }
+      .kpi { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="hero">
+      <h1>ChatCat AI 数据链路可视化总览</h1>
+      <p>
+        该图覆盖当前项目 AI 相关全链路：聊天、Skills、QuickPanel（润色/问答/识图）、
+        记忆提取与行为数据采集。重点标注 Main / Renderer / Store / 外部 API 的边界与数据流向。
+      </p>
+      <div class="badge-row">
+        <span class="badge">架构形态：Electron 一体化单体</span>
+        <span class="badge">调用模式：Renderer 直连 + Main 代理（混合）</span>
+        <span class="badge">存储：electron-store + 本地文件</span>
+      </div>
+      <div class="kpi">
+        <div class="kpi-card"><div class="kpi-num">4</div><div class="kpi-label">主链路（聊天/skills/quickpanel/记忆行为）</div></div>
+        <div class="kpi-card"><div class="kpi-num">2</div><div class="kpi-label">AI Client 实现（Main/Renderer）</div></div>
+        <div class="kpi-card"><div class="kpi-num">5</div><div class="kpi-label">现有 SKILL.md 数量</div></div>
+        <div class="kpi-card"><div class="kpi-num">20+</div><div class="kpi-label">关键 store 键与信号字段</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>1) 架构边界图（组件视角）</h2>
+      <div class="arch-grid">
+        <article class="node renderer">
+          <h3>Renderer 进程</h3>
+          <ul>
+            <li><code>src/chat/chat-ui.js</code>：用户输入、消息发送、Skill 优先匹配</li>
+            <li><code>src/chat/ai-service.js</code>：聊天系统提示词拼装、流式对话</li>
+            <li><code>src/shared/ai-client-renderer.js</code>：聊天/记忆提取 HTTP 调用</li>
+            <li><code>src/skills/skill-router.js</code>：/command + keyword 路由匹配</li>
+            <li><code>src/proactive/signal-collector.js</code>：CPM/删除率/节奏信号</li>
+          </ul>
+        </article>
+
+        <article class="node main">
+          <h3>Main 进程</h3>
+          <ul>
+            <li><code>main.js</code>：IPC Hub、store、技能入口、权限联动</li>
+            <li><code>src/skills/skill-engine.js</code>：技能执行 + 上下文收集</li>
+            <li><code>src/skills/skill-registry.js</code>：扫描 SKILL.md 并解析 frontmatter</li>
+            <li><code>src/shared/ai-client-main.js</code>：skills/quick panel/vision 调用</li>
+            <li><code>src/quick-panel/*</code>：润色/问答/识图业务入口</li>
+          </ul>
+        </article>
+
+        <article class="node store">
+          <h3>本地持久化</h3>
+          <ul>
+            <li><code>electron-store</code>：<code>chatHistory</code> / <code>aiMemories</code> / <code>skillsEnabled</code> / <code>proactiveConfig</code> ...</li>
+            <li>按日节奏：<code>rhythmData_YYYY-MM-DD</code></li>
+            <li>速度基线：<code>typingSpeedBaseline</code></li>
+            <li>文件：<code>keyboard_YYYY-MM-DD.txt</code></li>
+          </ul>
+        </article>
+
+        <article class="node api">
+          <h3>外部模型 API（OpenAI 兼容）</h3>
+          <ul>
+            <li>聊天与技能请求统一走 <code>/chat/completions</code></li>
+            <li>聊天多为 Renderer 直连</li>
+            <li>Skills / QuickPanel / OCR 多为 Main 代理</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="flow-svg-wrap">
+        <svg width="1200" height="280" viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="边界数据流图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,3 L0,6 z" fill="#9b6a4d"/>
+            </marker>
+          </defs>
+          <rect x="30" y="36" width="250" height="84" rx="12" fill="#eef7ff" stroke="#9dc3ff"/>
+          <text x="48" y="64" font-size="15" fill="#1f4d96">Renderer</text>
+          <text x="48" y="88" font-size="13" fill="#345e9d">ChatUI / AIService / SkillRouter</text>
+
+          <rect x="340" y="36" width="260" height="84" rx="12" fill="#eefdf2" stroke="#98ddb0"/>
+          <text x="358" y="64" font-size="15" fill="#1c7a38">Main</text>
+          <text x="358" y="88" font-size="13" fill="#2f7f49">IPC / SkillEngine / QuickPanel</text>
+
+          <rect x="660" y="36" width="230" height="84" rx="12" fill="#fff4ec" stroke="#efc3a7"/>
+          <text x="678" y="64" font-size="15" fill="#9d3b10">AI API</text>
+          <text x="678" y="88" font-size="13" fill="#9d5f42">/chat/completions</text>
+
+          <rect x="950" y="36" width="220" height="84" rx="12" fill="#f3f0ff" stroke="#c6b8ff"/>
+          <text x="968" y="64" font-size="15" fill="#5d3bb0">Store / Files</text>
+          <text x="968" y="88" font-size="13" fill="#7058a8">chatHistory / aiMemories / keyboard_*</text>
+
+          <line x1="280" y1="78" x2="340" y2="78" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="600" y1="78" x2="660" y2="78" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="730" y1="120" x2="520" y2="184" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="470" y1="120" x2="470" y2="208" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="580" y1="220" x2="950" y2="78" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="980" y1="120" x2="250" y2="184" stroke="#9b6a4d" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <rect x="250" y="180" width="330" height="72" rx="10" fill="#fff" stroke="#e8ddd3"/>
+          <text x="266" y="206" font-size="13" fill="#6e5847">行为信号链路：SignalCollector / RhythmAnalyzer / CompositeEngine</text>
+          <text x="266" y="228" font-size="12" fill="#8a776a">实时注入到 AIService 系统提示词</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2) 业务链路（时序视角）</h2>
+      <div class="tabs" id="tabs">
+        <button class="tab-btn active" data-tab="chat">聊天链路</button>
+        <button class="tab-btn" data-tab="skills">Skills 链路</button>
+        <button class="tab-btn" data-tab="quick">QuickPanel 链路</button>
+        <button class="tab-btn" data-tab="memory">记忆与行为链路</button>
+      </div>
+
+      <article class="tab active" id="tab-chat">
+        <h3>聊天链路（默认路径）</h3>
+        <ol class="step-list">
+          <li>用户输入并发送：<code>src/chat/chat-ui.js:725</code></li>
+          <li>先尝试技能匹配：<code>src/chat/chat-ui.js:743</code></li>
+          <li>未命中则进入流式聊天：<code>src/chat/ai-service.js:108</code></li>
+          <li>构造 system + history：<code>src/chat/ai-service.js:116</code></li>
+          <li>调用 Renderer AI 客户端：<code>src/shared/ai-client-renderer.js:93</code></li>
+          <li>SSE chunk 实时回填 UI：<code>src/chat/chat-ui.js:760</code></li>
+          <li>写回历史到 store：<code>src/chat/ai-service.js:140</code></li>
+        </ol>
+      </article>
+
+      <article class="tab" id="tab-skills">
+        <h3>Skills 链路（命令/关键词触发）</h3>
+        <ol class="step-list">
+          <li>Skill 元数据加载：<code>src/skills/skill-router.js:20</code></li>
+          <li>输入匹配（/command 或 keyword）：<code>src/skills/skill-router.js:41</code></li>
+          <li>Renderer 通过 IPC 调 Main：<code>src/skills/skill-router.js:72</code> → <code>main.js:454</code></li>
+          <li>Main 执行技能：<code>src/skills/skill-engine.js:30</code></li>
+          <li>收集上下文（converted/raw/todos/...）：<code>src/skills/skill-engine.js:75</code></li>
+          <li>调用 Main AI 客户端：<code>src/skills/skill-engine.js:47</code></li>
+          <li>后处理（写 convertedText / 解析 todo）：<code>src/skills/skill-engine.js:53</code>, <code>src/skills/skill-engine.js:61</code></li>
+        </ol>
+      </article>
+
+      <article class="tab" id="tab-quick">
+        <h3>QuickPanel 链路（润色/问答/识图）</h3>
+        <ol class="step-list">
+          <li>润色/总结/解释模板来源：<code>src/quick-panel/text-processor.js:7</code></li>
+          <li>文本处理入口：<code>src/quick-panel/quick-panel-main.js:99</code></li>
+          <li>问答入口：<code>src/quick-panel/quick-panel-main.js:127</code></li>
+          <li>二者都走 Main 流式 AI：<code>src/quick-panel/quick-panel-main.js:103</code>, <code>src/quick-panel/quick-panel-main.js:134</code></li>
+          <li>识图/OCR：<code>src/quick-panel/screenshot-ocr.js:130</code> → <code>src/shared/ai-client-main.js:112</code></li>
+        </ol>
+      </article>
+
+      <article class="tab" id="tab-memory">
+        <h3>记忆与行为数据链路</h3>
+        <ol class="step-list">
+          <li>聊天结束后异步提取记忆：<code>src/chat/ai-service.js:147</code></li>
+          <li>记忆提取系统提示词：<code>src/chat/memory-manager.js:11</code></li>
+          <li>提取并持久化：<code>src/chat/memory-manager.js:47</code>, <code>src/chat/memory-manager.js:125</code></li>
+          <li>SignalCollector 计算 CPM/删除率：<code>src/proactive/signal-collector.js:178</code>, <code>src/proactive/signal-collector.js:185</code></li>
+          <li>速度基线持久化：<code>src/proactive/signal-collector.js:230</code></li>
+          <li>授权后键盘内容落盘：<code>src/recorder/keyboard-recorder.js:251</code>, <code>src/recorder/keyboard-recorder.js:267</code></li>
+          <li>上述行为数据注入系统提示词：<code>src/chat/ai-service.js:77</code></li>
+        </ol>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>3) 数据资产与维护位置清单</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>数据类型</th>
+            <th>维护/产生位置</th>
+            <th>存储位置</th>
+            <th>关键引用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>系统提示词（人格）</td>
+            <td><code>src/chat/personality.js</code></td>
+            <td>代码常量</td>
+            <td><code>src/chat/personality.js:9</code>, <code>src/chat/personality.js:35</code></td>
+          </tr>
+          <tr>
+            <td>实时提示词注入</td>
+            <td><code>src/chat/ai-service.js</code></td>
+            <td>运行时拼接</td>
+            <td><code>src/chat/ai-service.js:77</code></td>
+          </tr>
+          <tr>
+            <td>Skills 定义</td>
+            <td><code>src/skills/skills/*/SKILL.md</code></td>
+            <td>文件</td>
+            <td><code>src/skills/skill-registry.js:20</code></td>
+          </tr>
+          <tr>
+            <td>聊天历史</td>
+            <td>ChatUI/AIService</td>
+            <td><code>chatHistory</code> (electron-store)</td>
+            <td><code>src/chat/ai-service.js:51</code>, <code>src/chat/ai-service.js:140</code></td>
+          </tr>
+          <tr>
+            <td>长期记忆</td>
+            <td>MemoryManager</td>
+            <td><code>aiMemories</code> (electron-store)</td>
+            <td><code>src/chat/memory-manager.js:47</code>, <code>src/chat/memory-manager.js:125</code></td>
+          </tr>
+          <tr>
+            <td>打字速度基线</td>
+            <td>SignalCollector</td>
+            <td><code>typingSpeedBaseline</code> (electron-store)</td>
+            <td><code>src/proactive/signal-collector.js:230</code></td>
+          </tr>
+          <tr>
+            <td>打字原始日志</td>
+            <td>KeyboardRecorder</td>
+            <td><code>keyboard_YYYY-MM-DD.txt</code></td>
+            <td><code>src/recorder/keyboard-recorder.js:267</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="foot">注：当前项目内 skills 同时存在 legacy（<code>skill-trigger</code>）与新系统（<code>skill-execute</code>）双轨，后续建议治理收敛。</p>
+    </section>
+
+    <p class="foot">文件：<code>doc/ai-data-chain-visual.html</code> · 依据：<code>doc/ai-data-chain.md</code> · 风格：Warm Signal（项目视觉延展）</p>
+  </main>
+
+  <script>
+    const buttons = document.querySelectorAll('.tab-btn');
+    const tabs = {
+      chat: document.getElementById('tab-chat'),
+      skills: document.getElementById('tab-skills'),
+      quick: document.getElementById('tab-quick'),
+      memory: document.getElementById('tab-memory')
+    };
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.remove('active'));
+        Object.values(tabs).forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        tabs[btn.dataset.tab]?.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

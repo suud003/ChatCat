@@ -96,6 +96,10 @@ function registerSkillPrompts(skillRegistry) {
 const { AIRuntime } = require('./runtime');
 const { AITrigger, TRIGGER_TYPES } = require('./trigger');
 
+// ─── Phase 3: Trigger Bus ────────────────────────────────────────────────
+const { TriggerBus } = require('./trigger-bus');
+const { ScheduledTriggerRegistry } = require('./scheduled-trigger-registry');
+
 module.exports = {
   // Phase 1: Definition layer
   SceneRegistry,
@@ -108,4 +112,8 @@ module.exports = {
   AIRuntime,
   AITrigger,
   TRIGGER_TYPES,
+
+  // Phase 3: Trigger Bus
+  TriggerBus,
+  ScheduledTriggerRegistry,
 };

@@ -33,6 +33,9 @@ import { SkillRouter } from './skills/skill-router.js';
 // Phase 2: AI Runtime Renderer
 import { AIRuntimeRenderer } from './ai-runtime/runtime-renderer.js';
 
+// Phase 3: TriggerBus Renderer
+import { TriggerBusRenderer } from './ai-runtime/trigger-bus-renderer.js';
+
 // V1.3 imports — Pet Base & Utils
 import { PetBaseSystem } from './pet/pet-base-system.js';
 import { PetBaseUI } from './pet/pet-base-ui.js';
@@ -269,6 +272,11 @@ async function init() {
   const aiRuntimeRenderer = new AIRuntimeRenderer(aiService.client);
   await aiRuntimeRenderer.init();
   aiService.setRuntime(aiRuntimeRenderer);
+
+  // Phase 3: TriggerBus (Renderer-side, communicates with Main TriggerBus via IPC)
+  const triggerBusRenderer = new TriggerBusRenderer();
+  triggerBusRenderer.init();
+  aiService.setTriggerBus(triggerBusRenderer);
 
   // V1.1: Memory Manager (Phase 2: now uses AIRuntimeRenderer)
   const memoryManager = new MemoryManager(aiRuntimeRenderer);
