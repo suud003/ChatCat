@@ -1,11 +1,13 @@
 /**
  * Personality Provider — Provides cat personality data for system prompt building.
  *
- * Data source: electron-store 'catPersonality' key
- * Original location: src/chat/personality.js (PERSONALITIES + buildSystemPrompt)
+ * Data source: electron-store keys:
+ *   - 'catPersonality' → personality key (lively/cool/soft/scholar)
+ *   - 'level'          → affection level (1-10)
+ *   - 'catMood'        → current mood (happy/normal/bored)
  *
- * Returns the personality key (e.g. 'lively', 'cool', 'soft', 'scholar')
- * so that the prompt composer can build the appropriate system prompt.
+ * V2: Reads entirely from store (persisted by Renderer),
+ *     no longer depends on Renderer-only services.affectionSystem.
  */
 
 'use strict';
@@ -19,14 +21,10 @@ const personalityProvider = {
    */
   async provide(input) {
     const store = input.store;
-    const services = input.services || {};
 
-    const personality = store
-      ? (store.get('catPersonality') || 'lively')
-      : 'lively';
-
-    const level = services.affectionSystem?.level || 1;
-    const mood = services.affectionSystem?.mood || 'normal';
+    const personality = store?.get('catPersonality') || 'lively';
+    const level = store?.get('level') || 1;
+    const mood = store?.get('catMood') || 'normal';
 
     return {
       personality,

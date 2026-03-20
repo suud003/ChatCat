@@ -241,6 +241,13 @@ async function init() {
   await affection.init();
   affectionSystem = affection;
 
+  // V2.1: Persist mood changes to store (for Main-side providers)
+  affection.on('moodchange', () => {
+    window.electronAPI.setStore('catMood', affection.mood);
+  });
+  // Initialize mood in store on startup
+  window.electronAPI.setStore('catMood', affection.mood);
+
   // Input tracker proxy — hooks into affection system
   // Note: _mpClient ref is set later after MultiplayerClient is created
   let _mpClient = null;
@@ -275,10 +282,10 @@ async function init() {
   const memoryManager = new MemoryManager();
   memoryManager.setTriggerBus(triggerBusRenderer);
   await memoryManager.init();
+  aiService.setMemoryManager(memoryManager);
 
-  // V1.1: Load personality and set context
+  // V1.1: Load personality (saved for Renderer-side usage; chat prompt now built by Main PromptRegistry)
   const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
-  aiService.setContext(savedPersonality, affection, memoryManager);
 
   // Chat UI (with integrated settings)
   const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
@@ -312,7 +319,6 @@ async function init() {
 
   // Todo list (lives in Tools panel tab)
   const todoList = new TodoList(affection);
-  aiService.setTodoList(todoList);
 
   // V1.1: Connect todo reminders to cat bubble
   todoList.onReminder = (todo) => {
@@ -378,20 +384,23 @@ async function init() {
   
   // 注入到 ProactiveEngine
   proactiveEngine.setRhythmModules(rhythmAnalyzer, compositeEngine);
-
-  // V2: 注入节奏数据到 AI Service，让聊天能访问实时统计
-  aiService.setRhythmContext(rhythmAnalyzer, compositeEngine);
   
   rhythmAnalyzer.on('rhythm-state-change', async (data) => {
     proactiveEngine.processExternalSignal('rhythm-state-change', data);
     
-    // Save on state change
+    // Save on state change (with real-time signals for Main-side providers)
     const today = new Date().toISOString().split('T')[0];
     const engineData = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...engineData,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   });
@@ -402,26 +411,38 @@ async function init() {
     proactiveEngine.processExternalSignal('activity-tick', data);
   });
   
-  // Save more frequently (every 1 min)
+  // Save more frequently (every 1 min) with real-time signals for Main-side providers
   setInterval(async () => {
     const today = new Date().toISOString().split('T')[0];
     const data = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...data,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   }, 60 * 1000);
 
-  // Hook for safe save on quit
+  // Hook for safe save on quit (with real-time signals for Main-side providers)
   window.electronAPI.onBeforeQuit(async () => {
     const today = new Date().toISOString().split('T')[0];
     const data = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...data,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   });

@@ -2,7 +2,7 @@
  * Context Hub — Centralized context assembly for AI scenes.
  *
  * Replaces scattered context-gathering logic in:
- *   - src/chat/ai-service.js:71 (_buildSystemPrompt)
+ *   - src/chat/ai-service.js (previously _buildSystemPrompt, now removed)
  *   - src/skills/skill-engine.js:75 (_gatherContext)
  *   - src/proactive/proactive-engine.js:273 (_buildContext)
  *

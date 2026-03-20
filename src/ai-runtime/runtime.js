@@ -61,14 +61,17 @@ class AIRuntime {
 
     const scene = SceneRegistry.getSceneOrThrow(trigger.sceneId);
     const profile = ModelProfiles.getProfileOrDefault(scene.modelProfile);
-    const prompt = PromptRegistry.getPrompt(scene.prompt.templateId, trigger.payload);
 
+    // Assemble context FIRST so prompt resolver can access it
     const context = await ContextHub.assembleContext(scene, {
       trigger,
       runtimeInput: trigger.payload,
       store: this._store,
       services: this._services,
     });
+
+    const promptContext = { ...trigger.payload, _assembledContext: context };
+    const prompt = PromptRegistry.getPrompt(scene.prompt.templateId, promptContext);
 
     const messages = this._buildMessages(scene, prompt, context, trigger.payload);
 
@@ -100,14 +103,17 @@ class AIRuntime {
 
     const scene = SceneRegistry.getSceneOrThrow(trigger.sceneId);
     const profile = ModelProfiles.getProfileOrDefault(scene.modelProfile);
-    const prompt = PromptRegistry.getPrompt(scene.prompt.templateId, trigger.payload);
 
+    // Assemble context FIRST so prompt resolver can access it
     const context = await ContextHub.assembleContext(scene, {
       trigger,
       runtimeInput: trigger.payload,
       store: this._store,
       services: this._services,
     });
+
+    const promptContext = { ...trigger.payload, _assembledContext: context };
+    const prompt = PromptRegistry.getPrompt(scene.prompt.templateId, promptContext);
 
     const messages = this._buildMessages(scene, prompt, context, trigger.payload);
 

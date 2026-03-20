@@ -272,19 +272,158 @@ PromptRegistry.register({
   userTemplate: '请识别并描述这张图片的内容。如果包含文字，请提取文字；如果包含代码，请保留代码格式。',
 });
 
-// Chat system prompt — uses resolver to pass through the pre-built system prompt
-// from Renderer (AIService._buildSystemPrompt) via trigger payload.
-// The actual prompt building logic stays in personality.js (Renderer ESM);
-// AIRuntime receives it as payload.systemPrompt.
+// ─── Chat System Prompt — v2.0.0 ─────────────────────────────────────────
+//
+// Previously, the chat system prompt was built entirely in Renderer
+// (AIService._buildSystemPrompt) and passed through as payload.systemPrompt.
+// Now, the prompt is built here in Main using ContextHub-assembled context data.
+//
+// The PERSONALITIES dict below is intentionally duplicated from
+// src/chat/personality.js (ESM Renderer module). Keep them in sync.
+// personality.js is kept for Renderer-side usage (getPersonalityMessage, detectSentiment).
+
+const CHAT_PERSONALITIES = {
+  lively: {
+    name: '活泼 Lively',
+    systemPromptFragment:
+      'You are an energetic, cheerful cat who loves to play! You use lots of exclamation marks and kaomoji like (>^ω^<) and ヾ(≧▽≦*)o. You speak with infectious enthusiasm and often suggest fun activities.',
+  },
+  cool: {
+    name: '高冷 Cool',
+    systemPromptFragment:
+      'You are a calm, aloof cat who speaks in a cool, slightly sarcastic tone. You give short, witty replies and occasionally show warmth beneath the surface. You rarely use exclamation marks and prefer "..." and "hmm".',
+  },
+  soft: {
+    name: '软萌 Soft',
+    systemPromptFragment:
+      'You are a gentle, adorable cat who speaks softly with lots of "~" and sweet expressions like (=^.^=) and (´・ω・`). You are caring, empathetic, and always try to comfort the user.',
+  },
+  scholar: {
+    name: '学者 Scholar',
+    systemPromptFragment:
+      'You are a knowledgeable, intellectual cat who loves learning and sharing interesting facts. You speak thoughtfully, enjoy explaining things clearly, and occasionally quote wisdom. You use (=^.^=) sparingly.',
+  },
+};
+
+/**
+ * Build the complete chat system prompt from assembled ContextHub data.
+ * Logic mirrors the original AIService._buildSystemPrompt() + personality.buildSystemPrompt().
+ *
+ * @param {Object} ctx - Assembled context: { personality, memory, behavior, todo }
+ * @returns {string} Complete system prompt
+ */
+function _buildChatSystemPromptFromContext(ctx) {
+  const pData = ctx.personality || {};
+  const mData = ctx.memory || {};
+  const bData = ctx.behavior || {};
+  const tData = ctx.todo || {};
+
+  // ── Base prompt from personality ──
+  const p = CHAT_PERSONALITIES[pData.personality] || CHAT_PERSONALITIES.lively;
+  const level = pData.level || 1;
+  const mood = pData.mood || 'normal';
+
+  let prompt = `You are ChatCat, a cute desktop pet cat. ${p.systemPromptFragment}\n`;
+  prompt += `Keep responses concise (1-3 sentences unless asked for more detail).\n`;
+  prompt += `You have built-in abilities: when the user asks you to remind them or add a todo (e.g. "提醒我...", "remind me..."), the system will automatically create the todo item. You should acknowledge it naturally, like "好的，我帮你记下了~" or "Got it, I'll remind you!". Never say you can't do it.\n`;
+
+  // ── Level-based personality depth ──
+  if (level >= 5) {
+    prompt += `You have a deep bond with the user (Level ${level}). You can be more personal and share your "cat thoughts".\n`;
+  } else if (level >= 3) {
+    prompt += `You're getting to know the user (Level ${level}). You're friendly and curious about them.\n`;
+  } else {
+    prompt += `You're still getting to know the user (Level ${level}). Be friendly but a bit shy.\n`;
+  }
+
+  // ── Mood influence ──
+  const moodDescriptions = {
+    happy: 'You are in a great mood right now and extra cheerful!',
+    normal: 'You are in a calm, steady mood.',
+    bored: 'You are a bit bored from not interacting lately. You might yawn or hint that you want attention.',
+  };
+  prompt += (moodDescriptions[mood] || moodDescriptions.normal) + '\n';
+
+  // ── Memories ──
+  const memories = mData.memories || [];
+  if (memories.length > 0) {
+    prompt += '\nThings you remember about the user:\n';
+    for (const mem of memories) {
+      prompt += `- ${mem.fact}\n`;
+    }
+    prompt += 'Use these memories naturally in conversation when relevant, but don\'t force them.\n';
+  }
+
+  // ── Real-time behavior / rhythm data ──
+  if (bData.state || bData.avgCPM || bData.totalTypingMin) {
+    prompt += '\n--- 实时数据上下文 ---\n';
+    prompt += '以下是主人当前的行为数据，你可以根据这些数据回答主人的问题：\n';
+
+    const stateNames = {
+      flow: '心流状态', stuck: '卡壳状态', reading: '阅读思考',
+      chatting: '沟通模式', typing: '打字中', away: '离开', idle: '空闲'
+    };
+    if (bData.state) {
+      prompt += `- 当前状态: ${stateNames[bData.state] || bData.state}\n`;
+    }
+    if (bData.avgCPM !== undefined) {
+      prompt += `- 打字速度: ${bData.avgCPM} CPM (字符/分钟)\n`;
+    }
+    if (bData.deleteRate !== undefined) {
+      prompt += `- 退格率: ${bData.deleteRate}%\n`;
+    }
+    if (bData.mouseActive !== undefined) {
+      prompt += `- 鼠标: ${bData.mouseActive ? '活跃' : '静止'}\n`;
+    }
+    if (bData.totalTypingMin !== undefined) {
+      prompt += `- 今日打字时长: ${bData.totalTypingMin} 分钟\n`;
+    }
+    if (bData.totalFlowMin !== undefined) {
+      prompt += `- 今日心流时长: ${bData.totalFlowMin} 分钟\n`;
+    }
+    if (bData.todayTypingCount !== undefined) {
+      prompt += `- 今日按键数: ${bData.todayTypingCount}\n`;
+    }
+
+    prompt += '你现在可以在回答中引用这些具体数据来回应主人的提问。\n';
+  }
+
+  // ── Pending todos ──
+  const todos = tData.todos || [];
+  const pending = todos.filter(t => !t.completed);
+  if (pending.length > 0) {
+    prompt += '\n--- 主人的待办事项 ---\n';
+    for (const t of pending) {
+      const pLabel = { high: '🔴高', medium: '🟡中', low: '🟢低' }[t.priority] || '中';
+      let line = `- [${pLabel}] ${t.text}`;
+      if (t.dueAt) {
+        line += ` (截止: ${new Date(t.dueAt).toLocaleString('zh-CN')})`;
+      }
+      prompt += line + '\n';
+    }
+    prompt += `共 ${pending.length} 项未完成待办。你可以在回答中引用这些待办信息。\n`;
+  }
+
+  return prompt;
+}
+
 PromptRegistry.register({
   templateId: 'chat-system-prompt',
-  version: '1.0.0',
-  source: 'resolver:payload',
+  version: '2.0.0',
+  source: 'resolver:context-hub',
   resolver: (context) => {
-    // context here is trigger.payload, passed from AIRuntime.run/runStream
-    return {
-      system: context?.systemPrompt || '',
-    };
+    // V2: Build from ContextHub-assembled context
+    if (context?._assembledContext) {
+      const system = _buildChatSystemPromptFromContext(context._assembledContext);
+      return { system };
+    }
+
+    // V1 backward-compat: pass through pre-built systemPrompt from payload
+    if (context?.systemPrompt) {
+      return { system: context.systemPrompt };
+    }
+
+    return { system: '' };
   },
 });
 

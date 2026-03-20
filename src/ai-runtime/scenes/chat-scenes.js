@@ -23,7 +23,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'history', 'memory', 'behavior'],
+  contextProviders: ['personality', 'history', 'memory', 'behavior', 'todo'],
   modelProfile: 'chat-stream',
   outputMode: 'stream-text',
   memoryPolicy: 'read-write',
@@ -44,7 +44,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'history', 'memory', 'behavior'],
+  contextProviders: ['personality', 'history', 'memory', 'behavior', 'todo'],
   modelProfile: 'chat-stream',
   outputMode: 'stream-text',
   memoryPolicy: 'read-write',
