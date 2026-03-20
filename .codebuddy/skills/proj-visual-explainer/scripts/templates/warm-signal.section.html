@@ -1,0 +1,68 @@
+<!-- #region {{SECTION_ID}} -->
+<section id="{{SECTION_ID}}"{{SECTION_ALT_CLASS}}>
+<div class="container">
+<p class="section-label">{{SECTION_LABEL}}</p>
+<h2>{{SECTION_HEADING}}</h2>
+
+<!-- TODO: 在此填充内容 -->
+<!--
+  ╔══════════════════════════════════════════════════════════════════════════╗
+  ║  组件速查 — 本模板使用 Warm Signal 风格主题                                ║
+  ║                                                                        ║
+  ║  参考文档（三层架构）：                                                    ║
+  ║    1. references/COMPONENT_REFERENCE.md  ← 通用组件库（风格无关的 HTML）    ║
+  ║    2. references/THEMING_GUIDE.md        ← CSS 变量约定 + 主题接入方法     ║
+  ║    3. references/VISUAL_STYLE_WARM_SIGNAL.md ← Warm Signal 主题实现       ║
+  ╚══════════════════════════════════════════════════════════════════════════╝
+
+  所有组件使用 CSS 变量（如 var(--accent)），由主题文件定义具体颜色值。
+  下方为常用组件速查，完整列表见 COMPONENT_REFERENCE.md。
+
+  ── 布局组件 ──
+  卡片网格(3列): <div class="card-grid card-grid--3"><div class="card" style="border-top:4px solid var(--accent)"><h3>标题</h3><p>内容</p></div></div>
+  卡片网格(2列): <div class="card-grid card-grid--2"><div class="card"><h4>标题</h4><p>内容</p></div></div>
+  卡片网格(4列): <div class="card-grid card-grid--4"><div class="card"><h4>标题</h4><p>内容</p></div></div>
+  对比网格:      <div class="compare-grid"><div class="card" style="border-top:4px solid var(--green)"><h4>A</h4><p>说明</p></div><div class="card" style="border-top:4px solid var(--blue)"><h4>B</h4><p>说明</p></div></div>
+  子章节:        <div class="subsection"><h3>子标题</h3>...</div>
+
+  ── 数据组件 ──
+  表格:          <div class="table-wrap"><table><thead><tr><th>列</th></tr></thead><tbody><tr><td>值</td></tr></tbody></table></div>
+  KPI 卡片:      <div class="kpi-row"><div class="kpi-card" style="border-top:3px solid var(--accent)"><div class="kpi-num" style="color:var(--accent)">42</div><div class="kpi-label">Metric</div><div class="kpi-desc">描述</div></div></div>
+  柱状图:        <div class="bar-chart"><div class="bar-item"><div class="bar-value">80%</div><div class="bar-fill" style="height:80%;background:var(--accent)"></div><div class="bar-label">A</div></div></div>
+
+  ── 流程组件 ──
+  流程图(CSS):   <div class="flow"><div class="flow-node fn--accent"><div class="fn-name">节点</div><div class="fn-sub">描述</div></div><span class="flow-arrow">&rarr;</span></div>
+  洞察卡片:      <div class="insight-item"><h4><span class="badge badge--accent">1</span> 标题</h4><p>内容</p></div>
+
+  ── SVG 图表 ──
+  流水线SVG:     <div class="pipeline-wrap"><svg viewBox="0 0 880 260">...节点+箭头marker+虚线路径...</svg></div>
+  架构SVG:       <div class="arch-diagram"><svg viewBox="0 0 900 300">...分组框+节点+连线...</svg></div>
+
+  ── 交互组件 ──
+  标签页:        <div class="tabs"><button class="tab-btn active" onclick="switchTab(event,'tab-1')">Tab1</button></div><div class="tab-panel active" id="tab-1">内容</div>
+  折叠面板:      <details><summary>标题</summary><div class="detail-body"><p>内容</p></div></details>
+  参考卡片:      <details class="ref-card"><summary>参考标题</summary><div class="ref-body"><div class="ref-item"><span class="ref-item-label">标签</span><img src="..." onclick="openImgOverlay(this.src)"/></div></div></details>
+
+  ── 内容组件 ──
+  提示框(7色):   <div class="callout callout--accent"><strong>标题</strong> 内容</div>
+  徽章(8色):     <span class="badge badge--accent">TAG</span>
+  Lead文本:      <p class="lead">引导性描述文字</p>
+  视频容器:      <div class="video-wrap"><video controls><source src="..."></video></div>
+
+  ── 8 色语义系统（由主题定义具体色值）──
+  accent / blue / green / amber / red / teal / purple / cyan
+-->
+
+<div class="card-grid card-grid--2">
+<div class="card">
+<h3>卡片标题</h3>
+<p>在此填写内容。</p>
+</div>
+<div class="card">
+<h3>卡片标题</h3>
+<p>在此填写内容。</p>
+</div>
+</div>
+
+</div></section>
+<!-- #endregion {{SECTION_ID}} -->

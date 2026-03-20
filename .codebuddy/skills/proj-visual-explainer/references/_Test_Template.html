@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warm Signal 组件全览</title>
+<script>
+(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- #region css -->
+<style>
+:root {
+  --font-body: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --bg: #faf8f5; --bg-warm: #f5f0e8; --surface: #ffffff; --surface2: #faf6f0;
+  --border: rgba(120,80,40,0.08); --border-bright: rgba(120,80,40,0.16);
+  --text: #2c2418; --text-dim: #8a7e6e; --text-mid: #5c5244;
+  --accent: #c2410c; --accent-light: #fb923c; --accent-dim: rgba(194,65,12,0.06);
+  --blue: #1d4ed8; --blue-dim: rgba(29,78,216,0.06);
+  --green: #15803d; --green-dim: rgba(21,128,61,0.06);
+  --red: #b91c1c; --red-dim: rgba(185,28,28,0.06);
+  --purple: #7c3aed; --purple-dim: rgba(124,58,237,0.06);
+  --amber: #b45309; --amber-dim: rgba(180,83,9,0.06);
+  --cyan: #0e7490; --cyan-dim: rgba(14,116,144,0.06);
+  --teal: #0f766e; --teal-dim: rgba(15,118,110,0.06);
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.06); --radius: 12px;
+}
+[data-theme="dark"] {
+  --bg: #1a1714; --bg-warm: #211e19; --surface: #252119; --surface2: #2c2720;
+  --border: rgba(200,170,120,0.08); --border-bright: rgba(200,170,120,0.16);
+  --text: #e8e0d4; --text-dim: #8a7e6e; --text-mid: #b5a998;
+  --accent: #fb923c; --accent-light: #fdba74; --accent-dim: rgba(251,146,60,0.08);
+  --blue: #60a5fa; --blue-dim: rgba(96,165,250,0.08);
+  --green: #4ade80; --green-dim: rgba(74,222,128,0.08);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.08);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.08);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.08);
+  --cyan: #22d3ee; --cyan-dim: rgba(34,211,238,0.08);
+  --teal: #2dd4bf; --teal-dim: rgba(45,212,191,0.08);
+  --shadow: 0 1px 3px rgba(0,0,0,0.2); --shadow-lg: 0 4px 24px rgba(0,0,0,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}
+body{font-family:var(--font-body);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;line-height:1.6}
+.container{max-width:1100px;margin:0 auto;padding:0 32px}
+section{padding:56px 0;border-bottom:1px solid var(--border)}section:last-of-type{border-bottom:none}
+h1{font-size:48px;font-weight:800;letter-spacing:-2px;line-height:1.1}
+h2{font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1.2;margin-bottom:24px}
+h3{font-size:20px;font-weight:600;letter-spacing:-0.3px;margin-bottom:12px}
+h4{font-size:16px;font-weight:600;margin-bottom:8px}
+.section-label{font-family:var(--font-mono);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px}
+.lead{font-size:18px;font-weight:400;line-height:1.7;color:var(--text-mid);max-width:720px}
+.topnav{position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;height:52px;gap:4px;overflow-x:auto;scrollbar-width:none}
+.topnav::-webkit-scrollbar{display:none}
+.topnav .nav-logo{font-weight:700;font-size:14px;color:var(--accent);margin-right:12px;letter-spacing:-0.5px;flex-shrink:0}
+.topnav a{font-size:13px;font-weight:500;color:var(--text-dim);text-decoration:none;padding:6px 14px;border-radius:6px;white-space:nowrap;transition:all .2s;letter-spacing:-0.2px}
+.topnav a:hover{color:var(--text);background:var(--accent-dim)}
+.topnav a.active{color:var(--accent);background:var(--accent-dim);font-weight:600}
+.theme-toggle{margin-left:auto;flex-shrink:0;width:44px;height:26px;border-radius:13px;border:1.5px solid var(--border-bright);background:var(--surface2);cursor:pointer;position:relative;transition:background .3s,border-color .3s;display:flex;align-items:center;padding:0 3px}
+.theme-toggle::before{content:'';display:block;width:20px;height:20px;border-radius:50%;background:var(--accent);transition:transform .3s cubic-bezier(.4,0,.2,1);transform:translateX(0)}
+[data-theme="dark"] .theme-toggle::before{transform:translateX(16px)}
+.theme-toggle .toggle-icon{position:absolute;top:50%;transform:translateY(-50%);font-size:13px;line-height:1;pointer-events:none;transition:opacity .2s}
+.theme-toggle .icon-sun{left:5px;opacity:1}.theme-toggle .icon-moon{right:5px;opacity:.4}
+[data-theme="dark"] .theme-toggle .icon-sun{opacity:.4}[data-theme="dark"] .theme-toggle .icon-moon{opacity:1}
+.hero{padding:80px 0 64px;text-align:center;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--accent-dim) 0%,transparent 60%)}
+.hero h1{margin-bottom:16px}.hero .lead{margin:0 auto 32px;text-align:center}
+.hero-stats{display:flex;justify-content:center;gap:40px;flex-wrap:wrap}
+.hero-stat{text-align:center}
+.hero-stat .num{font-size:36px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.hero-stat .label{font-size:12px;font-weight:500;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-lg)}
+.card h3{margin-bottom:6px}.card h4{margin-bottom:4px}
+.card p{font-size:14px;color:var(--text-dim);line-height:1.6}
+.card-grid{display:grid;gap:16px;margin-top:24px}
+.card-grid--2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card-grid--3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card-grid--4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.badge{display:inline-block;font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase;vertical-align:middle}
+.badge--accent{background:var(--accent-dim);color:var(--accent)}.badge--blue{background:var(--blue-dim);color:var(--blue)}
+.badge--green{background:var(--green-dim);color:var(--green)}.badge--amber{background:var(--amber-dim);color:var(--amber)}
+.badge--red{background:var(--red-dim);color:var(--red)}.badge--teal{background:var(--teal-dim);color:var(--teal)}
+.badge--purple{background:var(--purple-dim);color:var(--purple)}.badge--cyan{background:var(--cyan-dim);color:var(--cyan)}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:12px 16px;font-family:var(--font-mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);background:var(--surface2);border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--accent-dim)}
+code{font-family:var(--font-mono);font-size:.88em;background:var(--accent-dim);color:var(--accent);padding:2px 6px;border-radius:4px}
+.flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;padding:16px 0;justify-content:center}
+.flow-node{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px 16px;text-align:center;min-width:100px;flex-shrink:0}
+.flow-node .fn-name{font-size:13px;font-weight:600}.flow-node .fn-sub{font-size:11px;color:var(--text-dim);font-family:var(--font-mono)}
+.flow-arrow{font-family:var(--font-mono);color:var(--text-dim);padding:0 8px;font-size:16px;flex-shrink:0}
+.fn--accent{border-color:var(--accent)}.fn--accent .fn-name{color:var(--accent)}
+.fn--blue{border-color:var(--blue)}.fn--blue .fn-name{color:var(--blue)}
+.fn--green{border-color:var(--green)}.fn--green .fn-name{color:var(--green)}
+.fn--purple{border-color:var(--purple)}.fn--purple .fn-name{color:var(--purple)}
+.fn--teal{border-color:var(--teal)}.fn--teal .fn-name{color:var(--teal)}
+.fn--red{border-color:var(--red)}.fn--red .fn-name{color:var(--red)}
+.fn--amber{border-color:var(--amber)}.fn--amber .fn-name{color:var(--amber)}
+.fn--cyan{border-color:var(--cyan)}.fn--cyan .fn-name{color:var(--cyan)}
+details{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;box-shadow:var(--shadow);overflow:hidden}
+details[open]{border-color:var(--border-bright)}
+summary{padding:16px 20px;cursor:pointer;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px;list-style:none;transition:background .15s;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'';width:0;height:0;flex-shrink:0;border-left:6px solid var(--text-dim);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}summary:hover{background:var(--accent-dim)}
+.detail-body{padding:0 20px 20px;font-size:14px;line-height:1.7;color:var(--text-mid)}.detail-body p{margin-bottom:8px}
+.ref-card{margin:20px 0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+.ref-card summary{padding:16px 24px;font-size:15px;font-weight:600;color:var(--accent);cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;transition:background .2s}
+.ref-card summary::-webkit-details-marker{display:none}
+.ref-card summary::before{content:'';display:inline-block;width:8px;height:8px;border-right:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg);transition:transform .25s ease;flex-shrink:0}
+.ref-card[open] summary::before{transform:rotate(45deg)}.ref-card summary:hover{background:var(--accent-dim)}
+.ref-card .ref-body{padding:0 24px 24px;display:flex;flex-direction:column;gap:24px}
+.ref-card .ref-item{display:flex;flex-direction:column;gap:8px}
+.ref-card .ref-item-label{font-size:13px;font-weight:600;color:var(--text-mid);letter-spacing:.5px;text-transform:uppercase}
+.ref-card .ref-item img{width:100%;border-radius:8px;border:1px solid var(--border);box-shadow:var(--shadow);transition:transform .3s ease,box-shadow .3s ease;cursor:zoom-in}
+.ref-card .ref-item img:hover{transform:scale(1.02);box-shadow:var(--shadow-lg)}
+.callout{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin:16px 0;font-size:14px;line-height:1.7;color:var(--text-mid);box-shadow:var(--shadow)}
+.callout--accent{border-left:4px solid var(--accent)}.callout--blue{border-left:4px solid var(--blue)}
+.callout--green{border-left:4px solid var(--green)}.callout--amber{border-left:4px solid var(--amber)}
+.callout--teal{border-left:4px solid var(--teal)}.callout--red{border-left:4px solid var(--red)}
+.callout--purple{border-left:4px solid var(--purple)}
+.callout strong{color:var(--text)}
+.tabs{display:flex;gap:2px;margin-bottom:0;border-bottom:2px solid var(--border);padding:0;overflow-x:auto}
+.tab-btn{font-family:var(--font-body);font-size:13px;font-weight:600;padding:10px 18px;background:none;border:none;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;white-space:nowrap}
+.tab-btn:hover{color:var(--text)}.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-panel{display:none;padding:20px 0}.tab-panel.active{display:block}
+.img-overlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;cursor:zoom-out;padding:32px}
+.img-overlay.active{display:flex}.img-overlay img{max-width:95vw;max-height:92vh;border-radius:12px;box-shadow:0 12px 48px rgba(0,0,0,.4)}
+.video-wrap{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow);margin:16px 0}
+.video-wrap video{width:100%;display:block}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin:24px 0}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;box-shadow:var(--shadow)}
+.kpi-card .kpi-num{font-size:32px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.kpi-card .kpi-label{font-size:12px;font-weight:500;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.kpi-card .kpi-desc{font-size:12px;color:var(--text-dim);margin-top:4px}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:160px;margin:24px 0;padding:0 8px}
+.bar-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.bar-fill{width:100%;max-width:48px;border-radius:6px 6px 0 0;min-height:2px}
+.bar-label{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);margin-top:6px;text-transform:uppercase}
+.bar-value{font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.insight-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;box-shadow:var(--shadow)}
+.insight-item h4{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.insight-item p{font-size:14px;color:var(--text-mid);line-height:1.6}
+.section-alt{background:var(--bg-warm)}.subsection{margin-top:40px}.subsection:first-child{margin-top:0}
+.footer{text-align:center;padding:40px 32px;font-size:12px;color:var(--text-dim);font-family:var(--font-mono);letter-spacing:.3px}
+.pipeline-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px 24px;box-shadow:var(--shadow);overflow-x:auto;margin:16px 0;display:flex;justify-content:center}
+.pipeline-wrap svg{width:100%;height:auto;max-width:960px}.pipeline-wrap svg text{font-family:var(--font-body)}.pipeline-wrap svg .mono{font-family:var(--font-mono)}
+.arch-diagram{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px 24px;box-shadow:var(--shadow);overflow-x:auto;margin:16px 0;display:flex;justify-content:center}
+.arch-diagram svg{width:100%;height:auto;max-width:75rem}
+.arch-diagram svg text{font-family:var(--font-body)}.arch-diagram svg .mono{font-family:var(--font-mono)}
+@media(max-width:768px){.container{padding:0 16px}h1{font-size:32px}h2{font-size:24px}.hero{padding:48px 0 40px}.hero-stats{gap:24px}.hero-stat .num{font-size:28px}.card-grid--2,.card-grid--3{grid-template-columns:1fr}.flow{flex-direction:column;align-items:stretch}.flow-arrow{transform:rotate(90deg);text-align:center;padding:4px 0}section{padding:36px 0}.kpi-row{grid-template-columns:repeat(2,1fr)}.compare-grid{grid-template-columns:1fr}.bar-chart{height:120px}.topnav{padding:0 16px}}
+</style>
+<!-- #endregion css -->
+</head>
+<body>
+<!-- #region nav -->
+<nav class="topnav">
+<span class="nav-logo">WS Demo</span>
+<a href="#hero">Overview</a>
+<a href="#s-cards">Cards</a>
+<a href="#s-data">Data</a>
+<a href="#s-flow">Flow</a>
+<a href="#s-svg">SVG Diagrams</a>
+<a href="#s-interactive">Interactive</a>
+<a href="#s-content">Content</a>
+<button class="theme-toggle" id="themeToggle" title="Toggle Theme" aria-label="Toggle Theme">
+<span class="toggle-icon icon-sun">&#9728;</span>
+<span class="toggle-icon icon-moon">&#9790;</span>
+</button>
+</nav>
+<!-- #endregion nav -->
+
+<!-- #region hero -->
+<header class="hero" id="hero">
+<div class="container">
+<p class="section-label">COMPONENT SHOWCASE</p>
+<h1>Warm Signal 组件全览</h1>
+<p style="color:var(--text-dim);font-size:16px;font-family:var(--font-mono);font-weight:500;margin-bottom:16px">Style Template &mdash; All Elements Demo</p>
+<p class="lead" style="margin:0 auto 32px;text-align:center">本页面展示 Warm Signal 风格下所有可用的 UI 组件，包括卡片、表格、流程图、KPI、柱状图、标签页、折叠面板、Callout、Badge、对比网格、SVG 架构图等。可作为创建新专题页的参考。</p>
+<div class="hero-stats">
+<div class="hero-stat"><div class="num" style="color:var(--accent)">18</div><div class="label">Components</div></div>
+<div class="hero-stat"><div class="num" style="color:var(--blue)">8</div><div class="label">Color Tokens</div></div>
+<div class="hero-stat"><div class="num" style="color:var(--teal)">3</div><div class="label">SVG Diagrams</div></div>
+<div class="hero-stat"><div class="num" style="color:var(--green)">2</div><div class="label">Themes</div></div>
+<div class="hero-stat"><div class="num" style="color:var(--purple)">100%</div><div class="label">Coverage</div></div>
+</div></div>
+</header>
+<!-- #endregion hero -->
+
+<!-- ================================================================== -->
+<!-- SECTION 1: Cards & Badges                                          -->
+<!-- ================================================================== -->
+<section id="s-cards">
+<div class="container">
+<p class="section-label">CARDS &amp; BADGES</p>
+<h2>卡片网格与徽章</h2>
+
+<div class="subsection">
+<h3>三列卡片 (card-grid--3) + 顶部彩色边框</h3>
+<div class="card-grid card-grid--3">
+<div class="card" style="border-top:4px solid var(--accent)"><h3>Accent Card</h3><p>这是 <code>--accent</code> 色调的卡片。适合放置核心信息或主要功能介绍。支持 <code>code</code> 内联代码高亮。</p></div>
+<div class="card" style="border-top:4px solid var(--blue)"><h3>Blue Card</h3><p>这是 <code>--blue</code> 色调的卡片。适合技术细节或架构说明。</p></div>
+<div class="card" style="border-top:4px solid var(--teal)"><h3>Teal Card</h3><p>这是 <code>--teal</code> 色调的卡片。适合状态指标或成果展示。</p></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>两列卡片 (card-grid--2)</h3>
+<div class="card-grid card-grid--2">
+<div class="card" style="border-top:4px solid var(--green)"><h4>Green Card</h4><p>使用 <code>h4</code> 标题的两列布局。适合对比场景。<br/><span class="badge badge--green">LIVE</span> <span class="badge badge--blue">V2</span></p></div>
+<div class="card" style="border-top:4px solid var(--purple)"><h4>Purple Card</h4><p>紫色色调配合多个徽章展示。<br/><span class="badge badge--purple">NEW</span> <span class="badge badge--amber">BETA</span></p></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>四列卡片 (card-grid--4)</h3>
+<div class="card-grid card-grid--4">
+<div class="card"><h4>模块 A</h4><p>简洁紧凑</p></div>
+<div class="card"><h4>模块 B</h4><p>适合列表</p></div>
+<div class="card"><h4>模块 C</h4><p>信息密集</p></div>
+<div class="card"><h4>模块 D</h4><p>快速概览</p></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>全部徽章色彩</h3>
+<p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+<span class="badge badge--accent">ACCENT</span>
+<span class="badge badge--blue">BLUE</span>
+<span class="badge badge--green">GREEN</span>
+<span class="badge badge--amber">AMBER</span>
+<span class="badge badge--red">RED</span>
+<span class="badge badge--teal">TEAL</span>
+<span class="badge badge--purple">PURPLE</span>
+<span class="badge badge--cyan">CYAN</span>
+</p>
+</div>
+
+</div></section>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: Data — Tables, KPIs, Bar Chart                         -->
+<!-- ================================================================== -->
+<section id="s-data" class="section-alt">
+<div class="container">
+<p class="section-label">DATA PRESENTATION</p>
+<h2>数据展示组件</h2>
+
+<div class="subsection">
+<h3>表格 (table-wrap)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Component</th><th>Type</th><th>Status</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><strong>Card Grid</strong></td><td>Layout</td><td><span class="badge badge--green">STABLE</span></td><td>2/3/4 列响应式网格布局</td></tr>
+<tr><td><strong>KPI Row</strong></td><td>Data</td><td><span class="badge badge--green">STABLE</span></td><td>大数字 + 标签 + 描述</td></tr>
+<tr><td><strong>Bar Chart</strong></td><td>Data</td><td><span class="badge badge--green">STABLE</span></td><td>纯 CSS 柱状图</td></tr>
+<tr><td><strong>Pipeline SVG</strong></td><td>Diagram</td><td><span class="badge badge--blue">ENHANCED</span></td><td>嵌套 SVG 流水线图</td></tr>
+<tr><td><strong>Arch SVG</strong></td><td>Diagram</td><td><span class="badge badge--blue">ENHANCED</span></td><td>嵌套 SVG 架构图</td></tr>
+<tr><td><strong>Tabs</strong></td><td>Interactive</td><td><span class="badge badge--green">STABLE</span></td><td>标签页切换面板</td></tr>
+<tr><td><strong>Details</strong></td><td>Interactive</td><td><span class="badge badge--green">STABLE</span></td><td>折叠/展开面板</td></tr>
+<tr><td><strong>Callout</strong></td><td>Content</td><td><span class="badge badge--green">STABLE</span></td><td>7 种颜色提示框</td></tr>
+</tbody></table></div>
+</div>
+
+<div class="subsection">
+<h3>KPI 卡片 (kpi-row)</h3>
+<div class="kpi-row">
+<div class="kpi-card" style="border-top:3px solid var(--accent)"><div class="kpi-num" style="color:var(--accent)">1,173</div><div class="kpi-label">Commits</div><div class="kpi-desc">3 months total</div></div>
+<div class="kpi-card" style="border-top:3px solid var(--green)"><div class="kpi-num" style="color:var(--green)">98.5%</div><div class="kpi-label">Uptime</div><div class="kpi-desc">last 30 days</div></div>
+<div class="kpi-card" style="border-top:3px solid var(--blue)"><div class="kpi-num" style="color:var(--blue)">2.3s</div><div class="kpi-label">P50 Latency</div><div class="kpi-desc">avg response</div></div>
+<div class="kpi-card" style="border-top:3px solid var(--purple)"><div class="kpi-num" style="color:var(--purple)">56</div><div class="kpi-label">Test Cases</div><div class="kpi-desc">3-layer coverage</div></div>
+<div class="kpi-card" style="border-top:3px solid var(--teal)"><div class="kpi-num" style="color:var(--teal)">13</div><div class="kpi-label">Skills</div><div class="kpi-desc">governance assets</div></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>柱状图 (bar-chart)</h3>
+<div class="bar-chart">
+<div class="bar-item"><div class="bar-value">217</div><div class="bar-fill" style="height:100%;background:var(--green)"></div><div class="bar-label">feat</div></div>
+<div class="bar-item"><div class="bar-value">211</div><div class="bar-fill" style="height:97%;background:var(--blue)"></div><div class="bar-label">docs</div></div>
+<div class="bar-item"><div class="bar-value">120</div><div class="bar-fill" style="height:55%;background:var(--red)"></div><div class="bar-label">fix</div></div>
+<div class="bar-item"><div class="bar-value">107</div><div class="bar-fill" style="height:49%;background:var(--purple)"></div><div class="bar-label">refactor</div></div>
+<div class="bar-item"><div class="bar-value">85</div><div class="bar-fill" style="height:39%;background:var(--amber)"></div><div class="bar-label">chore</div></div>
+<div class="bar-item"><div class="bar-value">12</div><div class="bar-fill" style="height:6%;background:var(--cyan)"></div><div class="bar-label">ci</div></div>
+<div class="bar-item"><div class="bar-value">8</div><div class="bar-fill" style="height:4%;background:var(--teal)"></div><div class="bar-label">test</div></div>
+</div>
+</div>
+
+</div></section>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: Flow Diagram (pure CSS)                                 -->
+<!-- ================================================================== -->
+<section id="s-flow">
+<div class="container">
+<p class="section-label">FLOW DIAGRAMS</p>
+<h2>流程图组件</h2>
+
+<div class="subsection">
+<h3>横向流程图 (flow)</h3>
+<p style="font-size:14px;color:var(--text-mid);margin-bottom:16px">纯 CSS 实现，使用 <code>.flow-node</code> + <code>.flow-arrow</code> + <code>.fn--{color}</code> 搭配。</p>
+<div class="flow">
+<div class="flow-node fn--accent"><div class="fn-name">Input</div><div class="fn-sub">User Request</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--blue"><div class="fn-name">Analyze</div><div class="fn-sub">InputAnalyzer</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--green"><div class="fn-name">Route</div><div class="fn-sub">V1 / V2</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--purple"><div class="fn-name">Execute</div><div class="fn-sub">Central Editor</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--teal"><div class="fn-name">Audit</div><div class="fn-sub">OutputAuditor</div></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>多色节点展示</h3>
+<div class="flow">
+<div class="flow-node fn--red"><div class="fn-name">Red</div><div class="fn-sub">error / alert</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--amber"><div class="fn-name">Amber</div><div class="fn-sub">warning</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--cyan"><div class="fn-name">Cyan</div><div class="fn-sub">info</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--green"><div class="fn-name">Green</div><div class="fn-sub">success</div></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>对比网格 (compare-grid)</h3>
+<div class="compare-grid">
+<div class="card" style="border-top:4px solid var(--green)"><h4>V1 Template Executor</h4><p><strong>触发条件</strong>：命中确定性 Pattern<br/><strong>性能</strong>：0 工具调用，&lt;1s<br/><strong>准确率</strong>：100%</p><p style="font-style:italic;margin-top:8px">"我知道怎么做，直接做"</p></div>
+<div class="card" style="border-top:4px solid var(--blue)"><h4>V2 Semantic Reasoner</h4><p><strong>触发条件</strong>：未命中 Pattern<br/><strong>性能</strong>：3-10 工具调用，2-5s<br/><strong>准确率</strong>：85%-95%</p><p style="font-style:italic;margin-top:8px">"我需要想想怎么做"</p></div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>洞察卡片 (insight-item)</h3>
+<div class="insight-item"><h4><span class="badge badge--accent">1</span> 关注点分离</h4><p>每个模块的提示词只教自己的事，上下游能力覆盖矩阵标注职责边界，避免能力重叠和提示词膨胀。</p></div>
+<div class="insight-item"><h4><span class="badge badge--blue">2</span> Pattern 驱动路由</h4><p>同一意图可走不同版本。路由依据不是意图类别，而是提问句式是否命中一个有确定性处理方案的 Pattern。</p></div>
+<div class="insight-item"><h4><span class="badge badge--green">3</span> 渐进式披露</h4><p>Base Prompt 只教 Agent 怎么想，EnhancedGrep 按需加载怎么写。上下文从 30K 降至 5K tokens。</p></div>
+</div>
+
+</div></section>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: SVG Diagrams                                            -->
+<!-- ================================================================== -->
+<section id="s-svg" class="section-alt">
+<div class="container">
+<p class="section-label">SVG DIAGRAMS</p>
+<h2>嵌套 SVG 图表</h2>
+
+<div class="subsection">
+<h3>流水线 SVG (pipeline-wrap)</h3>
+<p style="font-size:14px;color:var(--text-mid);margin-bottom:16px">使用 <code>.pipeline-wrap</code> 包裹 SVG。支持箭头 marker、圆角矩形、虚线路径、彩色文字、分支逻辑等。</p>
+<div class="pipeline-wrap">
+<svg viewBox="0 0 880 260" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr-accent" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--accent)"/></marker>
+<marker id="arr-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--green)"/></marker>
+<marker id="arr-blue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--blue)"/></marker>
+<marker id="arr-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--purple)"/></marker>
+<marker id="arr-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--teal)"/></marker>
+</defs>
+<!-- User node -->
+<rect x="10" y="90" width="90" height="50" rx="10" fill="var(--surface)" stroke="var(--text-dim)" stroke-width="1.5"/>
+<text x="55" y="112" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-dim)" class="mono">USER</text>
+<text x="55" y="128" text-anchor="middle" font-size="9" fill="var(--text-dim)">Multi-lang Input</text>
+<!-- Arrow to IA -->
+<line x1="100" y1="115" x2="138" y2="115" stroke="var(--accent)" stroke-width="2" marker-end="url(#arr-accent)"/>
+<!-- InputAnalyzer -->
+<rect x="150" y="70" width="155" height="90" rx="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+<text x="228" y="62" text-anchor="middle" font-size="9" font-weight="600" fill="var(--accent)" class="mono">MODULE 1</text>
+<text x="228" y="94" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">InputAnalyzer</text>
+<line x1="162" y1="102" x2="293" y2="102" stroke="var(--border)" stroke-width="0.5"/>
+<text x="228" y="118" text-anchor="middle" font-size="9" fill="var(--text-mid)">Intent + Translation</text>
+<text x="228" y="132" text-anchor="middle" font-size="9" fill="var(--text-mid)">Semantic Features</text>
+<text x="228" y="150" text-anchor="middle" font-size="8" fill="var(--accent)" class="mono">is_template_match?</text>
+<!-- Branching arrows -->
+<line x1="305" y1="100" x2="338" y2="100" stroke="var(--green)" stroke-width="2" marker-end="url(#arr-green)"/>
+<text x="328" y="92" text-anchor="middle" font-size="8" fill="var(--green)" class="mono">TRUE</text>
+<line x1="305" y1="135" x2="338" y2="135" stroke="var(--blue)" stroke-width="2" marker-end="url(#arr-blue)"/>
+<text x="328" y="150" text-anchor="middle" font-size="8" fill="var(--blue)" class="mono">FALSE</text>
+<!-- V1 box -->
+<rect x="350" y="76" width="140" height="44" rx="10" fill="var(--surface)" stroke="var(--green)" stroke-width="2"/>
+<text x="420" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--green)">V1 Template</text>
+<text x="420" y="112" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">0 tools, &lt;1s</text>
+<!-- V2 box -->
+<rect x="350" y="126" width="140" height="44" rx="10" fill="var(--surface)" stroke="var(--blue)" stroke-width="2"/>
+<text x="420" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="var(--blue)">V2 Semantic</text>
+<text x="420" y="162" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">3-10 tools, 2-5s</text>
+<!-- Merge lines -->
+<line x1="490" y1="98" x2="530" y2="115" stroke="var(--text-dim)" stroke-width="1.5"/>
+<line x1="490" y1="148" x2="530" y2="125" stroke="var(--text-dim)" stroke-width="1.5"/>
+<!-- Central Editor -->
+<rect x="530" y="92" width="130" height="50" rx="10" fill="var(--surface)" stroke="var(--purple)" stroke-width="2"/>
+<text x="595" y="82" text-anchor="middle" font-size="9" font-weight="600" fill="var(--purple)" class="mono">MODULE 2/3</text>
+<text x="595" y="114" text-anchor="middle" font-size="12" font-weight="700" fill="var(--purple)">Central Editor</text>
+<text x="595" y="132" text-anchor="middle" font-size="9" fill="var(--text-dim)">Lua Code Gen</text>
+<!-- Arrow to Auditor -->
+<line x1="660" y1="117" x2="698" y2="117" stroke="var(--teal)" stroke-width="2" marker-end="url(#arr-teal)"/>
+<!-- OutputAuditor -->
+<rect x="710" y="82" width="130" height="70" rx="10" fill="var(--surface)" stroke="var(--teal)" stroke-width="2"/>
+<text x="775" y="72" text-anchor="middle" font-size="9" font-weight="600" fill="var(--teal)" class="mono">MODULE 4</text>
+<text x="775" y="106" text-anchor="middle" font-size="12" font-weight="700" fill="var(--teal)">OutputAuditor</text>
+<line x1="720" y1="114" x2="830" y2="114" stroke="var(--border)" stroke-width="0.5"/>
+<text x="775" y="128" text-anchor="middle" font-size="9" fill="var(--text-mid)">Security Audit</text>
+<text x="775" y="142" text-anchor="middle" font-size="9" fill="var(--text-mid)">Context-aware I18n</text>
+<!-- Skip-central dashed path -->
+<path d="M228,160 L228,220 L775,220 L775,152" fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="6 3"/>
+<text x="500" y="216" text-anchor="middle" font-size="8" fill="var(--amber)" class="mono">should_skip_central = true (Direct Reply)</text>
+</svg>
+</div>
+</div>
+
+<div class="subsection">
+<h3>架构 SVG (arch-diagram) &mdash; 组件关系图</h3>
+<p style="font-size:14px;color:var(--text-mid);margin-bottom:16px">使用 <code>.arch-diagram</code> 包裹。支持嵌套分组框、虚线背景区域、多色箭头、标注文字等复杂布局。</p>
+<div class="arch-diagram">
+<svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="a-arrow-accent" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--accent)"/></marker>
+<marker id="a-arrow-blue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--blue)"/></marker>
+<marker id="a-arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--green)"/></marker>
+<marker id="a-arrow-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--teal)"/></marker>
+<marker id="a-arrow-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8" fill="var(--purple)"/></marker>
+</defs>
+<!-- Background group: Gateway -->
+<rect x="20" y="20" width="860" height="60" rx="12" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="450" y="38" text-anchor="middle" font-size="10" font-weight="600" fill="var(--accent)" class="mono">GATEWAY (Port 8288)</text>
+<text x="450" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">API Gateway &amp; Load Balancer</text>
+<!-- Arrow from Gateway down -->
+<line x1="450" y1="80" x2="450" y2="108" stroke="var(--accent)" stroke-width="2" marker-end="url(#a-arrow-accent)"/>
+<!-- Background group: Core Services -->
+<rect x="20" y="110" width="860" height="160" rx="12" fill="var(--blue-dim)" stroke="var(--blue)" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="50" y="132" font-size="10" font-weight="600" fill="var(--blue)" class="mono">CORE SERVICES</text>
+<!-- Service boxes -->
+<rect x="40" y="145" width="180" height="110" rx="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+<text x="130" y="167" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">UGC Agent</text>
+<text x="130" y="183" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">Port 8302</text>
+<line x1="52" y1="190" x2="208" y2="190" stroke="var(--border)" stroke-width="0.5"/>
+<text x="130" y="206" text-anchor="middle" font-size="9" fill="var(--text-mid)">LLM Agent</text>
+<text x="130" y="220" text-anchor="middle" font-size="9" fill="var(--text-mid)">WebSocket Chat</text>
+<text x="130" y="244" text-anchor="middle" font-size="8" fill="var(--green)" class="mono">4 Modules Pipeline</text>
+
+<rect x="250" y="145" width="180" height="110" rx="10" fill="var(--surface)" stroke="var(--blue)" stroke-width="2"/>
+<text x="340" y="167" text-anchor="middle" font-size="12" font-weight="700" fill="var(--blue)">UGC RAG</text>
+<text x="340" y="183" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">Port 8303</text>
+<line x1="262" y1="190" x2="418" y2="190" stroke="var(--border)" stroke-width="0.5"/>
+<text x="340" y="206" text-anchor="middle" font-size="9" fill="var(--text-mid)">Vector Search</text>
+<text x="340" y="220" text-anchor="middle" font-size="9" fill="var(--text-mid)">Knowledge Base</text>
+<text x="340" y="244" text-anchor="middle" font-size="8" fill="var(--purple)" class="mono">EnhancedGrep</text>
+
+<rect x="460" y="145" width="180" height="110" rx="10" fill="var(--surface)" stroke="var(--teal)" stroke-width="2"/>
+<text x="550" y="167" text-anchor="middle" font-size="12" font-weight="700" fill="var(--teal)">UGC VLM</text>
+<text x="550" y="183" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">Port 8304</text>
+<line x1="472" y1="190" x2="628" y2="190" stroke="var(--border)" stroke-width="0.5"/>
+<text x="550" y="206" text-anchor="middle" font-size="9" fill="var(--text-mid)">Vision-Language</text>
+<text x="550" y="220" text-anchor="middle" font-size="9" fill="var(--text-mid)">Asset Annotation</text>
+
+<rect x="670" y="145" width="180" height="110" rx="10" fill="var(--surface)" stroke="var(--purple)" stroke-width="2"/>
+<text x="760" y="167" text-anchor="middle" font-size="12" font-weight="700" fill="var(--purple)">Model Service</text>
+<text x="760" y="183" text-anchor="middle" font-size="9" fill="var(--text-dim)" class="mono">Port 8305</text>
+<line x1="682" y1="190" x2="838" y2="190" stroke="var(--border)" stroke-width="0.5"/>
+<text x="760" y="206" text-anchor="middle" font-size="9" fill="var(--text-mid)">Intent Classifier</text>
+<text x="760" y="220" text-anchor="middle" font-size="9" fill="var(--text-mid)">Custom Models</text>
+
+<!-- Cross-service arrows -->
+<line x1="220" y1="200" x2="248" y2="200" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#a-arrow-blue)"/>
+<line x1="130" y1="255" x2="130" y2="290" stroke="var(--green)" stroke-width="1.5" marker-end="url(#a-arrow-green)"/>
+
+<!-- Background group: Infrastructure -->
+<rect x="20" y="290" width="860" height="150" rx="12" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="50" y="312" font-size="10" font-weight="600" fill="var(--teal)" class="mono">INFRASTRUCTURE</text>
+<!-- Infra boxes -->
+<rect x="40" y="325" width="150" height="60" rx="8" fill="var(--surface)" stroke="var(--green)" stroke-width="1.5"/>
+<text x="115" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="var(--green)">Langfuse</text>
+<text x="115" y="370" text-anchor="middle" font-size="9" fill="var(--text-dim)">Observability</text>
+
+<rect x="220" y="325" width="150" height="60" rx="8" fill="var(--surface)" stroke="var(--amber)" stroke-width="1.5"/>
+<text x="295" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="var(--amber)">Redis</text>
+<text x="295" y="370" text-anchor="middle" font-size="9" fill="var(--text-dim)">Cache + Session</text>
+
+<rect x="400" y="325" width="150" height="60" rx="8" fill="var(--surface)" stroke="var(--purple)" stroke-width="1.5"/>
+<text x="475" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="var(--purple)">Eva System</text>
+<text x="475" y="370" text-anchor="middle" font-size="9" fill="var(--text-dim)">56 Test Cases</text>
+
+<rect x="580" y="325" width="150" height="60" rx="8" fill="var(--surface)" stroke="var(--cyan)" stroke-width="1.5"/>
+<text x="655" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="var(--cyan)">CI/CD</text>
+<text x="655" y="370" text-anchor="middle" font-size="9" fill="var(--text-dim)">DevOps Pipeline</text>
+
+<rect x="760" y="325" width="100" height="60" rx="8" fill="var(--surface)" stroke="var(--red)" stroke-width="1.5"/>
+<text x="810" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="var(--red)">Hooks</text>
+<text x="810" y="370" text-anchor="middle" font-size="9" fill="var(--text-dim)">Gate Audit</text>
+</svg>
+</div>
+</div>
+
+<div class="subsection">
+<h3>数据流 SVG &mdash; 交互链路图</h3>
+<p style="font-size:14px;color:var(--text-mid);margin-bottom:16px">支持多层分区、弯曲路径、注释标签、双向箭头等复杂交互。</p>
+<div class="arch-diagram">
+<svg viewBox="0 0 780 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="d-arr-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--blue)"/></marker>
+<marker id="d-arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--green)"/></marker>
+<marker id="d-arr-amber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--amber)"/></marker>
+<marker id="d-arr-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--purple)"/></marker>
+</defs>
+<!-- Layer labels -->
+<rect x="10" y="10" width="80" height="260" rx="6" fill="var(--blue-dim)" stroke="var(--blue)" stroke-width="1"/>
+<text x="50" y="145" text-anchor="middle" font-size="10" font-weight="600" fill="var(--blue)" transform="rotate(-90,50,145)" class="mono">CLIENT</text>
+<rect x="120" y="10" width="540" height="260" rx="6" fill="var(--green-dim)" stroke="var(--green)" stroke-width="1"/>
+<text x="390" y="28" text-anchor="middle" font-size="10" font-weight="600" fill="var(--green)" class="mono">SERVER PIPELINE</text>
+<rect x="690" y="10" width="80" height="260" rx="6" fill="var(--purple-dim)" stroke="var(--purple)" stroke-width="1"/>
+<text x="730" y="145" text-anchor="middle" font-size="10" font-weight="600" fill="var(--purple)" transform="rotate(-90,730,145)" class="mono">LLM / TOOLS</text>
+<!-- Client box -->
+<rect x="20" y="90" width="60" height="80" rx="8" fill="var(--surface)" stroke="var(--blue)" stroke-width="1.5"/>
+<text x="50" y="126" text-anchor="middle" font-size="10" font-weight="600" fill="var(--blue)">Client</text>
+<text x="50" y="142" text-anchor="middle" font-size="8" fill="var(--text-dim)">WS</text>
+<!-- Pipeline boxes -->
+<rect x="140" y="55" width="110" height="50" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+<text x="195" y="78" text-anchor="middle" font-size="11" font-weight="600" fill="var(--accent)">IA</text>
+<text x="195" y="94" text-anchor="middle" font-size="8" fill="var(--text-dim)" class="mono">translate + route</text>
+
+<rect x="280" y="55" width="100" height="50" rx="8" fill="var(--surface)" stroke="var(--green)" stroke-width="1.5"/>
+<text x="330" y="78" text-anchor="middle" font-size="11" font-weight="600" fill="var(--green)">V1</text>
+<text x="330" y="94" text-anchor="middle" font-size="8" fill="var(--text-dim)" class="mono">template</text>
+
+<rect x="280" y="120" width="100" height="50" rx="8" fill="var(--surface)" stroke="var(--blue)" stroke-width="1.5"/>
+<text x="330" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="var(--blue)">V2</text>
+<text x="330" y="159" text-anchor="middle" font-size="8" fill="var(--text-dim)" class="mono">semantic</text>
+
+<rect x="410" y="85" width="120" height="50" rx="8" fill="var(--surface)" stroke="var(--purple)" stroke-width="1.5"/>
+<text x="470" y="108" text-anchor="middle" font-size="11" font-weight="600" fill="var(--purple)">Central</text>
+<text x="470" y="124" text-anchor="middle" font-size="8" fill="var(--text-dim)" class="mono">code gen</text>
+
+<rect x="540" y="85" width="100" height="50" rx="8" fill="var(--surface)" stroke="var(--teal)" stroke-width="1.5"/>
+<text x="590" y="108" text-anchor="middle" font-size="11" font-weight="600" fill="var(--teal)">Auditor</text>
+<text x="590" y="124" text-anchor="middle" font-size="8" fill="var(--text-dim)" class="mono">audit + i18n</text>
+
+<!-- LLM box -->
+<rect x="700" y="70" width="60" height="120" rx="8" fill="var(--surface)" stroke="var(--purple)" stroke-width="1.5"/>
+<text x="730" y="122" text-anchor="middle" font-size="10" font-weight="600" fill="var(--purple)">LLM</text>
+<text x="730" y="140" text-anchor="middle" font-size="8" fill="var(--text-dim)">API</text>
+<!-- Arrows: Client -> IA -->
+<line x1="80" y1="120" x2="138" y2="80" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#d-arr-blue)"/>
+<!-- IA -> V1/V2 -->
+<line x1="250" y1="72" x2="278" y2="72" stroke="var(--green)" stroke-width="1.5" marker-end="url(#d-arr-green)"/>
+<line x1="250" y1="90" x2="278" y2="138" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#d-arr-blue)"/>
+<!-- V1/V2 -> Central -->
+<line x1="380" y1="80" x2="408" y2="100" stroke="var(--text-dim)" stroke-width="1"/>
+<line x1="380" y1="145" x2="408" y2="120" stroke="var(--text-dim)" stroke-width="1"/>
+<!-- Central -> Auditor -->
+<line x1="530" y1="110" x2="538" y2="110" stroke="var(--teal)" stroke-width="1.5" marker-end="url(#d-arr-green)"/>
+<!-- Server <-> LLM -->
+<line x1="640" y1="100" x2="698" y2="115" stroke="var(--purple)" stroke-width="1.5" marker-end="url(#d-arr-purple)"/>
+<path d="M700,145 L650,145 L650,130" fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#d-arr-amber)"/>
+<!-- Auditor -> Client (response) -->
+<path d="M590,135 L590,210 L50,210 L50,170" fill="none" stroke="var(--green)" stroke-width="1.5" marker-end="url(#d-arr-green)"/>
+<text x="320" y="228" text-anchor="middle" font-size="9" fill="var(--green)" class="mono">WebSocket Response: {code, message, lua_code}</text>
+<!-- Skip path -->
+<path d="M195,105 L195,240 L590,240 L590,225" fill="none" stroke="var(--amber)" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="390" y="254" text-anchor="middle" font-size="8" fill="var(--amber)" class="mono">skip_central: direct reply path</text>
+</svg>
+</div>
+</div>
+
+</div></section>
+
+<!-- ================================================================== -->
+<!-- SECTION 5: Interactive — Tabs, Details, Ref-Card                   -->
+<!-- ================================================================== -->
+<section id="s-interactive">
+<div class="container">
+<p class="section-label">INTERACTIVE</p>
+<h2>交互式组件</h2>
+
+<div class="subsection">
+<h3>标签页 (tabs)</h3>
+<div class="tabs">
+<button class="tab-btn active" onclick="switchTab(event,'tab-basic')">Basic Info</button>
+<button class="tab-btn" onclick="switchTab(event,'tab-table')">Table View</button>
+<button class="tab-btn" onclick="switchTab(event,'tab-code')">Code Sample</button>
+<button class="tab-btn" onclick="switchTab(event,'tab-cards')">Cards</button>
+</div>
+<div class="tab-panel active" id="tab-basic">
+<p style="font-size:14px;color:var(--text-mid);line-height:1.7">这是第一个标签页的内容。<code>switchTab(event, id)</code> 函数负责切换面板可见性。标签页内可以放置任意组件。</p>
+<div class="callout callout--blue" style="margin-top:12px"><strong>提示</strong>：标签页内部支持嵌套所有其他组件，包括表格、卡片、流程图等。</div>
+</div>
+<div class="tab-panel" id="tab-table">
+<div class="table-wrap"><table>
+<thead><tr><th>Property</th><th>Value</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>font-body</code></td><td>Inter + Noto Sans SC</td><td>正文字体</td></tr>
+<tr><td><code>font-mono</code></td><td>JetBrains Mono</td><td>代码字体</td></tr>
+<tr><td><code>radius</code></td><td>12px</td><td>圆角半径</td></tr>
+<tr><td><code>max-width</code></td><td>1100px</td><td>容器最大宽度</td></tr>
+</tbody></table></div>
+</div>
+<div class="tab-panel" id="tab-code">
+<div class="callout callout--accent"><strong>Code Snippet</strong> &mdash; 内联代码使用 <code>&lt;code&gt;</code> 标签，自动获得 accent 色调背景。</div>
+<p style="font-size:14px;color:var(--text-mid);margin-top:12px">
+示例：<code>const result = await agent.execute(input)</code><br/>
+配置：<code>SERVICES["ugc_agent"]["llm"]["api_key"]</code><br/>
+路径：<code>server/services/ugc_agent_service/modules/</code>
+</p>
+</div>
+<div class="tab-panel" id="tab-cards">
+<div class="card-grid card-grid--3">
+<div class="card"><h4>Card in Tab</h4><p>标签页内嵌套卡片网格</p></div>
+<div class="card"><h4>Card in Tab</h4><p>完美兼容所有组件</p></div>
+<div class="card"><h4>Card in Tab</h4><p>响应式布局自适应</p></div>
+</div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>折叠面板 (details)</h3>
+<details>
+<summary>基础折叠面板</summary>
+<div class="detail-body">
+<p>点击 summary 展开/收起。箭头图标自动旋转。</p>
+<p>内部可放置任意 HTML 内容，包括段落、列表、表格等。支持嵌套。</p>
+</div>
+</details>
+<details>
+<summary>带表格的折叠面板</summary>
+<div class="detail-body">
+<div class="table-wrap"><table>
+<thead><tr><th>Phase</th><th>V1 : V2</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Day 1</td><td>0 : 100</td><td>Pure V2 fallback</td></tr>
+<tr><td>Month 1</td><td>50 : 50</td><td>5 Patterns solidified</td></tr>
+<tr><td>Month 3</td><td>70 : 30</td><td>15 Patterns (current)</td></tr>
+</tbody></table></div>
+</div>
+</details>
+<details>
+<summary>带流程图的折叠面板</summary>
+<div class="detail-body">
+<div class="flow">
+<div class="flow-node fn--accent"><div class="fn-name">Step 1</div><div class="fn-sub">Trigger</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--blue"><div class="fn-name">Step 2</div><div class="fn-sub">Process</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-node fn--green"><div class="fn-name">Step 3</div><div class="fn-sub">Complete</div></div>
+</div>
+</div>
+</details>
+</div>
+
+<div class="subsection">
+<h3>参考卡片 (ref-card) &mdash; 可折叠图片展示</h3>
+<details class="ref-card">
+<summary>参考：组件效果展示</summary>
+<div class="ref-body">
+<div class="ref-item"><span class="ref-item-label">Placeholder Image 1</span><div style="width:100%;height:200px;background:linear-gradient(135deg,var(--accent-dim),var(--blue-dim));border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono);font-size:14px">Image Placeholder (640x200)</div></div>
+<div class="ref-item"><span class="ref-item-label">Placeholder Image 2</span><div style="width:100%;height:200px;background:linear-gradient(135deg,var(--green-dim),var(--teal-dim));border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono);font-size:14px">Image Placeholder (640x200)</div></div>
+</div>
+</details>
+</div>
+
+</div></section>
+
+<!-- ================================================================== -->
+<!-- SECTION 6: Content — Callouts, Lead text, Video                    -->
+<!-- ================================================================== -->
+<section id="s-content" class="section-alt">
+<div class="container">
+<p class="section-label">CONTENT ELEMENTS</p>
+<h2>内容展示组件</h2>
+
+<div class="subsection">
+<h3>提示框 (callout) &mdash; 7 种颜色</h3>
+<div class="callout callout--accent"><strong>Accent</strong>：用于核心洞察、最重要的信息。边框颜色 <code>var(--accent)</code>。</div>
+<div class="callout callout--blue"><strong>Blue</strong>：用于技术说明、补充解释。边框颜色 <code>var(--blue)</code>。</div>
+<div class="callout callout--green"><strong>Green</strong>：用于成功状态、最佳实践。边框颜色 <code>var(--green)</code>。</div>
+<div class="callout callout--amber"><strong>Amber</strong>：用于警告信息、注意事项。边框颜色 <code>var(--amber)</code>。</div>
+<div class="callout callout--red"><strong>Red</strong>：用于错误提示、反模式。边框颜色 <code>var(--red)</code>。</div>
+<div class="callout callout--purple"><strong>Purple</strong>：用于战略方向、高层决策。边框颜色 <code>var(--purple)</code>。</div>
+<div class="callout callout--teal"><strong>Teal</strong>：用于基础设施、工具链信息。边框颜色 <code>var(--teal)</code>。</div>
+</div>
+
+<div class="subsection">
+<h3>Lead 文本</h3>
+<p class="lead">这是 <code>.lead</code> 样式的段落文本，字号 18px，行高 1.7，颜色 <code>var(--text-mid)</code>，最大宽度 720px。适合用于章节的引导性描述。</p>
+</div>
+
+<div class="subsection">
+<h3>视频容器 (video-wrap)</h3>
+<div class="video-wrap">
+<div style="width:100%;height:300px;background:linear-gradient(135deg,var(--surface2),var(--bg-warm));display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono)">
+<div style="text-align:center">
+<div style="font-size:48px;margin-bottom:8px">&#9654;</div>
+<div style="font-size:14px">Video Placeholder</div>
+<div style="font-size:11px;margin-top:4px">&lt;video controls&gt; goes here</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="subsection">
+<h3>Typography 层级</h3>
+<h1 style="margin-bottom:8px">H1 &mdash; 48px / 800 weight</h1>
+<h2 style="margin-bottom:8px">H2 &mdash; 32px / 700 weight</h2>
+<h3 style="margin-bottom:8px">H3 &mdash; 20px / 600 weight</h3>
+<h4 style="margin-bottom:8px">H4 &mdash; 16px / 600 weight</h4>
+<p style="font-size:14px;color:var(--text-dim);margin-bottom:4px">Body text &mdash; 14px / var(--text-dim)</p>
+<p style="font-size:12px;font-family:var(--font-mono);color:var(--text-dim)">Mono text &mdash; 12px / JetBrains Mono / var(--text-dim)</p>
+<p class="section-label" style="margin-top:12px">SECTION LABEL &mdash; 12px / mono / uppercase / accent</p>
+</div>
+
+</div></section>
+
+<!-- #region footer -->
+<footer class="footer">
+Warm Signal Component Showcase &mdash; 18 components &middot; 8 colors &middot; 3 SVG diagrams &middot; Light/Dark theme &middot; Generated 2026-03-18
+</footer>
+<!-- #endregion footer -->
+
+<div class="img-overlay" id="imgOverlay" onclick="closeImgOverlay()">
+<img id="overlayImg" src="" alt="Zoom view">
+</div>
+
+<!-- #region scripts -->
+<script>
+function openImgOverlay(s){var o=document.getElementById('imgOverlay');document.getElementById('overlayImg').src=s;o.classList.add('active')}
+function closeImgOverlay(){document.getElementById('imgOverlay').classList.remove('active')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeImgOverlay()});
+function switchTab(e,id){var t=e.target.closest('.tabs'),p=t.parentElement;t.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});p.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active')});e.target.classList.add('active');document.getElementById(id).classList.add('active')}
+var navLinks=document.querySelectorAll('.topnav a[href^="#"]');var sections=[];
+navLinks.forEach(function(a){var s=document.querySelector(a.getAttribute('href'));if(s)sections.push({el:s,link:a})});
+function updateNav(){var y=window.scrollY+80,active=null;sections.forEach(function(s){if(s.el.offsetTop<=y)active=s});navLinks.forEach(function(a){a.classList.remove('active')});if(active)active.link.classList.add('active')}
+window.addEventListener('scroll',updateNav,{passive:true});updateNav();
+(function(){var h=document.documentElement,b=document.getElementById('themeToggle');if(b){b.addEventListener('click',function(){var d=h.getAttribute('data-theme')==='dark';if(d){h.removeAttribute('data-theme');localStorage.setItem('theme','light')}else{h.setAttribute('data-theme','dark');localStorage.setItem('theme','dark')}})}})();
+</script>
+<!-- #endregion scripts -->
+</body>
+</html>

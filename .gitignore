@@ -9,4 +9,12 @@ test-instance-2/
 .DS_Store
 
 # CodeBuddy AI assistant local data
-.codebuddy/
+.codebuddy/MEMORY.md
+.codebuddy/memory/
+.codebuddy/plans/
+.codebuddy/CODEBUDDY.local.md
+.codebuddy/skills/visual-explainer/
+
+# Claude Code & Cursor specific auto-generated memory
+.claude/
+.cursorrules.local
