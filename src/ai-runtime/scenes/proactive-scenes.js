@@ -8,6 +8,8 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../context/provider-types');
+
 const { SceneRegistry } = require('../scene-registry');
 
 // ─── proactive.scene-message ─────────────────────────────────────────────
@@ -22,7 +24,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'behavior'],
+  contextProviders: [CONTEXT_PROVIDERS.PERSONALITY, CONTEXT_PROVIDERS.BEHAVIOR],
   modelProfile: 'chat-complete',
   outputMode: 'text',
   memoryPolicy: 'read',

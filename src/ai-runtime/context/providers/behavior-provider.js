@@ -13,8 +13,10 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const behaviorProvider = {
-  id: 'behavior',
+  id: CONTEXT_PROVIDERS.BEHAVIOR,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

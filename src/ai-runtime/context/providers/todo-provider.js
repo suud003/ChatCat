@@ -9,8 +9,10 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const todoProvider = {
-  id: 'todo',
+  id: CONTEXT_PROVIDERS.TODO,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

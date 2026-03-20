@@ -15,6 +15,8 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../context/provider-types');
+
 const { SceneRegistry } = require('../scene-registry');
 
 // ─── skill.text-converter ────────────────────────────────────────────────
@@ -29,7 +31,7 @@ SceneRegistry.register({
     mode: 'instruction',
   },
 
-  contextProviders: ['raw-typing'],
+  contextProviders: [CONTEXT_PROVIDERS.RAW_TYPING],
   modelProfile: 'skill-text-converter',
   outputMode: 'text',
   memoryPolicy: 'none',
@@ -49,7 +51,7 @@ SceneRegistry.register({
     mode: 'instruction',
   },
 
-  contextProviders: ['converted-text', 'raw-typing', 'todo'],
+  contextProviders: [CONTEXT_PROVIDERS.CONVERTED_TEXT, CONTEXT_PROVIDERS.RAW_TYPING, CONTEXT_PROVIDERS.TODO],
   modelProfile: 'skill-todo',
   outputMode: 'markdown',
   memoryPolicy: 'none',
@@ -69,7 +71,7 @@ SceneRegistry.register({
     mode: 'instruction',
   },
 
-  contextProviders: ['converted-text', 'raw-typing', 'todo', 'pomodoro'],
+  contextProviders: [CONTEXT_PROVIDERS.CONVERTED_TEXT, CONTEXT_PROVIDERS.RAW_TYPING, CONTEXT_PROVIDERS.TODO, CONTEXT_PROVIDERS.POMODORO],
   modelProfile: 'skill-daily-report',
   outputMode: 'markdown',
   memoryPolicy: 'none',
@@ -89,7 +91,7 @@ SceneRegistry.register({
     mode: 'instruction',
   },
 
-  contextProviders: ['converted-text', 'todo'],
+  contextProviders: [CONTEXT_PROVIDERS.CONVERTED_TEXT, CONTEXT_PROVIDERS.TODO],
   modelProfile: 'skill-complete',
   outputMode: 'markdown',
   memoryPolicy: 'none',

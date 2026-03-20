@@ -9,10 +9,12 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const DEFAULT_TOP_N = 10;
 
 const memoryProvider = {
-  id: 'memory',
+  id: CONTEXT_PROVIDERS.MEMORY,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

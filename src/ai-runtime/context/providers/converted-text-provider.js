@@ -10,8 +10,10 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const convertedTextProvider = {
-  id: 'converted-text',
+  id: CONTEXT_PROVIDERS.CONVERTED_TEXT,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

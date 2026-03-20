@@ -7,6 +7,8 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../context/provider-types');
+
 const { SceneRegistry } = require('../scene-registry');
 
 // ─── memory.extract ──────────────────────────────────────────────────────

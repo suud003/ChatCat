@@ -9,6 +9,8 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../context/provider-types');
+
 const { SceneRegistry } = require('../scene-registry');
 
 // ─── chat.default ────────────────────────────────────────────────────────
@@ -23,7 +25,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'history', 'memory', 'behavior', 'todo'],
+  contextProviders: [CONTEXT_PROVIDERS.PERSONALITY, CONTEXT_PROVIDERS.HISTORY, CONTEXT_PROVIDERS.MEMORY, CONTEXT_PROVIDERS.BEHAVIOR, CONTEXT_PROVIDERS.TODO],
   modelProfile: 'chat-stream',
   outputMode: 'stream-text',
   memoryPolicy: 'read-write',
@@ -44,7 +46,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'history', 'memory', 'behavior', 'todo'],
+  contextProviders: [CONTEXT_PROVIDERS.PERSONALITY, CONTEXT_PROVIDERS.HISTORY, CONTEXT_PROVIDERS.MEMORY, CONTEXT_PROVIDERS.BEHAVIOR, CONTEXT_PROVIDERS.TODO],
   modelProfile: 'chat-stream',
   outputMode: 'stream-text',
   memoryPolicy: 'read-write',
@@ -65,7 +67,7 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'behavior'],
+  contextProviders: [CONTEXT_PROVIDERS.PERSONALITY, CONTEXT_PROVIDERS.BEHAVIOR],
   modelProfile: 'chat-complete',
   outputMode: 'text',
   memoryPolicy: 'read',

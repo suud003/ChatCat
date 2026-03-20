@@ -10,11 +10,13 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const fs = require('fs');
 const path = require('path');
 
 const rawTypingProvider = {
-  id: 'raw-typing',
+  id: CONTEXT_PROVIDERS.RAW_TYPING,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

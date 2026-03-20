@@ -10,10 +10,12 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const DEFAULT_MAX_MESSAGES = 20;
 
 const historyProvider = {
-  id: 'history',
+  id: CONTEXT_PROVIDERS.HISTORY,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

@@ -9,8 +9,10 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const pomodoroProvider = {
-  id: 'pomodoro',
+  id: CONTEXT_PROVIDERS.POMODORO,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input

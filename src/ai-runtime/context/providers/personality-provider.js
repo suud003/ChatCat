@@ -12,8 +12,10 @@
 
 'use strict';
 
+const { CONTEXT_PROVIDERS } = require('../provider-types');
+
 const personalityProvider = {
-  id: 'personality',
+  id: CONTEXT_PROVIDERS.PERSONALITY,
 
   /**
    * @param {import('../context-hub').ContextProviderInput} input
