@@ -1,6 +1,7 @@
 /**
  * Renderer entry point - initializes all modules
  * V1.2: Skill System + Proactive Interaction Engine + User Profiler
+ * V3: Phase 2 AI Runtime integration
  */
 
 import { SpriteCharacter, SKINS } from './pet/pixel-character.js';
@@ -28,6 +29,9 @@ import { UserProfiler } from './proactive/user-profiler.js';
 
 // V1.5 imports — Skill Agent System
 import { SkillRouter } from './skills/skill-router.js';
+
+// Phase 3: TriggerBus Renderer
+import { TriggerBusRenderer } from './ai-runtime/trigger-bus-renderer.js';
 
 // V1.3 imports — Pet Base & Utils
 import { PetBaseSystem } from './pet/pet-base-system.js';
@@ -239,6 +243,13 @@ async function init() {
   await affection.init();
   affectionSystem = affection;
 
+  // V2.1: Persist mood changes to store (for Main-side providers)
+  affection.on('moodchange', () => {
+    window.electronAPI.setStore('catMood', affection.mood);
+  });
+  // Initialize mood in store on startup
+  window.electronAPI.setStore('catMood', affection.mood);
+
   // Input tracker proxy — hooks into affection system
   // Note: _mpClient ref is set later after MultiplayerClient is created
   let _mpClient = null;
@@ -260,17 +271,23 @@ async function init() {
   const inputTracker = new InputTracker(characterProxy);
 
   // AI service
+  // AI service (Phase 4: TriggerBus-only, no direct AI HTTP)
   const aiService = new AIService();
   await aiService.loadConfig();
 
-  // V1.1: Memory Manager
-  const memoryManager = new MemoryManager();
-  memoryManager.setAIClient(aiService.client);
-  await memoryManager.init();
+  // Phase 3: TriggerBus (Renderer-side, communicates with Main TriggerBus via IPC)
+  const triggerBusRenderer = new TriggerBusRenderer();
+  triggerBusRenderer.init();
+  aiService.setTriggerBus(triggerBusRenderer);
 
-  // V1.1: Load personality and set context
+  // V1.1: Memory Manager (Phase 4: uses TriggerBus via Main process)
+  const memoryManager = new MemoryManager();
+  memoryManager.setTriggerBus(triggerBusRenderer);
+  await memoryManager.init();
+  aiService.setMemoryManager(memoryManager);
+
+  // V1.1: Load personality (saved for Renderer-side usage; chat prompt now built by Main PromptRegistry)
   const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
-  aiService.setContext(savedPersonality, affection, memoryManager);
 
   // Chat UI (with integrated settings)
   const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
@@ -310,12 +327,13 @@ async function init() {
     showCatBubble(`⏰ 提醒: ${todo.text}`, 6000);
   };
 
-  // V1.1: Todo Parser
-  const todoParser = new TodoParser(aiService.client, todoList, showCatBubble);
+  // V1.1: Todo Parser (Phase 4: AI extraction via Main IPC)
+  const todoParser = new TodoParser(todoList, showCatBubble);
   chatUI.setTodoParser(todoParser);
 
   // V1.5: Skill Router — intercepts chat commands/keywords before AI
   const skillRouter = new SkillRouter();
+  skillRouter.setTriggerBus(triggerBusRenderer);
   await skillRouter.init();
   chatUI.setSkillRouter(skillRouter);
 
@@ -338,6 +356,8 @@ async function init() {
     aiService: aiService
   });
   proactiveEngine.setPersonality(savedPersonality);
+  proactiveEngine.setTriggerBus(triggerBusRenderer);
+  proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
 
   // ========== V2 Pillar A: 行为节奏智能 ==========
   
@@ -366,20 +386,23 @@ async function init() {
   
   // 注入到 ProactiveEngine
   proactiveEngine.setRhythmModules(rhythmAnalyzer, compositeEngine);
-
-  // V2: 注入节奏数据到 AI Service，让聊天能访问实时统计
-  aiService.setRhythmContext(rhythmAnalyzer, compositeEngine);
   
   rhythmAnalyzer.on('rhythm-state-change', async (data) => {
     proactiveEngine.processExternalSignal('rhythm-state-change', data);
     
-    // Save on state change
+    // Save on state change (with real-time signals for Main-side providers)
     const today = new Date().toISOString().split('T')[0];
     const engineData = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...engineData,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   });
@@ -390,26 +413,38 @@ async function init() {
     proactiveEngine.processExternalSignal('activity-tick', data);
   });
   
-  // Save more frequently (every 1 min)
+  // Save more frequently (every 1 min) with real-time signals for Main-side providers
   setInterval(async () => {
     const today = new Date().toISOString().split('T')[0];
     const data = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...data,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   }, 60 * 1000);
 
-  // Hook for safe save on quit
+  // Hook for safe save on quit (with real-time signals for Main-side providers)
   window.electronAPI.onBeforeQuit(async () => {
     const today = new Date().toISOString().split('T')[0];
     const data = compositeEngine.getTodayFullData();
     const summary = rhythmAnalyzer.getDailySummary();
+    const signals = rhythmAnalyzer.getCurrentSignals?.() || {};
     await window.electronAPI.setStore(`rhythmData_${today}`, {
       ...data,
       ...summary,
+      currentState: rhythmAnalyzer.currentState || 'idle',
+      avgCPM: signals.avgCPM || 0,
+      deleteRate: signals.deleteRate || 0,
+      mouseActive: !!signals.mouseActive,
+      todayTypingCount: compositeEngine.todayTypingCount || 0,
       date: today
     });
   });
@@ -461,8 +496,9 @@ async function init() {
     proactiveEngine.updateConfig();
   };
 
-  // V1.2: Skill Scheduler
+  // V1.2: Skill Scheduler (Phase 3: scheduling delegated to Main ScheduledTriggerRegistry)
   const skillScheduler = new SkillScheduler();
+  skillScheduler.setTriggerBus(triggerBusRenderer);
   await skillScheduler.init(proactiveEngine);
 
   // Skill status listener — show cat thinking animation

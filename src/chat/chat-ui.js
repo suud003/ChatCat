@@ -219,11 +219,10 @@ export class ChatUI {
         await window.electronAPI.setStore('visionModel', this.visionModelInput.value.trim());
       }
 
-      // V1.1: Save personality
+      // V1.1: Save personality (Main-side PromptRegistry reads from store directly)
       if (this.personalitySelect) {
         const personality = this.personalitySelect.value;
         await window.electronAPI.setStore('catPersonality', personality);
-        this.aiService.setPersonality(personality);
       }
 
       await this.aiService.loadConfig();

@@ -12,6 +12,15 @@ export class SkillRouter {
   constructor() {
     this._metas = [];
     this._initialized = false;
+    this._triggerBus = null;  // Phase 3: TriggerBusRenderer
+  }
+
+  /**
+   * Phase 3: Set TriggerBusRenderer for skill execution.
+   * @param {import('../ai-runtime/trigger-bus-renderer.js').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   /**
@@ -64,13 +73,41 @@ export class SkillRouter {
   }
 
   /**
-   * Execute a skill via IPC.
+   * Execute a skill via TriggerBus (Phase 3) or IPC fallback.
    * @returns {{ skillId: string, result: object }}
    */
   async execute(skillId, userMessage) {
     try {
-      const result = await window.electronAPI.skillExecute(skillId, { userMessage });
-      return { skillId, result };
+      if (this._triggerBus) {
+        // Phase 3: Route through TriggerBus
+        const trigger = {
+          type: 'skill',
+          sceneId: `skill.${skillId}`,
+          payload: {
+            skillId,
+            userContext: { userMessage },
+            userMessage,
+          },
+        };
+
+        const busResult = await this._triggerBus.submitAndWait(trigger, { priority: 'NORMAL' });
+
+        if (busResult.status === 'completed') {
+          return {
+            skillId,
+            result: { success: true, output: busResult.result, outputType: 'markdown' }
+          };
+        } else {
+          return {
+            skillId,
+            result: { success: false, output: `执行失败: ${busResult.error || busResult.status}`, outputType: 'text' }
+          };
+        }
+      } else {
+        // Legacy fallback: direct IPC
+        const result = await window.electronAPI.skillExecute(skillId, { userMessage });
+        return { skillId, result };
+      }
     } catch (err) {
       return {
         skillId,

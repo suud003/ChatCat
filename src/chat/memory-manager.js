@@ -3,33 +3,30 @@
  *
  * Extracts key facts from conversations via API,
  * stores up to 30 memories, and provides them for prompt injection.
+ *
+ * V4: Phase 4 — extraction now delegates to TriggerBusRenderer.
+ *     AI execution happens in Main process via TriggerBus → AIRuntime.
+ *     Memory parsing and storage remain in Renderer.
+ *
+ * Scene: memory.extract (AI Runtime SceneRegistry)
  */
 
 const MAX_MEMORIES = 30;
 const CATEGORIES = ['name', 'preference', 'habit', 'birthday', 'work', 'other'];
 
-const EXTRACT_SYSTEM_PROMPT = `You are a memory extraction assistant. Given a user message and assistant response from a chat, extract key personal facts about the user.
-
-Rules:
-- Only extract concrete, memorable facts (name, preferences, habits, birthday, work info, etc.)
-- Return a JSON array of objects: [{"fact": "...", "category": "..."}]
-- Categories: name, preference, habit, birthday, work, other
-- If no memorable facts, return an empty array: []
-- Keep facts short (under 50 chars each)
-- Max 3 facts per extraction
-- Do NOT extract generic conversational content
-- Respond with ONLY the JSON array, no other text`;
-
 export class MemoryManager {
   constructor() {
     this._memories = []; // { id, fact, category, timestamp }
     this._nextId = 1;
-    this._aiClient = null;  // AIClientRenderer instance
+    this._triggerBus = null; // TriggerBusRenderer, set via setTriggerBus()
   }
 
-  /** @param {import('../shared/ai-client-renderer').AIClientRenderer} aiClient */
-  setAIClient(aiClient) {
-    this._aiClient = aiClient;
+  /**
+   * Phase 4: Set TriggerBusRenderer for memory extraction via Main process.
+   * @param {import('../ai-runtime/trigger-bus-renderer').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   async init() {
@@ -43,22 +40,29 @@ export class MemoryManager {
   /**
    * Extract memories from a conversation turn (fire-and-forget).
    * Only triggers when user message is > 10 characters.
+   *
+   * Phase 4: Routes through TriggerBus → Main AIRuntime instead of
+   * direct Renderer-side HTTP via AIRuntimeRenderer.
    */
   async extractMemories(userMsg, assistantResp) {
     if (!userMsg || userMsg.length <= 10) return;
-    if (!this._aiClient || !this._aiClient.isConfigured()) return;
+    if (!this._triggerBus) return;
 
     try {
-      const content = await this._aiClient.complete({
-        messages: [
-          { role: 'system', content: EXTRACT_SYSTEM_PROMPT },
-          { role: 'user', content: `User message: "${userMsg}"\nAssistant response: "${assistantResp}"` },
-        ],
-        temperature: 0.3,
-        maxTokens: 200,
-      });
+      const trigger = {
+        type: 'memory',
+        sceneId: 'memory.extract',
+        payload: {
+          userMessage: userMsg,
+          assistantResponse: assistantResp,
+        },
+      };
 
-      if (!content) return;
+      const result = await this._triggerBus.submitAndWait(trigger, { priority: 'LOW' });
+
+      if (result.status !== 'completed' || !result.result) return;
+
+      const content = result.result;
 
       // Parse JSON from response (handle markdown code blocks)
       let jsonStr = content;

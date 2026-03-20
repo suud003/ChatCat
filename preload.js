@@ -56,7 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Skills
-  skillTrigger: (skillId) => ipcRenderer.invoke('skill-trigger', skillId),
+  // Phase 3: skillTrigger removed — scheduling delegated to ScheduledTriggerRegistry via TriggerBus
   skillGetStatus: () => ipcRenderer.invoke('skill-get-status'),
   skillGetConvertedText: (date) => ipcRenderer.invoke('skill-get-converted-text', date),
   skillGetDailyReport: (date) => ipcRenderer.invoke('skill-get-daily-report', date),
@@ -107,5 +107,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
   consentCheck: () => ipcRenderer.invoke('consent-check'),
   consentRequest: () => ipcRenderer.invoke('consent-request'),
   consentRevoke: () => ipcRenderer.invoke('consent-revoke'),
-  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data))
+  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data)),
+
+  // Phase 3: TriggerBus IPC
+  triggerBusSubmit: (triggerData, options) => ipcRenderer.invoke('trigger-bus-submit', triggerData, options),
+  triggerBusGetResult: (correlationId) => ipcRenderer.invoke('trigger-bus-get-result', correlationId),
+  triggerBusGetStatus: (correlationId) => ipcRenderer.invoke('trigger-bus-get-status', correlationId),
+
+  // Phase 4: AI utilities (replaces Renderer-side AIClientRenderer)
+  isAIConfigured: () => ipcRenderer.invoke('ai-is-configured'),
+  testAIConnection: (apiUrl, apiKey, modelName, options) =>
+    ipcRenderer.invoke('ai-test-connection', apiUrl, apiKey, modelName, options),
+  todoParseText: (userMsg) => ipcRenderer.invoke('todo-parse-text', userMsg),
+
+  // Phase 3: TriggerBus push events (Main → Renderer)
+  onTriggerChunk: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-chunk', listener);
+    return () => ipcRenderer.removeListener('trigger-chunk', listener);
+  },
+  onTriggerCompleted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-completed', listener);
+    return () => ipcRenderer.removeListener('trigger-completed', listener);
+  },
+  onTriggerError: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-error', listener);
+    return () => ipcRenderer.removeListener('trigger-error', listener);
+  },
+  onTriggerStarted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-started', listener);
+    return () => ipcRenderer.removeListener('trigger-started', listener);
+  },
 });
