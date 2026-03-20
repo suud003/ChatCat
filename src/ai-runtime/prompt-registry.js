@@ -272,8 +272,20 @@ PromptRegistry.register({
   userTemplate: '请识别并描述这张图片的内容。如果包含文字，请提取文字；如果包含代码，请保留代码格式。',
 });
 
-// Chat system prompt — uses resolver since it's dynamic (personality/level/mood/memories)
-// The actual prompt building logic stays in personality.js; we just reference it here.
-// Resolver is registered in scenes/chat-scenes.js after personality module is available.
+// Chat system prompt — uses resolver to pass through the pre-built system prompt
+// from Renderer (AIService._buildSystemPrompt) via trigger payload.
+// The actual prompt building logic stays in personality.js (Renderer ESM);
+// AIRuntime receives it as payload.systemPrompt.
+PromptRegistry.register({
+  templateId: 'chat-system-prompt',
+  version: '1.0.0',
+  source: 'resolver:payload',
+  resolver: (context) => {
+    // context here is trigger.payload, passed from AIRuntime.run/runStream
+    return {
+      system: context?.systemPrompt || '',
+    };
+  },
+});
 
 module.exports = { PromptRegistry };

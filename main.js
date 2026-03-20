@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const Store = require('electron-store');
 const { KeyboardRecorder } = require('./src/recorder/keyboard-recorder');
 const { TextConverter } = require('./src/skills/text-converter');
@@ -300,20 +301,6 @@ function createDefaultIcon() {
 ipcMain.handle('get-store', (_, key) => store.get(key));
 ipcMain.handle('set-store', (_, key, value) => store.set(key, value));
 
-// Phase 2: Registry mirror for Renderer-side AIRuntimeRenderer
-ipcMain.handle('ai-runtime-get-registries', () => {
-  const { SceneRegistry, PromptRegistry, ModelProfiles } = require('./src/ai-runtime');
-  return {
-    scenes: SceneRegistry.listScenesDetailed(),
-    prompts: PromptRegistry.listPromptsDetailed().map(p => {
-      // Include actual content for non-resolver prompts
-      const full = PromptRegistry.getPrompt(p.templateId);
-      return { ...p, system: full?.system || null, userTemplate: full?.userTemplate || null };
-    }),
-    profiles: ModelProfiles.listProfilesDetailed(),
-  };
-});
-
 // Phase 3: TriggerBus IPC handlers
 ipcMain.handle('trigger-bus-submit', (_, triggerData, options = {}) => {
   const trigger = AITrigger.create(
@@ -332,6 +319,69 @@ ipcMain.handle('trigger-bus-get-result', async (_, correlationId) => {
 
 ipcMain.handle('trigger-bus-get-status', (_, correlationId) => {
   return global._triggerBus.getStatus(correlationId);
+});
+
+// Phase 4: AI configuration check (replaces Renderer-side AIClientRenderer.isConfigured)
+ipcMain.handle('ai-is-configured', () => {
+  const baseUrl = store.get('apiBaseUrl');
+  const apiKey = store.get('apiKey');
+  const preset = store.get('apiPreset');
+
+  // Ollama / local models don't need API key
+  if (preset === 'ollama' ||
+      (baseUrl && (baseUrl.includes('://127.0.0.1:11434') || baseUrl.includes('://localhost:11434')))) {
+    return !!baseUrl;
+  }
+  return !!baseUrl && !!apiKey;
+});
+
+// Phase 4: Test API connection (replaces Renderer-side AIClientRenderer.testConnection)
+ipcMain.handle('ai-test-connection', async (_, apiUrl, apiKey, modelName, options) => {
+  const { AIClientMain } = require('./src/shared/ai-client-main');
+  const testClient = new AIClientMain(store);
+  return testClient.testConnection(apiUrl, apiKey, modelName, options);
+});
+
+// Phase 4: Todo parsing via Main-side AI call
+ipcMain.handle('todo-parse-text', async (_, userMsg) => {
+  const now = new Date();
+  const currentTime = now.toISOString();
+
+  const prompt = `You are a todo extraction assistant. Given a user message, determine if it contains a task/reminder/todo item.
+
+Rules:
+- If there IS a todo, respond with JSON: {"hasTodo": true, "text": "task description", "priority": "high|medium|low", "dueAt": "ISO string or null"}
+- If there is NO todo, respond with: {"hasTodo": false}
+- For due times, interpret relative references (e.g., "tomorrow 3pm", "next Monday")
+- Current time reference: ${currentTime}
+- Priority: default to "medium", use "high" for urgent language, "low" for casual mentions
+- Respond with ONLY the JSON object, no other text`;
+
+  try {
+    // aiClient is initialized in app.whenReady — safe since renderer can't call until window is loaded
+    const aiClient = new AIClientMain(store);
+    const content = await aiClient.complete({
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: userMsg },
+      ],
+      temperature: 0.2,
+      maxTokens: 150,
+    });
+
+    if (!content) return { hasTodo: false };
+
+    let jsonStr = content;
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    }
+
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.warn('[Main] Todo parse failed:', e.message);
+    return { hasTodo: false };
+  }
 });
 
 ipcMain.handle('get-system-info', () => {
@@ -455,25 +505,7 @@ ipcMain.handle('clipboard-clear', () => {
 });
 
 // Skill IPC handlers
-ipcMain.handle('skill-trigger', async (_, skillId) => {
-  try {
-    switch (skillId) {
-      case 'textConverter':
-        if (textConverter) return await textConverter.execute();
-        return { success: false, reason: 'not-initialized' };
-      case 'dailyReport':
-        if (dailyReport) return await dailyReport.execute();
-        return { success: false, reason: 'not-initialized' };
-      case 'todoExtractor':
-        if (todoExtractor) return await todoExtractor.execute();
-        return { success: false, reason: 'not-initialized' };
-      default:
-        return { success: false, reason: 'unknown-skill' };
-    }
-  } catch (err) {
-    return { success: false, reason: 'error', error: err.message };
-  }
-});
+// Phase 3: skill-trigger removed — scheduling delegated to ScheduledTriggerRegistry via TriggerBus
 
 ipcMain.handle('skill-get-status', () => {
   const enabled = store.get('skillsEnabled') || {};
@@ -493,6 +525,7 @@ ipcMain.handle('skill-get-daily-report', (_, date) => {
 });
 
 // Skill Agent IPC handlers (SKILL.md-based system)
+// Phase 3: Prefer TriggerBus for skill execution. This handler kept as fallback.
 ipcMain.handle('skill-execute', async (_, skillId, context) => {
   if (!skillEngine) return { success: false, output: 'Skill engine not initialized', outputType: 'text' };
   const result = await skillEngine.execute(skillId, context);
@@ -704,6 +737,79 @@ async function setupInputHook() {
   await startUioHook();
 }
 
+/**
+ * Phase 3: Register all scheduled skills in ScheduledTriggerRegistry.
+ *
+ * Replaces Renderer-side SkillScheduler timers with Main-side centralized scheduling.
+ * All executions route through TriggerBus.
+ */
+function _registerScheduledSkills(scheduledRegistry, skillRegistry, skillEngine, store) {
+  // Legacy skill: textConverter — every 10 minutes
+  scheduledRegistry.register('legacy-text-converter', () => {
+    return AITrigger.create('skill', 'skill.text-converter', {
+      skillId: 'text-converter',
+      userContext: {},
+    });
+  }, {
+    intervalMinutes: 10,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).textConverter !== false,
+  });
+
+  // Legacy skill: todoExtractor — every 60 minutes
+  scheduledRegistry.register('legacy-todo-extractor', () => {
+    return AITrigger.create('skill', 'skill.todo-management', {
+      skillId: 'todo-management',
+      userContext: { userMessage: '/todo' },
+    });
+  }, {
+    intervalMinutes: 60,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).todoExtractor !== false,
+  });
+
+  // Legacy skill: dailyReport — cron at configured hour
+  const reportHour = store.get('dailyReportHour') || 18;
+  scheduledRegistry.register('legacy-daily-report', () => {
+    return AITrigger.create('skill', 'skill.daily-report', {
+      skillId: 'daily-report',
+      userContext: {},
+    });
+  }, {
+    cronHour: reportHour,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).dailyReport !== false,
+  });
+
+  // SKILL.md-based scheduled skills from registry
+  const allMeta = skillRegistry.getAllMeta();
+  const scheduled = allMeta.filter(m => m.schedule);
+
+  for (const meta of scheduled) {
+    const scheduleConfig = {};
+
+    if (meta.schedule.cronHour !== undefined) {
+      scheduleConfig.cronHour = meta.schedule.cronHour;
+    } else if (meta.schedule.interval) {
+      scheduleConfig.intervalMinutes = meta.schedule.interval;
+    } else {
+      continue; // Skip if no valid schedule
+    }
+
+    scheduleConfig.priority = 'NORMAL';
+    scheduleConfig.enabled = true;
+
+    scheduledRegistry.register(`registry-${meta.name}`, () => {
+      return AITrigger.create('skill', `skill.${meta.name}`, {
+        skillId: meta.name,
+        userContext: {},
+      });
+    }, scheduleConfig);
+  }
+
+  console.log(`[Main] Registered ${3 + scheduled.length} scheduled skills in ScheduledTriggerRegistry`);
+}
+
 app.whenReady().then(() => {
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -743,8 +849,8 @@ app.whenReady().then(() => {
   global._triggerBus = triggerBus;
   global._scheduledRegistry = scheduledRegistry;
 
-  // V2: Quick Panel (now with AIRuntime)
-  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient, aiRuntime);
+  // V2: Quick Panel (now with AIRuntime + Phase 3 TriggerBus)
+  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient, aiRuntime, triggerBus);
   quickPanelManager.init();
 
   // Phase 3: Wire TriggerBus webContents for IPC push
@@ -831,6 +937,42 @@ app.whenReady().then(() => {
     skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient, aiRuntime);
     // Register skill prompts into AI Runtime PromptRegistry
     aiRuntimeDefs.registerSkillPrompts(skillRegistry);
+
+    // Phase 3: Register scheduled skills in ScheduledTriggerRegistry
+    _registerScheduledSkills(scheduledRegistry, skillRegistry, skillEngine, store);
+
+    // Phase 3: Wire TriggerBus post-processing for skill results
+    triggerBus.on('trigger:completed', (event) => {
+      const trigger = triggerBus._entries.get(event.correlationId)?.trigger;
+      if (!trigger || trigger.type !== 'skill') return;
+
+      const skillId = trigger.payload?.skillId;
+      const result = event.result;
+      if (!skillId || !result) return;
+
+      // Post-processing: text-converter saves result to store
+      if (skillId === 'text-converter') {
+        const today = new Date().toISOString().split('T')[0];
+        store.set(`convertedText_${today}`, result);
+        console.log(`[TriggerBus:PostProcess] text-converter: saved ${result.length} chars`);
+      }
+
+      // Post-processing: todo-management parses todos
+      if (skillId === 'todo-management') {
+        skillEngine._parseTodosFromAI(result);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('todos-updated');
+        }
+      }
+
+      // Post-processing: daily-report saves to store
+      if (skillId === 'daily-report') {
+        const today = new Date().toISOString().split('T')[0];
+        store.set(`dailyReport_${today}`, { content: result, generatedAt: Date.now() });
+        console.log(`[TriggerBus:PostProcess] daily-report: saved for ${today}`);
+      }
+    });
+
     console.log('[Main] Skill system initialized');
   }).catch(err => {
     console.warn('[Main] Skill system init failed:', err.message);

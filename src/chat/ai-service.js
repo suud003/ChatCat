@@ -1,31 +1,20 @@
 /**
- * AI Service - OpenAI-compatible API client with streaming support
- * V1.1: Dynamic system prompt via personality + memory integration, sentiment detection
- * V2: Refactored to use centralized AIClientRenderer for HTTP calls
- * V3: Phase 2 — chat streaming now delegates to AIRuntimeRenderer for unified
- *     model config management. Prompt building stays here.
- * V4: Phase 3 — chat streaming delegates to TriggerBusRenderer for unified
- *     trigger bus architecture. Falls back to Phase 2 path if bus unavailable.
+ * AI Service - Chat orchestration via TriggerBus
+ *
+ * V5: Phase 4 — All AI calls via Main TriggerBus.
+ *     Renderer makes ZERO direct AI HTTP calls.
+ *     Prompt building stays here (uses Renderer-only data: personality, rhythm, memories).
  *
  * Scene: chat.default / chat.followup (AI Runtime SceneRegistry)
- * Model config sourced from AI Runtime ModelProfiles 'chat-stream' via AIRuntimeRenderer.
+ * Model config sourced from AI Runtime ModelProfiles 'chat-stream' (via Main AIRuntime).
  * Prompt corresponds to AI Runtime PromptRegistry 'chat-system-prompt' (dynamic via personality.js).
  * Context providers: personality, history, memory, behavior.
  */
 
 import { buildSystemPrompt, detectSentiment } from './personality.js';
-import { AIClientRenderer } from '../shared/ai-client-renderer.js';
-import { AIRuntimeRenderer } from '../ai-runtime/runtime-renderer.js';
-
-// Model parameters — used as fallback when AIRuntimeRenderer is not available
-// Canonical values are now in ModelProfiles 'chat-stream'.
-const CHAT_FALLBACK_TEMPERATURE = 0.8;
-const CHAT_FALLBACK_MAX_TOKENS = 500;
 
 export class AIService {
   constructor() {
-    this._client = new AIClientRenderer();
-    this._runtime = null;  // AIRuntimeRenderer, set via setRuntime()
     this._triggerBus = null;  // TriggerBusRenderer, set via setTriggerBus()
     this.conversationHistory = [];
 
@@ -39,14 +28,9 @@ export class AIService {
     // V2: rhythm context
     this._rhythmAnalyzer = null;
     this._compositeEngine = null;
-  }
 
-  /**
-   * Phase 2: Set AIRuntimeRenderer for centralized model config.
-   * @param {import('../ai-runtime/runtime-renderer').AIRuntimeRenderer} runtime
-   */
-  setRuntime(runtime) {
-    this._runtime = runtime;
+    // V2: todo context
+    this._todoList = null;
   }
 
   /**
@@ -74,32 +58,36 @@ export class AIService {
     this._compositeEngine = compositeEngine;
   }
 
+  /**
+   * Set TodoList for injecting todo data into system prompt.
+   * @param {import('../widgets/todo-list').TodoList} todoList
+   */
+  setTodoList(todoList) {
+    this._todoList = todoList;
+  }
+
   setPersonality(p) {
     this._personality = p || 'lively';
   }
 
   async loadConfig() {
-    await this._client.loadConfig();
-
     const history = await window.electronAPI.getStore('chatHistory');
     if (Array.isArray(history)) {
       this.conversationHistory = history.slice(-20); // Keep last 20 messages
     }
   }
 
-  isConfigured() {
-    return this._client.isConfigured();
+  /**
+   * Phase 4: Check if AI is configured via Main process IPC.
+   * @returns {Promise<boolean>}
+   */
+  async isConfigured() {
+    try {
+      return await window.electronAPI.isAIConfigured();
+    } catch {
+      return false;
+    }
   }
-
-  /** Expose underlying client for modules that need direct access (e.g. MemoryManager) */
-  get client() {
-    return this._client;
-  }
-
-  // Backward-compatible getters for external code that reads these directly
-  get baseUrl() { return this._client.baseUrl; }
-  get apiKey() { return this._client.apiKey; }
-  get modelName() { return this._client.modelName; }
 
   _buildSystemPrompt() {
     const level = this._affectionSystem?.level || 1;
@@ -135,12 +123,35 @@ export class AIService {
       prompt += '你现在可以在回答中引用这些具体数据来回应主人的提问。\n';
     }
 
+    // Inject pending todos
+    if (this._todoList) {
+      const todos = this._todoList._todos || [];
+      const pending = todos.filter(t => !t.completed);
+      if (pending.length > 0) {
+        prompt += '\n--- 主人的待办事项 ---\n';
+        for (const t of pending) {
+          const pLabel = { high: '🔴高', medium: '🟡中', low: '🟢低' }[t.priority] || '中';
+          let line = `- [${pLabel}] ${t.text}`;
+          if (t.dueAt) {
+            line += ` (截止: ${new Date(t.dueAt).toLocaleString('zh-CN')})`;
+          }
+          prompt += line + '\n';
+        }
+        prompt += `共 ${pending.length} 项未完成待办。你可以在回答中引用这些待办信息。\n`;
+      }
+    }
+
     return prompt;
   }
 
   async *sendMessageStream(userMessage) {
-    if (!this.isConfigured()) {
+    if (!await this.isConfigured()) {
       yield 'Please configure your API key in Settings first! (=^.^=)';
+      return;
+    }
+
+    if (!this._triggerBus) {
+      yield '[Error: TriggerBus not available]';
       return;
     }
 
@@ -149,47 +160,18 @@ export class AIService {
     try {
       let fullResponse = '';
 
-      // Phase 3: Delegate to TriggerBusRenderer (preferred path)
-      if (this._triggerBus) {
-        const trigger = {
-          type: 'chat',
-          sceneId: 'chat.default',
-          payload: {
-            systemPrompt: this._buildSystemPrompt(),
-            history: this.conversationHistory,
-          },
-        };
-
-        for await (const chunk of this._triggerBus.submitAndStream(trigger, { priority: 'HIGH' })) {
-          fullResponse += chunk;
-          yield chunk;
-        }
-      } else if (this._runtime && this._runtime.isReady()) {
-        // Phase 2 fallback: AIRuntimeRenderer
-        const trigger = AIRuntimeRenderer.createTrigger('chat', 'chat.default', {
+      const trigger = {
+        type: 'chat',
+        sceneId: 'chat.default',
+        payload: {
           systemPrompt: this._buildSystemPrompt(),
           history: this.conversationHistory,
-        });
+        },
+      };
 
-        for await (const chunk of this._runtime.runStream(trigger)) {
-          fullResponse += chunk;
-          yield chunk;
-        }
-      } else {
-        // Legacy fallback: direct client call (pre-Phase 2 behavior)
-        const messages = [
-          { role: 'system', content: this._buildSystemPrompt() },
-          ...this.conversationHistory
-        ];
-
-        for await (const chunk of this._client.stream({
-          messages,
-          temperature: CHAT_FALLBACK_TEMPERATURE,
-          maxTokens: CHAT_FALLBACK_MAX_TOKENS,
-        })) {
-          fullResponse += chunk;
-          yield chunk;
-        }
+      for await (const chunk of this._triggerBus.submitAndStream(trigger, { priority: 'HIGH' })) {
+        fullResponse += chunk;
+        yield chunk;
       }
 
       // Save to history
@@ -227,9 +209,9 @@ export class AIService {
   }
 
   /**
-   * Test API Connection with given credentials
+   * Phase 4: Test API Connection via Main process IPC.
    */
   async testConnection(apiUrl, apiKey, modelName, options = {}) {
-    return this._client.testConnection(apiUrl, apiKey, modelName, options);
+    return window.electronAPI.testAIConnection(apiUrl, apiKey, modelName, options);
   }
 }

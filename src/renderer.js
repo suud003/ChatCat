@@ -30,9 +30,6 @@ import { UserProfiler } from './proactive/user-profiler.js';
 // V1.5 imports — Skill Agent System
 import { SkillRouter } from './skills/skill-router.js';
 
-// Phase 2: AI Runtime Renderer
-import { AIRuntimeRenderer } from './ai-runtime/runtime-renderer.js';
-
 // Phase 3: TriggerBus Renderer
 import { TriggerBusRenderer } from './ai-runtime/trigger-bus-renderer.js';
 
@@ -265,21 +262,18 @@ async function init() {
   const inputTracker = new InputTracker(characterProxy);
 
   // AI service
+  // AI service (Phase 4: TriggerBus-only, no direct AI HTTP)
   const aiService = new AIService();
   await aiService.loadConfig();
-
-  // Phase 2: AI Runtime (Renderer-side, uses IPC registry mirror)
-  const aiRuntimeRenderer = new AIRuntimeRenderer(aiService.client);
-  await aiRuntimeRenderer.init();
-  aiService.setRuntime(aiRuntimeRenderer);
 
   // Phase 3: TriggerBus (Renderer-side, communicates with Main TriggerBus via IPC)
   const triggerBusRenderer = new TriggerBusRenderer();
   triggerBusRenderer.init();
   aiService.setTriggerBus(triggerBusRenderer);
 
-  // V1.1: Memory Manager (Phase 2: now uses AIRuntimeRenderer)
-  const memoryManager = new MemoryManager(aiRuntimeRenderer);
+  // V1.1: Memory Manager (Phase 4: uses TriggerBus via Main process)
+  const memoryManager = new MemoryManager();
+  memoryManager.setTriggerBus(triggerBusRenderer);
   await memoryManager.init();
 
   // V1.1: Load personality and set context
@@ -318,18 +312,20 @@ async function init() {
 
   // Todo list (lives in Tools panel tab)
   const todoList = new TodoList(affection);
+  aiService.setTodoList(todoList);
 
   // V1.1: Connect todo reminders to cat bubble
   todoList.onReminder = (todo) => {
     showCatBubble(`⏰ 提醒: ${todo.text}`, 6000);
   };
 
-  // V1.1: Todo Parser
-  const todoParser = new TodoParser(aiService.client, todoList, showCatBubble);
+  // V1.1: Todo Parser (Phase 4: AI extraction via Main IPC)
+  const todoParser = new TodoParser(todoList, showCatBubble);
   chatUI.setTodoParser(todoParser);
 
   // V1.5: Skill Router — intercepts chat commands/keywords before AI
   const skillRouter = new SkillRouter();
+  skillRouter.setTriggerBus(triggerBusRenderer);
   await skillRouter.init();
   chatUI.setSkillRouter(skillRouter);
 
@@ -352,6 +348,8 @@ async function init() {
     aiService: aiService
   });
   proactiveEngine.setPersonality(savedPersonality);
+  proactiveEngine.setTriggerBus(triggerBusRenderer);
+  proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
 
   // ========== V2 Pillar A: 行为节奏智能 ==========
   
@@ -475,8 +473,9 @@ async function init() {
     proactiveEngine.updateConfig();
   };
 
-  // V1.2: Skill Scheduler
+  // V1.2: Skill Scheduler (Phase 3: scheduling delegated to Main ScheduledTriggerRegistry)
   const skillScheduler = new SkillScheduler();
+  skillScheduler.setTriggerBus(triggerBusRenderer);
   await skillScheduler.init(proactiveEngine);
 
   // Skill status listener — show cat thinking animation

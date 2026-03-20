@@ -47,9 +47,31 @@ class QuickPanelUI {
 
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        const prevMode = this._mode;
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this._mode = btn.dataset.mode;
+
+        // --- 模式切换时的状态重置 ---
+
+        // 清空上一次结果
+        this._resultArea.innerHTML = '';
+        this._setResultVisible(false);
+        this._historyVisible = false;
+
+        // 离开 ask 模式时清空对话历史
+        if (prevMode === 'ask' && this._mode !== 'ask') {
+          this._qaHistory = [];
+        }
+
+        // 离开识图模式 或 从识图切到非识图，清除图片预览
+        if (prevMode === 'screenshot' && this._mode !== 'screenshot') {
+          this._pastedImageBase64 = null;
+          this._clearPreview();
+        }
+
+        // 重置状态栏
+        this._statusBar.textContent = 'ESC 关闭 · Ctrl+Enter 发送';
 
         if (this._mode === 'screenshot' && window.qpAPI.startScreenshot) {
           window.qpAPI.startScreenshot();
@@ -156,14 +178,22 @@ class QuickPanelUI {
       this._scheduleReportPanelSize();
     });
 
-    // 外部自动传入图片识别（从猫咪气泡触发）
+    // 从猫咪气泡接收剪贴板图片（仅显示预览，用户需手动点击"发送"或"开始识别"）
     window.qpAPI.onAutoRecognizeImage?.((data) => {
       this._historyVisible = false;
+      this._pastedImageBase64 = data.base64;  // 保存 base64 供 _send() 使用
+      
       if (this._previewEl && data.dataUrl) {
         this._showPreview(`
           <img src="${data.dataUrl}" style="max-width:100%;max-height:80px;border-radius:6px;margin-bottom:4px;">
-          <span style="font-size:11px;color:#888;">🔍 自动识别中...</span>
+          <span style="font-size:11px;color:#888;cursor:pointer;" id="remove-auto-image">✕ 移除图片</span>
         `);
+        
+        // 添加移除按钮事件
+        document.getElementById('remove-auto-image')?.addEventListener('click', () => {
+          this._pastedImageBase64 = null;
+          this._clearPreview();
+        });
       }
 
       document.querySelectorAll('.mode-btn').forEach(b => {
@@ -171,7 +201,7 @@ class QuickPanelUI {
         if (b.dataset.mode === 'screenshot') b.classList.add('active');
       });
       this._mode = 'screenshot';
-      this._statusBar.textContent = '⏳ 正在自动识别剪贴板图片...';
+      this._statusBar.textContent = '📸 已接收剪贴板图片 · 点击"发送"开始识别';
       this._scheduleReportPanelSize();
     });
 
@@ -197,13 +227,17 @@ class QuickPanelUI {
       if (this._mode === 'screenshot' || this._pastedImageBase64) {
         if (this._pastedImageBase64) {
           const base64 = this._pastedImageBase64;
-          this._pastedImageBase64 = null;
-          this._clearPreview();
+          // 保留缩略图，更新状态为 "识别中"
+          this._updatePreviewStatus('recognizing');
           try {
             await window.qpAPI.recognizeImage(base64);
+            // 识别完成，更新缩略图状态
+            this._updatePreviewStatus('done');
           } catch (e) {
             // 错误已通过 qp-display-direct-result 展示
+            this._updatePreviewStatus('done');
           }
+          this._pastedImageBase64 = null;
           this._isProcessing = false;
           this._scheduleReportPanelSize();
         } else if (window.qpAPI.startScreenshot) {
@@ -397,6 +431,49 @@ class QuickPanelUI {
     if (!this._previewEl) return;
     this._previewEl.innerHTML = '';
     this._previewEl.classList.remove('visible');
+    this._scheduleReportPanelSize();
+  }
+
+  /**
+   * 更新缩略图预览区的识别状态
+   * @param {'recognizing'|'done'} status
+   */
+  _updatePreviewStatus(status) {
+    if (!this._previewEl) return;
+    const statusEl = this._previewEl.querySelector('.preview-status');
+    const removeBtn = this._previewEl.querySelector('#remove-pasted-image, #remove-auto-image');
+
+    if (status === 'recognizing') {
+      // 隐藏移除按钮，显示识别中状态
+      if (removeBtn) removeBtn.style.display = 'none';
+      if (statusEl) {
+        statusEl.textContent = '⏳ 正在识别...';
+        statusEl.style.color = '#f5a623';
+      } else {
+        const span = document.createElement('span');
+        span.className = 'preview-status';
+        span.style.cssText = 'display:block;font-size:11px;color:#f5a623;margin-top:2px;';
+        span.textContent = '⏳ 正在识别...';
+        this._previewEl.appendChild(span);
+      }
+    } else if (status === 'done') {
+      if (statusEl) {
+        statusEl.textContent = '✓ 已识别';
+        statusEl.style.color = '#4caf50';
+      }
+      // 显示手动关闭按钮
+      if (removeBtn) {
+        removeBtn.textContent = '✕ 关闭预览';
+        removeBtn.style.display = '';
+        // 重新绑定点击事件 (移除旧的)
+        const newBtn = removeBtn.cloneNode(true);
+        removeBtn.parentNode.replaceChild(newBtn, removeBtn);
+        newBtn.addEventListener('click', () => {
+          this._pastedImageBase64 = null;
+          this._clearPreview();
+        });
+      }
+    }
     this._scheduleReportPanelSize();
   }
 

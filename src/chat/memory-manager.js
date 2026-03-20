@@ -4,28 +4,29 @@
  * Extracts key facts from conversations via API,
  * stores up to 30 memories, and provides them for prompt injection.
  *
- * V3: Phase 2 — extraction now delegates to AIRuntimeRenderer.
- *     Prompt and model config sourced from PromptRegistry/ModelProfiles
- *     via the runtime's IPC registry mirror.
+ * V4: Phase 4 — extraction now delegates to TriggerBusRenderer.
+ *     AI execution happens in Main process via TriggerBus → AIRuntime.
+ *     Memory parsing and storage remain in Renderer.
  *
  * Scene: memory.extract (AI Runtime SceneRegistry)
- * Model config: ModelProfiles 'memory-extract' (via AIRuntimeRenderer)
- * Prompt: PromptRegistry 'memory-extract' (via AIRuntimeRenderer)
  */
-
-import { AIRuntimeRenderer } from '../ai-runtime/runtime-renderer.js';
 
 const MAX_MEMORIES = 30;
 const CATEGORIES = ['name', 'preference', 'habit', 'birthday', 'work', 'other'];
 
 export class MemoryManager {
-  /**
-   * @param {AIRuntimeRenderer} [aiRuntimeRenderer] - Phase 2 runtime
-   */
-  constructor(aiRuntimeRenderer) {
+  constructor() {
     this._memories = []; // { id, fact, category, timestamp }
     this._nextId = 1;
-    this._runtime = aiRuntimeRenderer || null;
+    this._triggerBus = null; // TriggerBusRenderer, set via setTriggerBus()
+  }
+
+  /**
+   * Phase 4: Set TriggerBusRenderer for memory extraction via Main process.
+   * @param {import('../ai-runtime/trigger-bus-renderer').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   async init() {
@@ -39,20 +40,29 @@ export class MemoryManager {
   /**
    * Extract memories from a conversation turn (fire-and-forget).
    * Only triggers when user message is > 10 characters.
+   *
+   * Phase 4: Routes through TriggerBus → Main AIRuntime instead of
+   * direct Renderer-side HTTP via AIRuntimeRenderer.
    */
   async extractMemories(userMsg, assistantResp) {
     if (!userMsg || userMsg.length <= 10) return;
-    if (!this._runtime || !this._runtime.isReady()) return;
+    if (!this._triggerBus) return;
 
     try {
-      const trigger = AIRuntimeRenderer.createTrigger('memory', 'memory.extract', {
-        userMessage: userMsg,
-        assistantResponse: assistantResp,
-      });
+      const trigger = {
+        type: 'memory',
+        sceneId: 'memory.extract',
+        payload: {
+          userMessage: userMsg,
+          assistantResponse: assistantResp,
+        },
+      };
 
-      const content = await this._runtime.run(trigger);
+      const result = await this._triggerBus.submitAndWait(trigger, { priority: 'LOW' });
 
-      if (!content) return;
+      if (result.status !== 'completed' || !result.result) return;
+
+      const content = result.result;
 
       // Parse JSON from response (handle markdown code blocks)
       let jsonStr = content;

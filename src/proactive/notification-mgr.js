@@ -20,6 +20,7 @@ export class NotificationMgr {
     this._onOpenChat = null;     // callback() — open chat panel on reply actions
     this._onBubbleReply = null;  // callback(userText, catMessage) — handle bubble inline reply
     this._onOpenTodoPanel = null; // callback() — open tools panel to todo tab
+    this._triggerBus = null;     // Phase 3: TriggerBusRenderer
   }
 
   async init(showBubbleFn) {
@@ -240,7 +241,28 @@ export class NotificationMgr {
       }
 
       try {
-        const result = await window.electronAPI.skillExecute('todo-management', { userMessage: '/todo' });
+        let result;
+        if (this._triggerBus) {
+          // Phase 3: Route through TriggerBus
+          const trigger = {
+            type: 'skill',
+            sceneId: 'skill.todo-management',
+            payload: {
+              skillId: 'todo-management',
+              userContext: { userMessage: '/todo' },
+              userMessage: '/todo',
+            },
+          };
+          const busResult = await this._triggerBus.submitAndWait(trigger, { priority: 'NORMAL' });
+          if (busResult.status === 'completed') {
+            result = { success: true, output: busResult.result };
+          } else {
+            throw new Error(busResult.error || 'Failed');
+          }
+        } else {
+          // Legacy fallback
+          result = await window.electronAPI.skillExecute('todo-management', { userMessage: '/todo' });
+        }
         const count = result?.todosAdded || 0;
 
         if (bubble) {
@@ -359,4 +381,12 @@ export class NotificationMgr {
   set onOpenChat(fn) { this._onOpenChat = fn; }
   set onBubbleReply(fn) { this._onBubbleReply = fn; }
   set onOpenTodoPanel(fn) { this._onOpenTodoPanel = fn; }
+
+  /**
+   * Phase 3: Set TriggerBusRenderer for skill execution.
+   * @param {import('../ai-runtime/trigger-bus-renderer.js').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
+  }
 }

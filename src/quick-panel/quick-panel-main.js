@@ -10,12 +10,14 @@ class QuickPanelManager {
    * @param {import('electron-store')} store
    * @param {import('../shared/ai-client-main').AIClientMain} aiClient
    * @param {import('../ai-runtime/runtime').AIRuntime} aiRuntime
+   * @param {import('../ai-runtime/trigger-bus').TriggerBus} [triggerBus]
    */
-  constructor(mainWindow, store, aiClient, aiRuntime) {
+  constructor(mainWindow, store, aiClient, aiRuntime, triggerBus) {
     this._mainWindow = mainWindow;
     this._store = store;
     this._aiClient = aiClient;
     this._aiRuntime = aiRuntime;
+    this._triggerBus = triggerBus || null;
     this._isVisible = false;
     this._textProcessor = new TextProcessor(store);
     this._screenshotOCR = new ScreenshotOCR(store, aiClient, aiRuntime);
@@ -215,15 +217,42 @@ class QuickPanelManager {
       return this._shortcutStatus || { toggle: false, screenshot: false };
     });
 
-    // 文本处理请求 (Phase 2: via AIRuntime)
+    // 文本处理请求 (Phase 3: via TriggerBus, fallback to AIRuntime)
     ipcMain.handle('qp-process-text', async (event, mode, text) => {
       try {
         const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_TEXT, `quick.${mode}`, { mode, text });
-        const result = await this._aiRuntime.runStream(trigger, (chunk) => {
-          if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-            this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+        let result;
+
+        if (this._triggerBus) {
+          // Phase 3: Route through TriggerBus
+          const { correlationId } = this._triggerBus.submit(trigger, { priority: 'NORMAL' });
+
+          // Subscribe to chunks for streaming to QuickPanel window
+          const chunkHandler = (evt) => {
+            if (evt.correlationId === correlationId) {
+              if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+                this._panelWindow.webContents.send('qp-stream-chunk', evt.chunk);
+              }
+            }
+          };
+          this._triggerBus.on('trigger:chunk', chunkHandler);
+
+          const busResult = await this._triggerBus.getResult(correlationId, 60000);
+          this._triggerBus.removeListener('trigger:chunk', chunkHandler);
+
+          if (busResult.status === 'completed') {
+            result = busResult.result;
+          } else {
+            throw new Error(busResult.error || 'TriggerBus execution failed');
           }
-        });
+        } else {
+          // Phase 2 fallback: direct AIRuntime
+          result = await this._aiRuntime.runStream(trigger, (chunk) => {
+            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+            }
+          });
+        }
         
         this._saveToHistory(mode, text, result);
         if (this._panelWindow && !this._panelWindow.isDestroyed()) {
@@ -240,15 +269,41 @@ class QuickPanelManager {
       }
     });
     
-    // 问答请求 (Phase 2: via AIRuntime)
+    // 问答请求 (Phase 3: via TriggerBus, fallback to AIRuntime)
     ipcMain.handle('qp-ask', async (event, question, history) => {
       try {
         const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_ASK, 'quick.ask', { question, history });
-        const result = await this._aiRuntime.runStream(trigger, (chunk) => {
-          if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-            this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+        let result;
+
+        if (this._triggerBus) {
+          // Phase 3: Route through TriggerBus
+          const { correlationId } = this._triggerBus.submit(trigger, { priority: 'NORMAL' });
+
+          const chunkHandler = (evt) => {
+            if (evt.correlationId === correlationId) {
+              if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+                this._panelWindow.webContents.send('qp-stream-chunk', evt.chunk);
+              }
+            }
+          };
+          this._triggerBus.on('trigger:chunk', chunkHandler);
+
+          const busResult = await this._triggerBus.getResult(correlationId, 60000);
+          this._triggerBus.removeListener('trigger:chunk', chunkHandler);
+
+          if (busResult.status === 'completed') {
+            result = busResult.result;
+          } else {
+            throw new Error(busResult.error || 'TriggerBus execution failed');
           }
-        });
+        } else {
+          // Phase 2 fallback: direct AIRuntime
+          result = await this._aiRuntime.runStream(trigger, (chunk) => {
+            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
+            }
+          });
+        }
         
         const lastMsg = Array.isArray(history) && history.length > 0
           ? history[history.length - 1].content
@@ -288,7 +343,8 @@ class QuickPanelManager {
       this._store.set('qpFeedback', feedbackList);
     });
 
-    // 从剪贴板读取图片并自动识别（由猫咪气泡触发）
+    // 从剪贴板读取图片（由猫咪气泡触发）
+    // 注意：只是打开面板和显示预览，用户需要在 QuickPanel 内确认才会执行 OCR
     ipcMain.handle('qp-recognize-clipboard-image', async () => {
       try {
         const image = clipboard.readImage();
@@ -305,46 +361,16 @@ class QuickPanelManager {
         await new Promise(resolve => setTimeout(resolve, 300));
         
         if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          // 先让 Quick Panel 显示图片预览和加载状态
+          // 发送图片预览给 QuickPanel（用户需在面板内手动点击"开始识别"才执行 OCR）
           this._panelWindow.webContents.send('qp-auto-recognize-image', {
             base64,
             dataUrl: image.toDataURL()
           });
         }
         
-        // 执行识别
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: '⏳ 正在识别图片内容，请稍候...'
-          });
-        }
-        
-        const config = {
-          visionModel: this._store.get('visionModel'),
-          modelName: this._store.get('modelName'),
-        };
-        
-        const result = await this._screenshotOCR.processImage(base64, config);
-        
-        this._saveToHistory('ocr', '[剪贴板图片]', result);
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: result
-          });
-        }
-        
-        return result;
+        return { success: true, message: '已打开 QuickPanel，请点击"开始识别"按钮' };
       } catch (err) {
-        console.error('[QuickPanel] 剪贴板图片识别失败:', err.message);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: `❌ 图片识别失败:\n${err.message}`
-          });
-        }
+        console.error('[QuickPanel] 剪贴板图片处理失败:', err.message);
         throw err;
       }
     });
