@@ -1,14 +1,17 @@
 const { BrowserWindow, desktopCapturer, screen, nativeImage, ipcMain } = require('electron');
 const path = require('path');
+const { AITrigger, TRIGGER_TYPES } = require('../ai-runtime/trigger');
 
 class ScreenshotOCR {
   /**
    * @param {import('electron-store')} store
    * @param {import('../shared/ai-client-main').AIClientMain} aiClient
+   * @param {import('../ai-runtime/runtime').AIRuntime} aiRuntime
    */
-  constructor(store, aiClient) {
+  constructor(store, aiClient, aiRuntime) {
     this._store = store;
     this._aiClient = aiClient;
+    this._aiRuntime = aiRuntime;
     this._overlayWindow = null;
   }
 
@@ -128,10 +131,8 @@ class ScreenshotOCR {
   }
   
   async processImage(base64, config) {
-    return this._aiClient.vision({
-      base64,
-      model: config.visionModel || config.modelName,
-    });
+    const trigger = AITrigger.create(TRIGGER_TYPES.VISION, 'vision.ocr', { base64, config });
+    return this._aiRuntime.vision(trigger);
   }
 }
 

@@ -2,14 +2,28 @@
  * AI Service - OpenAI-compatible API client with streaming support
  * V1.1: Dynamic system prompt via personality + memory integration, sentiment detection
  * V2: Refactored to use centralized AIClientRenderer for HTTP calls
+ * V3: Phase 2 — chat streaming now delegates to AIRuntimeRenderer for unified
+ *     model config management. Prompt building stays here.
+ *
+ * Scene: chat.default / chat.followup (AI Runtime SceneRegistry)
+ * Model config sourced from AI Runtime ModelProfiles 'chat-stream' via AIRuntimeRenderer.
+ * Prompt corresponds to AI Runtime PromptRegistry 'chat-system-prompt' (dynamic via personality.js).
+ * Context providers: personality, history, memory, behavior.
  */
 
 import { buildSystemPrompt, detectSentiment } from './personality.js';
 import { AIClientRenderer } from '../shared/ai-client-renderer.js';
+import { AIRuntimeRenderer } from '../ai-runtime/runtime-renderer.js';
+
+// Model parameters — used as fallback when AIRuntimeRenderer is not available
+// Canonical values are now in ModelProfiles 'chat-stream'.
+const CHAT_FALLBACK_TEMPERATURE = 0.8;
+const CHAT_FALLBACK_MAX_TOKENS = 500;
 
 export class AIService {
   constructor() {
     this._client = new AIClientRenderer();
+    this._runtime = null;  // AIRuntimeRenderer, set via setRuntime()
     this.conversationHistory = [];
 
     // V1.1: personality & memory context
@@ -22,6 +36,14 @@ export class AIService {
     // V2: rhythm context
     this._rhythmAnalyzer = null;
     this._compositeEngine = null;
+  }
+
+  /**
+   * Phase 2: Set AIRuntimeRenderer for centralized model config.
+   * @param {import('../ai-runtime/runtime-renderer').AIRuntimeRenderer} runtime
+   */
+  setRuntime(runtime) {
+    this._runtime = runtime;
   }
 
   /**
@@ -113,21 +135,35 @@ export class AIService {
 
     this.conversationHistory.push({ role: 'user', content: userMessage });
 
-    const messages = [
-      { role: 'system', content: this._buildSystemPrompt() },
-      ...this.conversationHistory
-    ];
-
     try {
       let fullResponse = '';
 
-      for await (const chunk of this._client.stream({
-        messages,
-        temperature: 0.8,
-        maxTokens: 500,
-      })) {
-        fullResponse += chunk;
-        yield chunk;
+      // Phase 2: Delegate to AIRuntimeRenderer if available
+      if (this._runtime && this._runtime.isReady()) {
+        const trigger = AIRuntimeRenderer.createTrigger('chat', 'chat.default', {
+          systemPrompt: this._buildSystemPrompt(),
+          history: this.conversationHistory,
+        });
+
+        for await (const chunk of this._runtime.runStream(trigger)) {
+          fullResponse += chunk;
+          yield chunk;
+        }
+      } else {
+        // Fallback: direct client call (pre-Phase 2 behavior)
+        const messages = [
+          { role: 'system', content: this._buildSystemPrompt() },
+          ...this.conversationHistory
+        ];
+
+        for await (const chunk of this._client.stream({
+          messages,
+          temperature: CHAT_FALLBACK_TEMPERATURE,
+          maxTokens: CHAT_FALLBACK_MAX_TOKENS,
+        })) {
+          fullResponse += chunk;
+          yield chunk;
+        }
       }
 
       // Save to history

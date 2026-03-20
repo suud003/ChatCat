@@ -4,8 +4,13 @@
  * Reads SKILL.md body, gathers context (typing records, todos, etc.), calls AI, returns result.
  * All skills use AI.
  *
+ * V3: Execution now delegates to AIRuntime. Context assembly handled by ContextHub.
+ *     Post-processing (store writes, todo parsing) remains here.
+ *
  * Runs in main process.
  */
+
+const { AITrigger, TRIGGER_TYPES } = require('../ai-runtime/trigger');
 
 class SkillEngine {
   /**
@@ -13,12 +18,14 @@ class SkillEngine {
    * @param {import('./skill-registry').SkillRegistry} registry
    * @param {import('../recorder/keyboard-recorder').KeyboardRecorder} keyboardRecorder
    * @param {import('../shared/ai-client-main').AIClientMain} aiClient
+   * @param {import('../ai-runtime/runtime').AIRuntime} aiRuntime
    */
-  constructor(store, registry, keyboardRecorder, aiClient) {
+  constructor(store, registry, keyboardRecorder, aiClient, aiRuntime) {
     this._store = store;
     this._registry = registry;
     this._recorder = keyboardRecorder;
     this._aiClient = aiClient;
+    this._aiRuntime = aiRuntime;
   }
 
   /**
@@ -34,20 +41,16 @@ class SkillEngine {
     }
 
     try {
-      const body = this._registry.readSkillBody(skillId);
-      if (!body) {
-        return { success: false, output: '技能模板为空', outputType: 'text' };
-      }
-
-      const contextData = this._gatherContext(meta.context, userContext);
-      const prompt = `${body}\n\n---\n\n${contextData}`;
-
-      console.log(`[SkillEngine] Skill ${skillId}: prompt length = ${prompt.length} chars`);
-
-      const result = await this._aiClient.complete({
-        prompt,
-        temperature: meta.temperature || 0.5,
+      // Phase 2: Delegate to AIRuntime
+      const trigger = AITrigger.create(TRIGGER_TYPES.SKILL, `skill.${skillId}`, {
+        skillId,
+        userContext,
+        userMessage: userContext.userMessage,
       });
+
+      const result = await this._aiRuntime.run(trigger);
+
+      console.log(`[SkillEngine] Skill ${skillId}: result length = ${result ? result.length : 0} chars`);
 
       // Post-processing: text-converter writes result back to store
       if (skillId === 'text-converter' && result) {
@@ -70,6 +73,9 @@ class SkillEngine {
   }
 
   /**
+   * @deprecated Phase 2: Context assembly now handled by ContextHub providers.
+   * Kept as reference during migration. Will be removed in Phase 3.
+   *
    * Gather context data based on context keys from SKILL.md frontmatter.
    */
   _gatherContext(contextKeys, userContext = {}) {

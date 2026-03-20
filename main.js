@@ -12,6 +12,10 @@ const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
 const { AIClientMain } = require('./src/shared/ai-client-main');
 
+// AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer)
+const aiRuntimeDefs = require('./src/ai-runtime');
+const { AIRuntime, AITrigger } = aiRuntimeDefs;
+
 // V2 Pillar C Imports
 const { PrivacyConsentManager } = require('./src/consent/privacy-consent');
 const { ContentSegmenter } = require('./src/cleaner/content-segmenter');
@@ -293,6 +297,21 @@ function createDefaultIcon() {
 // IPC handlers
 ipcMain.handle('get-store', (_, key) => store.get(key));
 ipcMain.handle('set-store', (_, key, value) => store.set(key, value));
+
+// Phase 2: Registry mirror for Renderer-side AIRuntimeRenderer
+ipcMain.handle('ai-runtime-get-registries', () => {
+  const { SceneRegistry, PromptRegistry, ModelProfiles } = require('./src/ai-runtime');
+  return {
+    scenes: SceneRegistry.listScenesDetailed(),
+    prompts: PromptRegistry.listPromptsDetailed().map(p => {
+      // Include actual content for non-resolver prompts
+      const full = PromptRegistry.getPrompt(p.templateId);
+      return { ...p, system: full?.system || null, userTemplate: full?.userTemplate || null };
+    }),
+    profiles: ModelProfiles.listProfilesDetailed(),
+  };
+});
+
 ipcMain.handle('get-system-info', () => {
   const os = require('os');
   return {
@@ -692,8 +711,11 @@ app.whenReady().then(() => {
   // V2: Unified AI Client (main process)
   const aiClient = new AIClientMain(store);
 
-  // V2: Quick Panel
-  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient);
+  // Phase 2: Unified AI Runtime (main process execution engine)
+  const aiRuntime = new AIRuntime(aiClient, { store });
+
+  // V2: Quick Panel (now with AIRuntime)
+  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient, aiRuntime);
   quickPanelManager.init();
 
   createTray();
@@ -770,7 +792,11 @@ app.whenReady().then(() => {
   // Initialize SKILL.md-based skill system
   skillRegistry = new SkillRegistry(path.join(__dirname, 'src', 'skills', 'skills'));
   skillRegistry.init().then(() => {
-    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient);
+    // Phase 2: Inject late-initialized services into AIRuntime
+    aiRuntime.setServices({ keyboardRecorder, skillRegistry });
+    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient, aiRuntime);
+    // Register skill prompts into AI Runtime PromptRegistry
+    aiRuntimeDefs.registerSkillPrompts(skillRegistry);
     console.log('[Main] Skill system initialized');
   }).catch(err => {
     console.warn('[Main] Skill system init failed:', err.message);

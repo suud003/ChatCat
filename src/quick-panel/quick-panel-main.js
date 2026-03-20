@@ -2,22 +2,23 @@ const { BrowserWindow, globalShortcut, screen, clipboard, nativeImage, ipcMain }
 const path = require('path');
 const { TextProcessor } = require('./text-processor');
 const { ScreenshotOCR } = require('./screenshot-ocr');
+const { AITrigger, TRIGGER_TYPES } = require('../ai-runtime/trigger');
 
 class QuickPanelManager {
   /**
    * @param {BrowserWindow} mainWindow
    * @param {import('electron-store')} store
    * @param {import('../shared/ai-client-main').AIClientMain} aiClient
+   * @param {import('../ai-runtime/runtime').AIRuntime} aiRuntime
    */
-  constructor(mainWindow, store, aiClient) {
-    this._mainWindow = mainWindow;  // 主猫咪窗口引用
+  constructor(mainWindow, store, aiClient, aiRuntime) {
+    this._mainWindow = mainWindow;
     this._store = store;
     this._aiClient = aiClient;
-    this._panelWindow = null;
+    this._aiRuntime = aiRuntime;
     this._isVisible = false;
     this._textProcessor = new TextProcessor(store);
-    this._screenshotOCR = new ScreenshotOCR(store, aiClient);
-    this._lastSyncAt = 0;
+    this._screenshotOCR = new ScreenshotOCR(store, aiClient, aiRuntime);
   }
 
   init() {
@@ -214,36 +215,16 @@ class QuickPanelManager {
       return this._shortcutStatus || { toggle: false, screenshot: false };
     });
 
-    // 接收猫咪位置更新，同步 Quick Panel 位置
-    ipcMain.on('qp-update-pet-position', (_, pos) => {
-      this._lastPetScreenPos = pos; // { screenX, screenY, width, height }
-      this._repositionToNearPet();
-    });
-
-    // 文本处理请求
+    // 文本处理请求 (Phase 2: via AIRuntime)
     ipcMain.handle('qp-process-text', async (event, mode, text) => {
-      const promptObj = this._textProcessor.buildPrompt(mode, text);
-      
       try {
-        const result = await this._aiClient.stream({
-          messages: [
-            { role: 'system', content: promptObj.system },
-            { role: 'user', content: promptObj.user }
-          ],
-          temperature: 0.4,
-          maxTokens: 800,
-          onChunk: (chunk) => {
-            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
-            }
-          },
+        const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_TEXT, `quick.${mode}`, { mode, text });
+        const result = await this._aiRuntime.runStream(trigger, (chunk) => {
+          this._sendToRenderer('qp-stream-chunk', chunk);
         });
         
-        this._saveToHistory(mode, promptObj.user, result);
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-end', result);
-        }
+        this._saveToHistory(mode, text, result);
+        this._sendToRenderer('qp-stream-end', result);
         
         return result;
       } catch (err) {
@@ -255,30 +236,19 @@ class QuickPanelManager {
       }
     });
     
-    // 问答请求
+    // 问答请求 (Phase 2: via AIRuntime)
     ipcMain.handle('qp-ask', async (event, question, history) => {
-      const messages = [
-        { role: 'system', content: '你是 ChatCat 🐱，一只聪明的AI猫咪助手。简洁准确地回答用户的问题。' },
-        ...history
-      ];
-      
       try {
-        const result = await this._aiClient.stream({
-          messages,
-          temperature: 0.4,
-          maxTokens: 800,
-          onChunk: (chunk) => {
-            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
-            }
-          },
+        const trigger = AITrigger.create(TRIGGER_TYPES.QUICK_ASK, 'quick.ask', { question, history });
+        const result = await this._aiRuntime.runStream(trigger, (chunk) => {
+          this._sendToRenderer('qp-stream-chunk', chunk);
         });
         
-        this._saveToHistory('ask', messages[messages.length - 1].content, result);
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-end', result);
-        }
+        const lastMsg = Array.isArray(history) && history.length > 0
+          ? history[history.length - 1].content
+          : question;
+        this._saveToHistory('ask', lastMsg, result);
+        this._sendToRenderer('qp-stream-end', result);
         
         return result;
       } catch (err) {

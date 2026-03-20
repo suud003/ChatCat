@@ -93,5 +93,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   consentCheck: () => ipcRenderer.invoke('consent-check'),
   consentRequest: () => ipcRenderer.invoke('consent-request'),
   consentRevoke: () => ipcRenderer.invoke('consent-revoke'),
-  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data))
+  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data)),
+
+  // Phase 2: AI Runtime registry mirror
+  getAIRegistries: () => ipcRenderer.invoke('ai-runtime-get-registries'),
 });

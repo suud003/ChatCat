@@ -3,33 +3,29 @@
  *
  * Extracts key facts from conversations via API,
  * stores up to 30 memories, and provides them for prompt injection.
+ *
+ * V3: Phase 2 — extraction now delegates to AIRuntimeRenderer.
+ *     Prompt and model config sourced from PromptRegistry/ModelProfiles
+ *     via the runtime's IPC registry mirror.
+ *
+ * Scene: memory.extract (AI Runtime SceneRegistry)
+ * Model config: ModelProfiles 'memory-extract' (via AIRuntimeRenderer)
+ * Prompt: PromptRegistry 'memory-extract' (via AIRuntimeRenderer)
  */
+
+import { AIRuntimeRenderer } from '../ai-runtime/runtime-renderer.js';
 
 const MAX_MEMORIES = 30;
 const CATEGORIES = ['name', 'preference', 'habit', 'birthday', 'work', 'other'];
 
-const EXTRACT_SYSTEM_PROMPT = `You are a memory extraction assistant. Given a user message and assistant response from a chat, extract key personal facts about the user.
-
-Rules:
-- Only extract concrete, memorable facts (name, preferences, habits, birthday, work info, etc.)
-- Return a JSON array of objects: [{"fact": "...", "category": "..."}]
-- Categories: name, preference, habit, birthday, work, other
-- If no memorable facts, return an empty array: []
-- Keep facts short (under 50 chars each)
-- Max 3 facts per extraction
-- Do NOT extract generic conversational content
-- Respond with ONLY the JSON array, no other text`;
-
 export class MemoryManager {
-  constructor() {
+  /**
+   * @param {AIRuntimeRenderer} [aiRuntimeRenderer] - Phase 2 runtime
+   */
+  constructor(aiRuntimeRenderer) {
     this._memories = []; // { id, fact, category, timestamp }
     this._nextId = 1;
-    this._aiClient = null;  // AIClientRenderer instance
-  }
-
-  /** @param {import('../shared/ai-client-renderer').AIClientRenderer} aiClient */
-  setAIClient(aiClient) {
-    this._aiClient = aiClient;
+    this._runtime = aiRuntimeRenderer || null;
   }
 
   async init() {
@@ -46,17 +42,15 @@ export class MemoryManager {
    */
   async extractMemories(userMsg, assistantResp) {
     if (!userMsg || userMsg.length <= 10) return;
-    if (!this._aiClient || !this._aiClient.isConfigured()) return;
+    if (!this._runtime || !this._runtime.isReady()) return;
 
     try {
-      const content = await this._aiClient.complete({
-        messages: [
-          { role: 'system', content: EXTRACT_SYSTEM_PROMPT },
-          { role: 'user', content: `User message: "${userMsg}"\nAssistant response: "${assistantResp}"` },
-        ],
-        temperature: 0.3,
-        maxTokens: 200,
+      const trigger = AIRuntimeRenderer.createTrigger('memory', 'memory.extract', {
+        userMessage: userMsg,
+        assistantResponse: assistantResp,
       });
+
+      const content = await this._runtime.run(trigger);
 
       if (!content) return;
 

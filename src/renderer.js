@@ -1,6 +1,7 @@
 /**
  * Renderer entry point - initializes all modules
  * V1.2: Skill System + Proactive Interaction Engine + User Profiler
+ * V3: Phase 2 AI Runtime integration
  */
 
 import { SpriteCharacter, SKINS } from './pet/pixel-character.js';
@@ -28,6 +29,9 @@ import { UserProfiler } from './proactive/user-profiler.js';
 
 // V1.5 imports — Skill Agent System
 import { SkillRouter } from './skills/skill-router.js';
+
+// Phase 2: AI Runtime Renderer
+import { AIRuntimeRenderer } from './ai-runtime/runtime-renderer.js';
 
 // V1.3 imports — Pet Base & Utils
 import { PetBaseSystem } from './pet/pet-base-system.js';
@@ -261,9 +265,13 @@ async function init() {
   const aiService = new AIService();
   await aiService.loadConfig();
 
-  // V1.1: Memory Manager
-  const memoryManager = new MemoryManager();
-  memoryManager.setAIClient(aiService.client);
+  // Phase 2: AI Runtime (Renderer-side, uses IPC registry mirror)
+  const aiRuntimeRenderer = new AIRuntimeRenderer(aiService.client);
+  await aiRuntimeRenderer.init();
+  aiService.setRuntime(aiRuntimeRenderer);
+
+  // V1.1: Memory Manager (Phase 2: now uses AIRuntimeRenderer)
+  const memoryManager = new MemoryManager(aiRuntimeRenderer);
   await memoryManager.init();
 
   // V1.1: Load personality and set context
