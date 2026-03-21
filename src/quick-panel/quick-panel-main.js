@@ -206,6 +206,15 @@ class QuickPanelManager {
       return { visible: this.isVisible() };
     });
 
+    ipcMain.handle('qp-set-visible', async (_, visible) => {
+      if (visible) {
+        await this.show();
+      } else {
+        this.hide();
+      }
+      return { visible: this.isVisible() };
+    });
+
     ipcMain.on('qp-report-size', (_, size) => {
       const h = Number(size?.height);
       if (!Number.isFinite(h) || h <= 0) return;
