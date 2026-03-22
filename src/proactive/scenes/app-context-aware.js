@@ -33,7 +33,7 @@ function categorizeApp(appName) {
 }
 
 // Minimum away time (minutes) to trigger a notification for returning to a category
-const MIN_AWAY_MINUTES = 0.5; // 30 seconds for testing
+const MIN_AWAY_MINUTES = 20;
 
 // ─── Scene: Coding App Switch ───────────────────────────────────────────
 
