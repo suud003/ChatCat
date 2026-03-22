@@ -37,6 +37,9 @@ import { catSelfReportFocusedScene, catSelfReportReturnScene, catSelfReportLateN
 import { relationshipDeepenScene } from './scenes/relationship-deepen.js';
 import { rhythmScenes } from './scenes/rhythm-scenes.js';
 
+// A1: App context awareness scenes
+import { appContextScenes } from './scenes/app-context-aware.js';
+
 const ALL_SCENES = [
   dailyReportScene,
   todoDetectScene,
@@ -76,7 +79,9 @@ const ALL_SCENES = [
   catSelfReportLateNightScene,
   catSelfReportMorningScene,
   relationshipDeepenScene,
-  ...rhythmScenes
+  ...rhythmScenes,
+  // A1: App context awareness scenes
+  ...appContextScenes
 ];
 
 export class ProactiveEngine {
@@ -194,7 +199,9 @@ export class ProactiveEngine {
     const signals = [
       'typing-pause', 'typing-speed-change', 'long-work', 'time-trigger', 'idle',
       // V1.5: New signals
-      'typing-rhythm-change', 'clipboard-content', 'work-phase', 'short-idle', 'periodic'
+      'typing-rhythm-change', 'clipboard-content', 'work-phase', 'short-idle', 'periodic',
+      // A1: App context
+      'app-switch'
     ];
 
     for (const signal of signals) {
@@ -239,15 +246,26 @@ export class ProactiveEngine {
 
       // Check condition
       const ctx = this._buildContext(data);
-      if (scene.condition && !(await scene.condition(ctx))) continue;
+      try {
+        if (scene.condition && !(await scene.condition(ctx))) continue;
+      } catch (err) {
+        console.warn(`[ProactiveEngine] Scene ${scene.name} condition error:`, err.message);
+        continue;
+      }
 
       matchingScenes.push(scene);
     }
 
-    // Process first matching scene (highest priority by level)
+    if (signal === 'app-switch' && matchingScenes.length > 0) {
+      console.log(`[ProactiveEngine] app-switch matched: ${matchingScenes.map(s => s.name).join(', ')}`);
+    }
+
+    // Process first matching scene (highest priority by level, then higher ID = more specific)
     const sorted = matchingScenes.sort((a, b) => {
       const levels = { L3: 3, L2: 2, L1: 1, L0: 0 };
-      return (levels[b.level] || 0) - (levels[a.level] || 0);
+      const levelDiff = (levels[b.level] || 0) - (levels[a.level] || 0);
+      if (levelDiff !== 0) return levelDiff;
+      return (b.id || 0) - (a.id || 0); // higher ID = more specific scene wins
     });
 
     if (sorted.length > 0) {
@@ -257,6 +275,8 @@ export class ProactiveEngine {
 
   _triggerScene(scene, signalData) {
     const ctx = this._buildContext(signalData);
+
+    console.log(`[ProactiveEngine] Triggering scene: ${scene.name} (level=${scene.level})`);
 
     // Phase 3: AI-generated messages for scenes with aiGenerate flag
     if (scene.aiGenerate && this._triggerBus) {
@@ -277,9 +297,17 @@ export class ProactiveEngine {
     };
 
     // Try to push through timing judge
-    const result = this.timingJudge.enqueue(notification);
-    if (result.immediate) {
+    // For app-switch scenes, bypass timing judge interval since they have their own cooldown
+    const bypassTimingJudge = scene.signal === 'app-switch';
+    if (bypassTimingJudge) {
+      // Directly push, bypassing min interval check (scene cooldown handles rate limiting)
       this.notificationMgr.push(notification);
+      this.timingJudge._lastPushTime = Date.now();
+    } else {
+      const result = this.timingJudge.enqueue(notification);
+      if (result.immediate) {
+        this.notificationMgr.push(notification);
+      }
     }
 
     // Record cooldown
@@ -327,12 +355,23 @@ export class ProactiveEngine {
         },
       };
 
-      const result = await this._triggerBus.submitAndWait(trigger, { priority: 'LOW' });
+      // Immediately show streaming bubble
+      const streamCtrl = this.notificationMgr.showStreamBubble();
 
-      if (result.status === 'completed' && result.result) {
-        const message = result.result.trim();
-        if (!message) return;
+      // Stream chunks into the bubble
+      let fullText = '';
+      const stream = this._triggerBus.submitAndStream(trigger, { priority: 'LOW' });
+      for await (const chunk of stream) {
+        fullText += chunk;
+        streamCtrl.update(chunk);
+      }
 
+      // Finish the bubble
+      streamCtrl.finish();
+
+      // Save to feed/history only (NOT chat history — these are ambient notifications)
+      const message = fullText.trim();
+      if (message) {
         const notification = {
           sceneId: scene.id,
           sceneName: scene.name,
@@ -341,18 +380,13 @@ export class ProactiveEngine {
           actions: scene.actions || [],
           timestamp: Date.now()
         };
-
-        const enqueueResult = this.timingJudge.enqueue(notification);
-        if (enqueueResult.immediate) {
-          this.notificationMgr.push(notification);
-        }
-      } else {
-        console.warn(`[ProactiveEngine] AI scene ${scene.name} failed: ${result.error || result.status}`);
-        // Fallback to template message
-        this._triggerSceneFallback(scene, ctx);
+        await this.notificationMgr._addToFeed(notification);
+        await this.notificationMgr._addToHistory(notification);
+        this.timingJudge._lastPushTime = Date.now();
       }
     } catch (err) {
       console.warn(`[ProactiveEngine] AI scene ${scene.name} error:`, err.message);
+      this.notificationMgr._streamLock = false; // Unlock on error
       // Fallback to template message
       this._triggerSceneFallback(scene, ctx);
     }
@@ -378,9 +412,16 @@ export class ProactiveEngine {
       timestamp: Date.now()
     };
 
-    const result = this.timingJudge.enqueue(notification);
-    if (result.immediate) {
+    // For app-switch scenes, bypass timing judge
+    const bypassTimingJudge = scene.signal === 'app-switch';
+    if (bypassTimingJudge) {
       this.notificationMgr.push(notification);
+      this.timingJudge._lastPushTime = Date.now();
+    } else {
+      const result = this.timingJudge.enqueue(notification);
+      if (result.immediate) {
+        this.notificationMgr.push(notification);
+      }
     }
   }
 

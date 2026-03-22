@@ -363,8 +363,135 @@ async function init() {
   proactiveEngine.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
 
+  // ========== A4: 离线冒险检测 ==========
+  try {
+    const { OfflineAdventure } = await import('./pet/offline-adventure.js');
+    const offlineAdventure = new OfflineAdventure(affection);
+    const offlineReward = await offlineAdventure.check();
+
+    if (offlineReward) {
+      // Delay 3 seconds for UI to fully load
+      setTimeout(async () => {
+        let msg;
+        try {
+          // Try AI-generated narrative
+          const result = await triggerBusRenderer.submitAndWait({
+            type: 'proactive', sceneId: 'offline.adventure',
+            payload: { ...offlineReward }
+          }, { priority: 'HIGH', timeout: 8000 });
+          msg = result?.text || null;
+        } catch (e) {
+          console.warn('[OfflineAdventure] AI narrative failed, using template:', e.message);
+        }
+
+        // Fallback template
+        if (!msg) {
+          msg = `\u{1F5FA}\uFE0F 冒险归来！我在「${offlineReward.location}」探索了 ${offlineReward.offlineHours} 小时～\n` +
+            offlineReward.events.map(e => `• ${e}`).join('\n') +
+            `\n\n\u{1F4B0} 获得 ${offlineReward.coins.toLocaleString()} 猫猫币！`;
+        }
+        showCatBubble(msg, 12000);
+        chatUI.addMessage(msg, 'assistant');
+      }, 3000);
+    }
+  } catch (err) {
+    console.warn('[OfflineAdventure] Check failed:', err.message);
+  }
+
   // ========== V2 Pillar A: 行为节奏智能 ==========
-  
+
+  // ─── A1: 操作感知 — 主动触发应用切换信号 ───
+  const { categorizeApp } = await import('./proactive/scenes/app-context-aware.js');
+  let _prevAppName = null;
+  let _prevAppCategory = null;
+  let _appSwitchTimestamps = []; // for frequent-switch detection
+
+  // Per-category tracking: when the user was last actively in each category
+  // Key = category string, Value = { lastSeenTime, awayApps[], visited }
+  // visited=false means first time entering this category → always trigger
+  const _categoryTracker = {};
+  for (const cat of ['coding', 'browser', 'communication', 'design', 'terminal', 'other']) {
+    _categoryTracker[cat] = { lastSeenTime: 0, awayApps: [], visited: false };
+  }
+
+  // Poll active window every 3 seconds, emit app-switch signal when changed
+  setInterval(async () => {
+    try {
+      const winData = await window.electronAPI.getActiveWindow();
+      if (!winData || !winData.current) return;
+
+      const currentApp = winData.current.app;
+      if (!currentApp || currentApp === _prevAppName) return;
+
+      const currentCategory = categorizeApp(currentApp);
+      const prevCategory = _prevAppCategory;
+      const prevApp = _prevAppName;
+      const now = Date.now();
+
+      // --- Per-category away-time tracking ---
+      // When leaving a category, stamp it with current time
+      if (prevCategory && prevCategory !== currentCategory) {
+        if (!_categoryTracker[prevCategory]) {
+          _categoryTracker[prevCategory] = { lastSeenTime: now, awayApps: [] };
+        } else {
+          _categoryTracker[prevCategory].lastSeenTime = now;
+          _categoryTracker[prevCategory].awayApps = [];
+        }
+      }
+
+      // Track which apps user visited while away from each category
+      for (const cat of Object.keys(_categoryTracker)) {
+        if (cat !== currentCategory && _categoryTracker[cat].lastSeenTime > 0) {
+          const apps = _categoryTracker[cat].awayApps;
+          if (!apps.includes(currentApp)) apps.push(currentApp);
+        }
+      }
+
+      // Calculate how many minutes the user was away from the CURRENT category
+      let categoryAwayMinutes = 0;
+      let isFirstVisit = false;
+      let awayApps = [];
+      const tracker = _categoryTracker[currentCategory];
+      if (tracker) {
+        if (!tracker.visited) {
+          // First time entering this category this session → always trigger
+          isFirstVisit = true;
+          tracker.visited = true;
+        } else if (tracker.lastSeenTime > 0) {
+          categoryAwayMinutes = Math.floor((now - tracker.lastSeenTime) / 60000);
+          awayApps = [...(tracker.awayApps || [])];
+        }
+        // Reset: user is now back in this category
+        tracker.lastSeenTime = 0;
+        tracker.awayApps = [];
+      }
+
+      // Track switch frequency (last 5 minutes)
+      _appSwitchTimestamps.push(now);
+      const fiveMinAgo = now - 5 * 60 * 1000;
+      _appSwitchTimestamps = _appSwitchTimestamps.filter(t => t > fiveMinAgo);
+
+      _prevAppName = currentApp;
+      _prevAppCategory = currentCategory;
+
+      // Emit app-switch signal to ProactiveEngine
+      console.log(`[A1] App switch: ${prevApp}(${prevCategory}) → ${currentApp}(${currentCategory}), away=${categoryAwayMinutes}min, first=${isFirstVisit}, switches=${_appSwitchTimestamps.length}`);
+      proactiveEngine.processExternalSignal('app-switch', {
+        appName: currentApp,
+        appCategory: currentCategory,
+        prevApp,
+        prevCategory,
+        switchCount: _appSwitchTimestamps.length,
+        categoryAwayMinutes,
+        isFirstVisit,
+        awayApps,
+        title: winData.current.title,
+      });
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  }, 3000);
+
   // A1: 鼠标信号化
   const { MouseSignalCollector } = await import('./proactive/mouse-signal-collector.js');
   const mouseSignalCollector = new MouseSignalCollector();
@@ -1495,6 +1622,104 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
       }
     });
     observer.observe(settingsContainer, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // ─── C4: Skill/MCP Import UI handlers ────────────────────────────────
+  const importSkillBtn = document.getElementById('import-skill-btn');
+  const importMcpBtn = document.getElementById('import-mcp-btn');
+  const importedSkillsList = document.getElementById('imported-skills-list');
+
+  async function refreshImportedList() {
+    if (!importedSkillsList) return;
+    const skills = await window.electronAPI.getImportedSkills();
+    const mcps = await window.electronAPI.getImportedMcp();
+
+    if (skills.length === 0 && mcps.length === 0) {
+      importedSkillsList.innerHTML = '<div style="color:#888;padding:4px 0;">暂无导入的技能或 MCP</div>';
+      return;
+    }
+
+    let html = '';
+    for (const s of skills) {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+        <span title="${s.description || ''}">🔧 ${s.name}</span>
+        <button class="remove-imported-skill" data-name="${s.id}" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:11px;">删除</button>
+      </div>`;
+    }
+    for (const m of mcps) {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+        <span>🔌 MCP: ${m.name}</span>
+        <button class="remove-imported-mcp" data-name="${m.name}" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:11px;">删除</button>
+      </div>`;
+    }
+    importedSkillsList.innerHTML = html;
+
+    // Wire delete buttons
+    importedSkillsList.querySelectorAll('.remove-imported-skill').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await window.electronAPI.removeImportedSkill(btn.dataset.name);
+        refreshImportedList();
+      });
+    });
+    importedSkillsList.querySelectorAll('.remove-imported-mcp').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await window.electronAPI.removeMcp(btn.dataset.name);
+        refreshImportedList();
+      });
+    });
+  }
+
+  if (importSkillBtn) {
+    importSkillBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.dialogOpenFile({
+        title: '导入技能文件',
+        filters: [
+          { name: '技能文件', extensions: ['md', 'zip'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      if (result.filePath) {
+        const importResult = await window.electronAPI.importSkillFile(result.filePath);
+        if (importResult.success) {
+          refreshImportedList();
+        } else {
+          alert('导入失败: ' + (importResult.reason || '未知错误'));
+        }
+      }
+    });
+  }
+
+  if (importMcpBtn) {
+    importMcpBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.dialogOpenFile({
+        title: '导入 MCP 配置',
+        filters: [
+          { name: 'JSON 文件', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      if (result.filePath) {
+        const importResult = await window.electronAPI.importMcpConfig(result.filePath);
+        if (importResult.success) {
+          refreshImportedList();
+        } else {
+          alert('导入失败: ' + (importResult.reason || '未知错误'));
+        }
+      }
+    });
+  }
+
+  // Refresh list when settings panel opens
+  if (settingsContainer) {
+    const importObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === 'class' && !settingsContainer.classList.contains('hidden')) {
+          refreshImportedList();
+          break;
+        }
+      }
+    });
+    importObserver.observe(settingsContainer, { attributes: true, attributeFilter: ['class'] });
   }
 }
 

@@ -141,4 +141,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('trigger-started', listener);
     return () => ipcRenderer.removeListener('trigger-started', listener);
   },
+
+  // A1: Active window tracking
+  getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
+
+  // C4: Skill import
+  importSkillFile: (filePath) => ipcRenderer.invoke('skill-import-file', filePath),
+  importSkillContent: (name, content) => ipcRenderer.invoke('skill-import-content', name, content),
+  getImportedSkills: () => ipcRenderer.invoke('skill-get-imported'),
+  removeImportedSkill: (name) => ipcRenderer.invoke('skill-remove-imported', name),
+
+  // C4: MCP import
+  importMcpConfig: (configPath) => ipcRenderer.invoke('mcp-import-config', configPath),
+  importMcpJson: (jsonContent) => ipcRenderer.invoke('mcp-import-json', jsonContent),
+  getImportedMcp: () => ipcRenderer.invoke('mcp-get-imported'),
+  removeMcp: (name) => ipcRenderer.invoke('mcp-remove', name),
+
+  // C4: File dialog helper
+  dialogOpenFile: (options) => ipcRenderer.invoke('dialog-open-file', options),
 });

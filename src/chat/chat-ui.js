@@ -316,10 +316,32 @@ export class ChatUI {
     // Keep inline chat visible when history is open
     if (!isHidden) {
       this.inlineChatEl?.classList.add('force-visible');
+      this._ensureClearButton();
       this.scrollToBottom();
     } else {
       this.inlineChatEl?.classList.remove('force-visible');
       this.inputEl?.blur();
     }
+  }
+
+  /**
+   * Add a "clear history" button at the top of chat history panel.
+   */
+  _ensureClearButton() {
+    if (!this.responseEl) return;
+    // Don't add duplicate
+    if (this.responseEl.querySelector('.chat-clear-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'chat-clear-btn';
+    btn.textContent = '🗑️ 清除记录';
+    btn.addEventListener('click', () => {
+      this.aiService.clearHistory();
+      // Remove all messages but keep the clear button
+      const messages = this.responseEl.querySelectorAll('.chat-message');
+      messages.forEach(el => el.remove());
+      this._showBubbleText('聊天记录已清除！(=^.^=)');
+    });
+    this.responseEl.prepend(btn);
   }
 }

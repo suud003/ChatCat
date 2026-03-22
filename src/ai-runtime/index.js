@@ -40,6 +40,7 @@ const { todoProvider } = require('./context/providers/todo-provider');
 const { rawTypingProvider } = require('./context/providers/raw-typing-provider');
 const { convertedTextProvider } = require('./context/providers/converted-text-provider');
 const { pomodoroProvider } = require('./context/providers/pomodoro-provider');
+const { appContextProvider } = require('./context/providers/app-context-provider');
 
 ContextHub.registerProvider(personalityProvider);
 ContextHub.registerProvider(historyProvider);
@@ -49,6 +50,7 @@ ContextHub.registerProvider(todoProvider);
 ContextHub.registerProvider(rawTypingProvider);
 ContextHub.registerProvider(convertedTextProvider);
 ContextHub.registerProvider(pomodoroProvider);
+ContextHub.registerProvider(appContextProvider);
 
 // ─── Convenience: log initialization status ──────────────────────────────
 

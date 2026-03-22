@@ -21,6 +21,7 @@ export class NotificationMgr {
     this._onBubbleReply = null;  // callback(userText, catMessage) — handle bubble inline reply
     this._onOpenTodoPanel = null; // callback() — open tools panel to todo tab
     this._triggerBus = null;     // Phase 3: TriggerBusRenderer
+    this._streamLock = false;    // Prevent other notifications from overwriting stream bubble
   }
 
   async init(showBubbleFn) {
@@ -34,9 +35,10 @@ export class NotificationMgr {
    * @returns {boolean} whether the notification was delivered
    */
   async push(config) {
-    // Check daily limit
+    // Check daily limit (app-switch scenes exempt — they have their own cooldown)
     await this._loadDailyCount();
-    if (this._dailyCount >= this._maxDaily) {
+    const isAppSwitch = config.sceneId >= 30 && config.sceneId <= 304 && String(config.sceneName || '').startsWith('app-switch');
+    if (!isAppSwitch && this._dailyCount >= this._maxDaily) {
       return false;
     }
 
@@ -68,12 +70,12 @@ export class NotificationMgr {
 
       case 'L2':
         this._showBubble(config.message);
-        this._saveToChatHistory(config.message, 'assistant');
+        if (!isAppSwitch) this._saveToChatHistory(config.message, 'assistant');
         break;
 
       case 'L3':
         this._showActionBubble(config);
-        this._saveToChatHistory(config.message, 'assistant');
+        if (!isAppSwitch) this._saveToChatHistory(config.message, 'assistant');
         break;
 
       default:
@@ -93,17 +95,161 @@ export class NotificationMgr {
     if (this._onDotChange) this._onDotChange(visible);
   }
 
-  _showBubble(message, duration = 5000) {
-    if (this._showBubbleFn) {
-      this._showBubbleFn(message, duration);
-    }
-    // Auto-shrink: after 5s, show dot
+  _showBubble(message, duration = 8000) {
+    this._streamLock = false; // Cancel any streaming bubble
+    this._pushToStack(message, duration);
+    // Auto-shrink: show dot after duration
     setTimeout(() => {
       this._showDot(true);
     }, duration);
   }
 
+  /**
+   * Push a text bubble into the bubble stack.
+   * Max 3 items; oldest fades out when exceeded.
+   */
+  _pushToStack(message, duration = 8000) {
+    const stack = document.getElementById('bubble-stack');
+    if (!stack) {
+      // Fallback to old showBubbleFn
+      if (this._showBubbleFn) this._showBubbleFn(message, duration);
+      return;
+    }
+
+    const item = document.createElement('div');
+    item.className = 'bubble-stack-item';
+    item.textContent = message;
+    stack.appendChild(item);
+
+    // Enforce max 3 items
+    this._trimStack(stack);
+
+    // Auto-remove after duration
+    item._removeTimer = setTimeout(() => {
+      this._removeStackItem(item);
+    }, duration);
+  }
+
+  /**
+   * Remove oldest items if stack exceeds 3.
+   */
+  _trimStack(stack) {
+    const items = stack.querySelectorAll('.bubble-stack-item:not(.fading)');
+    while (items.length > 3) {
+      this._removeStackItem(items[0]);
+      // Re-query since we mutated
+      break;
+    }
+    // Re-check
+    const remaining = stack.querySelectorAll('.bubble-stack-item:not(.fading)');
+    if (remaining.length > 3) {
+      this._removeStackItem(remaining[0]);
+    }
+  }
+
+  /**
+   * Fade out and remove a stack item.
+   */
+  _removeStackItem(item) {
+    if (!item || item.classList.contains('fading')) return;
+    if (item._removeTimer) clearTimeout(item._removeTimer);
+    item.classList.add('fading');
+    setTimeout(() => {
+      item.remove();
+    }, 500);
+  }
+
+  /**
+   * Show a streaming bubble in the stack.
+   * Includes inline reply input for user interaction.
+   * @returns {{ update(chunk), finish() }} controller
+   */
+  showStreamBubble() {
+    const stack = document.getElementById('bubble-stack');
+    if (!stack) return { update() {}, finish() {} };
+
+    // Lock — prevent other notifications from overwriting during stream
+    this._streamLock = true;
+
+    const item = document.createElement('div');
+    item.className = 'bubble-stack-item bubble-interactive';
+
+    // Message area
+    const msgEl = document.createElement('div');
+    msgEl.className = 'bubble-message bubble-stream-text';
+    msgEl.textContent = '...';
+    item.appendChild(msgEl);
+
+    stack.appendChild(item);
+    this._trimStack(stack);
+
+    let fullText = '';
+    let finished = false;
+
+    // Add reply input after streaming finishes
+    const addReplyInput = () => {
+      const inputRow = document.createElement('div');
+      inputRow.className = 'bubble-input-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'bubble-reply-input';
+      input.placeholder = '回复猫猫...';
+      const sendBtn = document.createElement('button');
+      sendBtn.className = 'bubble-reply-send';
+      sendBtn.textContent = '发送';
+      const doSend = () => {
+        const text = input.value.trim();
+        if (!text) return;
+        this._saveToChatHistory(text, 'user');
+        if (this._onBubbleReply) {
+          this._onBubbleReply(text, fullText);
+        }
+        this._removeStackItem(item);
+      };
+      sendBtn.addEventListener('click', doSend);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doSend();
+      });
+      inputRow.appendChild(input);
+      inputRow.appendChild(sendBtn);
+      item.appendChild(inputRow);
+
+      // Auto-remove after 15s
+      item._removeTimer = setTimeout(() => {
+        this._removeStackItem(item);
+      }, 15000);
+    };
+
+    return {
+      update: (chunk) => {
+        if (!this._streamLock) return; // Stream was cancelled
+        fullText += chunk;
+        msgEl.textContent = fullText;
+      },
+      finish: () => {
+        if (finished) return;
+        finished = true;
+        if (!this._streamLock) {
+          item.remove();
+          return;
+        }
+        this._streamLock = false;
+        if (!fullText.trim()) {
+          item.remove();
+          return;
+        }
+        msgEl.textContent = fullText;
+        addReplyInput();
+        // Show dot after bubble hides
+        setTimeout(() => {
+          this._showDot(true);
+        }, 17000);
+      },
+    };
+  }
+
   _showActionBubble(config) {
+    this._streamLock = false; // New action bubble cancels any streaming bubble
     const bubble = document.getElementById('cat-bubble');
     if (!bubble) return;
 

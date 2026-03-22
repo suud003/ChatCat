@@ -272,6 +272,17 @@ PromptRegistry.register({
   userTemplate: '请识别并描述这张图片的内容。如果包含文字，请提取文字；如果包含代码，请保留代码格式。',
 });
 
+// Offline Adventure prompt — generates a cute adventure diary
+PromptRegistry.register({
+  templateId: 'offline-adventure-prompt',
+  version: '1.0.0',
+  source: 'inline',
+  system: `你是一只可爱的桌宠猫咪，主人离开后你偷偷出去冒险了。
+请用第一人称、可爱的语气写一段 50-80 字的冒险日记，描述你的经历。
+要求：活泼可爱，使用一些颜文字，末尾提到获得的猫猫币。`,
+  userTemplate: `主人离开了 {hours} 小时。你去了「{location}」冒险，发生了这些事：{events}。你获得了 {coins} 猫猫币。`,
+});
+
 // ─── Chat System Prompt — v2.0.0 ─────────────────────────────────────────
 //
 // Previously, the chat system prompt was built entirely in Renderer
@@ -317,6 +328,7 @@ function _buildChatSystemPromptFromContext(ctx) {
   const mData = ctx.memory || {};
   const bData = ctx.behavior || {};
   const tData = ctx.todo || {};
+  const aData = ctx.appContext || {};
 
   // ── Base prompt from personality ──
   const p = CHAT_PERSONALITIES[pData.personality] || CHAT_PERSONALITIES.lively;
@@ -386,6 +398,23 @@ function _buildChatSystemPromptFromContext(ctx) {
     }
 
     prompt += '你现在可以在回答中引用这些具体数据来回应主人的提问。\n';
+  }
+
+  // ── Active app context (A1: 操作感知) ──
+  if (aData.available && aData.currentApp) {
+    prompt += '\n--- 当前操作上下文 ---\n';
+    prompt += `主人当前正在使用: ${aData.currentApp}`;
+    if (aData.currentTitle) {
+      prompt += ` (${aData.currentTitle})`;
+    }
+    prompt += '\n';
+    if (aData.recentApps && aData.recentApps.length > 1) {
+      prompt += `最近使用的应用: ${aData.recentApps.join(', ')}\n`;
+    }
+    if (aData.topApps && aData.topApps.length > 0) {
+      prompt += `今日常用应用: ${aData.topApps.join(', ')}\n`;
+    }
+    prompt += '你可以根据主人正在使用的应用来提供更贴切的回复。\n';
   }
 
   // ── Pending todos ──

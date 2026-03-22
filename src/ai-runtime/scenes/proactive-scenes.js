@@ -22,9 +22,9 @@ SceneRegistry.register({
     mode: 'chat',
   },
 
-  contextProviders: ['personality', 'behavior'],
-  modelProfile: 'chat-complete',
-  outputMode: 'text',
+  contextProviders: ['personality', 'behavior', 'appContext'],
+  modelProfile: 'chat-stream',
+  outputMode: 'stream-text',
   memoryPolicy: 'read',
 
   guards: {
@@ -34,6 +34,29 @@ SceneRegistry.register({
   },
 
   postProcessors: ['sendNotification'],
+});
+
+// ─── offline.adventure ──────────────────────────────────────────────────
+
+SceneRegistry.register({
+  id: 'offline.adventure',
+  category: 'proactive',
+  description: '离线冒险报告 — 猫咪离线期间的探索故事',
+
+  prompt: {
+    templateId: 'offline-adventure-prompt',
+    mode: 'instruction',
+  },
+
+  contextProviders: ['personality'],
+  modelProfile: 'chat-complete',
+  outputMode: 'text',
+  memoryPolicy: 'none',
+
+  guards: {
+    quietHoursAware: false,
+    maxPerDay: 1,
+  },
 });
 
 // ─── system.agent-task ───────────────────────────────────────────────────

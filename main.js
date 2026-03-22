@@ -12,6 +12,8 @@ const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 
 const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
 const { AIClientMain } = require('./src/shared/ai-client-main');
+const { SkillImporter } = require('./src/skills/skill-importer');
+const { McpConfigImporter } = require('./src/skills/mcp-config-importer');
 
 // AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer + Phase 3: trigger bus)
 const aiRuntimeDefs = require('./src/ai-runtime');
@@ -96,7 +98,14 @@ const store = new Store({
     gachaSssrPity: 0,
     gachaTotalPulls: 0,
     gachaHistory: [],
-    gachaEquipped: []
+    gachaEquipped: [],
+    // A1: Active window tracking
+    activeWindowSnapshot: null,
+    // A4: Offline adventure
+    lastActiveTime: 0,
+    offlineAdventureDate: '',
+    // C4: MCP servers
+    mcpServers: {},
   }
 });
 
@@ -111,6 +120,8 @@ let embeddedServer = null;
 let skillRegistry = null;
 let skillEngine = null;
 let quickPanelManager = null;
+let skillImporter = null;
+let mcpImporter = null;
 
 function createWindow() {
   // Use the primary display for initial window placement.
@@ -817,6 +828,221 @@ function _registerScheduledSkills(scheduledRegistry, skillRegistry, skillEngine,
   console.log(`[Main] Registered ${3 + scheduled.length} scheduled skills in ScheduledTriggerRegistry`);
 }
 
+// ─── A1: Active Window Tracker ─────────────────────────────────────────
+const activeWindowTracker = {
+  _current: null,
+  _history: [],     // Recent 20 entries: { title, app, timestamp }
+  _appUsage: {},    // { appName: totalSeconds }
+
+  async poll() {
+    try {
+      const info = await this._getPlatformWindow();
+      if (info && info.app) {
+        if (info.app !== this._current?.app || info.title !== this._current?.title) {
+          console.log(`[ActiveWindow] Switch: ${info.app} — ${info.title}`);
+          this._current = { ...info, timestamp: Date.now() };
+          this._history.unshift(this._current);
+          if (this._history.length > 20) this._history.pop();
+        }
+        // Accumulate app usage time
+        this._appUsage[info.app] = (this._appUsage[info.app] || 0) + 10;
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  },
+
+  async _getPlatformWindow() {
+    if (process.platform === 'win32') {
+      return this._getWindowsWindow();
+    }
+    if (process.platform === 'darwin') {
+      const { exec } = require('child_process');
+      return new Promise(resolve => {
+        exec(
+          `osascript -e 'tell application "System Events" to get {name, title of window 1} of first application process whose frontmost is true'`,
+          { timeout: 3000 },
+          (err, stdout) => {
+            if (err) return resolve(null);
+            const parts = stdout.trim().split(', ');
+            resolve({ app: parts[0] || 'unknown', title: parts[1] || '' });
+          }
+        );
+      });
+    }
+    return null; // Linux: future extension
+  },
+
+  // Windows: Use a compiled .NET script via PowerShell, cached as a temp .exe
+  // Falls back to simple Get-Process if compilation fails
+  _compiledExePath: null,
+  _compileAttempted: false,
+
+  async _getWindowsWindow() {
+    const { execFile, exec } = require('child_process');
+    const path = require('path');
+    const fs = require('fs');
+
+    // Strategy 1: Use compiled helper (fast, ~50ms)
+    // Pass --exclude-pid to skip ChatCat's own alwaysOnTop transparent window
+    if (this._compiledExePath && fs.existsSync(this._compiledExePath)) {
+      const myPid = String(process.pid);
+      return new Promise(resolve => {
+        execFile(this._compiledExePath, ['--exclude-pid', myPid], { timeout: 2000, windowsHide: true }, (err, stdout) => {
+          if (err) return resolve(null);
+          try {
+            const data = JSON.parse(stdout.trim());
+            resolve({ app: data.N || '', title: data.T || '' });
+          } catch { resolve(null); }
+        });
+      });
+    }
+
+    // Strategy 2: Compile helper once (first run only)
+    if (!this._compileAttempted) {
+      this._compileAttempted = true;
+      try {
+        await this._compileHelper();
+        if (this._compiledExePath) {
+          return this._getWindowsWindow(); // retry with compiled exe
+        }
+      } catch {}
+    }
+
+    // Strategy 3: Fallback — simple PowerShell (slower, ~500ms, but always works)
+    return new Promise(resolve => {
+      exec(
+        'powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Sort-Object -Property @{Expression={if($_.MainWindowHandle -eq [System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle){0}else{1}}} | Select-Object -First 1 -Property ProcessName,MainWindowTitle | ConvertTo-Json -Compress"',
+        { timeout: 5000, windowsHide: true },
+        (err, stdout) => {
+          if (err) return resolve(null);
+          try {
+            const data = JSON.parse(stdout.trim());
+            resolve({ app: data.ProcessName || '', title: data.MainWindowTitle || '' });
+          } catch { resolve(null); }
+        }
+      );
+    });
+  },
+
+  async _compileHelper() {
+    const path = require('path');
+    const fs = require('fs');
+    const { exec } = require('child_process');
+    const os = require('os');
+
+    const exePath = path.join(os.tmpdir(), 'chatcat-fgwindow.exe');
+    const csPath = path.join(__dirname, 'src', 'helpers', 'fgwindow.cs');
+
+    if (!fs.existsSync(csPath)) {
+      console.warn('[ActiveWindow] C# source not found:', csPath);
+      return;
+    }
+
+    // Compile with csc.exe (available on all Windows with .NET Framework)
+    return new Promise((resolve, reject) => {
+      // Find csc.exe in .NET Framework directory
+      const cscPaths = [
+        'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe',
+        'C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\csc.exe',
+      ];
+      let cscPath = null;
+      for (const p of cscPaths) {
+        if (fs.existsSync(p)) { cscPath = p; break; }
+      }
+      if (!cscPath) return reject(new Error('csc.exe not found'));
+
+      exec(
+        `"${cscPath}" /nologo /out:"${exePath}" "${csPath}"`,
+        { timeout: 10000, windowsHide: true },
+        (err, stdout, stderr) => {
+          if (err) {
+            console.warn('[ActiveWindow] C# compile failed:', stderr?.trim());
+            return reject(err);
+          }
+          if (fs.existsSync(exePath)) {
+            this._compiledExePath = exePath;
+            console.log('[ActiveWindow] Compiled helper:', exePath);
+            resolve();
+          } else {
+            reject(new Error('exe not created'));
+          }
+        }
+      );
+    });
+  },
+
+  _destroyPersistentPS() {
+    // No-op, kept for API compatibility
+  },
+
+  getCurrent() { return this._current; },
+  getHistory() { return this._history; },
+  getUsage() { return this._appUsage; },
+};
+
+// IPC: get active window data
+ipcMain.handle('get-active-window', () => ({
+  current: activeWindowTracker.getCurrent(),
+  recent: activeWindowTracker.getHistory(),
+  appUsage: activeWindowTracker.getUsage(),
+}));
+
+// ─── C4: Skill / MCP Import IPC Handlers ──────────────────────────────
+
+ipcMain.handle('skill-import-file', async (_, filePath) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.importFromFile(filePath);
+});
+
+ipcMain.handle('skill-import-content', async (_, name, content) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.importFromContent(name, content);
+});
+
+ipcMain.handle('skill-get-imported', () => {
+  if (!skillImporter) return [];
+  return skillImporter.getImported();
+});
+
+ipcMain.handle('skill-remove-imported', async (_, name) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.remove(name);
+});
+
+ipcMain.handle('mcp-import-config', async (_, configPath) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.importFromClaudeConfig(configPath);
+});
+
+ipcMain.handle('mcp-import-json', async (_, jsonContent) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.importFromJson(jsonContent);
+});
+
+ipcMain.handle('mcp-get-imported', () => {
+  if (!mcpImporter) return [];
+  return mcpImporter.getImported();
+});
+
+ipcMain.handle('mcp-remove', async (_, name) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.remove(name);
+});
+
+// File dialog for importing skills/MCP configs
+ipcMain.handle('dialog-open-file', async (_, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: options?.filters || [{ name: 'All Files', extensions: ['*'] }],
+    title: options?.title || '选择文件',
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return { filePath: result.filePaths[0] };
+  }
+  return { filePath: null };
+});
+
 app.whenReady().then(() => {
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -939,6 +1165,10 @@ app.whenReady().then(() => {
   // Initialize SKILL.md-based skill system
   skillRegistry = new SkillRegistry(path.join(__dirname, 'src', 'skills', 'skills'));
   skillRegistry.init().then(() => {
+    // C4: Initialize skill importer and MCP importer
+    skillImporter = new SkillImporter(path.join(__dirname, 'src', 'skills', 'skills'), skillRegistry);
+    mcpImporter = new McpConfigImporter(store, skillImporter);
+
     // Phase 2: Inject late-initialized services into AIRuntime
     aiRuntime.setServices({ keyboardRecorder, skillRegistry });
     skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient, aiRuntime);
@@ -987,10 +1217,27 @@ app.whenReady().then(() => {
 
   // Start clipboard monitoring
   startClipboardPolling();
+
+  // A1: Start active window polling (every 10 seconds)
+  setInterval(() => activeWindowTracker.poll(), 10000);
+  activeWindowTracker.poll(); // Immediate first poll
+
+  // A1: Persist active window snapshot to store (every 60 seconds)
+  setInterval(() => {
+    store.set('activeWindowSnapshot', {
+      current: activeWindowTracker.getCurrent(),
+      recent: activeWindowTracker.getHistory(),
+      appUsage: activeWindowTracker.getUsage(),
+    });
+  }, 60000);
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // A4: Save last active timestamp for offline adventure
+  store.set('lastActiveTime', Date.now());
+  // A1: Cleanup persistent PowerShell process
+  activeWindowTracker._destroyPersistentPS();
   // Phase 3: Stop TriggerBus and ScheduledTriggerRegistry
   if (global._triggerBus) {
     try { global._triggerBus.stop(); } catch {}

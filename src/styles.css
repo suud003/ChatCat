@@ -420,6 +420,29 @@ body {
   background: url('illustrations/empty-chat.png') center/contain no-repeat;
 }
 
+.chat-clear-btn {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: block;
+  margin: 0 auto 6px;
+  padding: 3px 12px;
+  font-size: 11px;
+  background: rgba(245, 245, 245, 0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.chat-clear-btn:hover {
+  background: #ffe0e0;
+  color: #d44;
+  border-color: #d44;
+}
+
 .chat-message {
   margin-bottom: 6px;
   font-size: 12px;
@@ -2941,6 +2964,100 @@ body {
 }
 
 /* ============================================================ */
+/*  Bubble Stack (multiple bubbles stacking upward)             */
+/* ============================================================ */
+
+.bubble-stack {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  z-index: 55;
+  pointer-events: none;
+  max-width: 320px;
+  width: max-content;
+}
+
+.bubble-stack-item {
+  background: #fff;
+  border: 2px solid #222;
+  border-radius: 16px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #333;
+  max-width: 280px;
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 2px 2px 0 #222;
+  animation: bubbleSlideUp 0.3s ease;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+.bubble-stack-item.bubble-interactive {
+  pointer-events: auto;
+  max-width: 320px;
+  padding: 10px 14px;
+}
+
+.bubble-stack-item .bubble-message {
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+.bubble-stack-item .bubble-stream-text {
+  min-height: 1.4em;
+}
+
+.bubble-stack-item .bubble-input-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.bubble-stack-item .bubble-reply-input {
+  flex: 1;
+  border: 1.5px solid #ccc;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  outline: none;
+  background: #fafafa;
+  color: #333;
+  min-width: 0;
+}
+
+.bubble-stack-item .bubble-reply-input:focus {
+  border-color: #222;
+}
+
+.bubble-stack-item .bubble-reply-send {
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bubble-stack-item.fading {
+  opacity: 0;
+}
+
+@keyframes bubbleSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================ */
 /*  Cat Bubble (floating speech bubble above cat)                */
 /* ============================================================ */
 
@@ -2970,6 +3087,13 @@ body {
   pointer-events: auto;
   max-width: 320px;
   padding: 10px 14px;
+  transition: max-height 0.3s ease, padding 0.2s ease;
+}
+
+/* Streaming text in bubble — auto-grow */
+.cat-bubble .bubble-stream-text {
+  min-height: 1.4em;
+  transition: all 0.15s ease;
 }
 
 .cat-bubble .bubble-message {

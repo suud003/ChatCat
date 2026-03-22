@@ -223,6 +223,38 @@ class SkillRegistry {
     const match = content.match(/^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)/);
     return match ? match[1].trim() : '';
   }
+
+  /**
+   * Hot-load a single skill from its directory.
+   * Used by SkillImporter for runtime skill registration.
+   * @param {string} name - Skill directory name
+   */
+  async loadSingle(name) {
+    const skillDir = path.join(this._dir, name);
+    const skillPath = path.join(skillDir, 'SKILL.md');
+    if (!fs.existsSync(skillPath)) {
+      console.warn(`[SkillRegistry] SKILL.md not found for: ${name}`);
+      return;
+    }
+
+    const content = fs.readFileSync(skillPath, 'utf-8');
+    const meta = this._parseFrontmatter(content, name);
+    if (meta) {
+      meta._path = skillPath;
+      this._skills.set(meta.name, meta);
+      console.log(`[SkillRegistry] Hot-loaded skill: ${meta.name}`);
+    }
+  }
+
+  /**
+   * Unregister a skill from the registry.
+   * Used by SkillImporter when removing imported skills.
+   * @param {string} name - Skill name/id
+   */
+  unregister(name) {
+    this._skills.delete(name);
+    console.log(`[SkillRegistry] Unregistered skill: ${name}`);
+  }
 }
 
 module.exports = { SkillRegistry };
