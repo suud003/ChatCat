@@ -6,6 +6,7 @@
   <title>ChatCat 桌面猫咪</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-pillar-c.css">
+  <link rel="stylesheet" href="styles-gacha.css">
 </head>
 <body>
   <!-- Character Canvas -->
@@ -13,10 +14,9 @@
     <div id="proactive-dot" class="proactive-dot hidden"></div>
     <div id="cat-bubble" class="cat-bubble hidden"></div>
     <div id="toolbar">
-      <button class="toolbar-btn" data-action="chat" title="聊天与设置"><img src="icons/toolbar-chat.png" class="cat-icon" alt="聊天"><span class="toolbar-label">聊天</span></button>
       <button class="toolbar-btn" data-action="tools" title="生产力工具"><img src="icons/toolbar-tools.png" class="cat-icon" alt="工具"><span class="toolbar-label">工具</span></button>
-      <button class="toolbar-btn" data-action="quick-panel" title="快捷AI助手 (⌘⇧Space)"><img src="icons/toolbar-quick.png" class="cat-icon" alt="办公"><span class="toolbar-label">办公</span></button>
       <button class="toolbar-btn" data-action="fun" title="角色与宠物"><img src="icons/toolbar-fun.png" class="cat-icon" alt="角色"><span class="toolbar-label">角色</span></button>
+      <button class="toolbar-btn" data-action="settings" title="设置"><img src="icons/toolbar-chat.png" class="cat-icon" alt="设置"><span class="toolbar-label">设置</span></button>
     </div>
     <div id="pet-overlay-bar">
       <span id="overlay-level">Lv.1</span>
@@ -27,33 +27,32 @@
       <div id="overlay-float-container"></div>
     </div>
     <canvas id="pet-canvas" width="300" height="300"></canvas>
+    <div id="pet-decoration-layer"></div>
+    <div id="inline-chat" class="inline-chat">
+      <div id="inline-chat-response" class="inline-chat-response hidden"></div>
+      <div class="inline-chat-input-row">
+        <button id="inline-chat-history" class="inline-chat-icon-btn" title="聊天记录">💬</button>
+        <input type="text" id="inline-chat-input" placeholder="说点什么..." autocomplete="off">
+        <button id="inline-chat-send">➤</button>
+      </div>
+    </div>
   </div>
 
   <!-- Multiplayer Mini Cats Container -->
   <div id="mp-cats-container"></div>
 
-  <!-- Chat + Settings Panel (Manga Bubble with Tabs) -->
-  <div id="chat-container" class="hidden">
-    <div id="chat-bubble">
-      <div id="chat-bubble-header">
+  <!-- Settings Panel (Independent Manga Bubble) -->
+  <div id="settings-container" class="hidden">
+    <div id="settings-bubble">
+      <div id="settings-bubble-header">
         <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="chat"><img src="icons/toolbar-chat.png" class="cat-icon" alt=""> 聊天</button>
-          <button class="panel-tab" data-tab="settings">⚙ 设置</button>
+          <button class="panel-tab active" data-tab="settings-main">⚙ 设置</button>
         </div>
-        <button id="chat-maximize" class="chat-ctrl-btn" title="最大化">□</button>
-        <button id="chat-close" class="chat-ctrl-btn" title="关闭">×</button>
+        <button id="settings-maximize" class="chat-ctrl-btn" title="最大化">□</button>
+        <button id="settings-close" class="chat-ctrl-btn" title="关闭">×</button>
       </div>
-      <div id="chat-body">
-        <!-- Chat Tab Content -->
-        <div id="tab-chat" class="tab-content active">
-          <div id="chat-messages"></div>
-          <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="说点什么..." autocomplete="off">
-            <button id="chat-send">➤</button>
-          </div>
-        </div>
-        <!-- Settings Tab Content -->
-        <div id="tab-settings" class="tab-content">
+      <div id="settings-body">
+        <div id="tab-settings-main" class="tab-content active">
           <div class="setting-group">
             <label>AI服务预设</label>
             <select id="setting-preset">
@@ -87,7 +86,7 @@
               <span id="test-connection-status" style="font-size: 12px;"></span>
             </div>
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
-              <input type="text" id="test-message-input" placeholder="测试消息（默认：请回复“连接测试通过”）" style="flex: 1;">
+              <input type="text" id="test-message-input" placeholder="测试消息（默认：请回复"连接测试通过"）" style="flex: 1;">
               <span id="test-connection-metrics" style="font-size: 12px; color: #888;"></span>
             </div>
           </div>
@@ -161,16 +160,17 @@
           </div>
         </div>
       </div>
-      <div id="chat-bubble-tail"></div>
+      <div id="settings-bubble-tail"></div>
     </div>
   </div>
 
-  <!-- Tools Panel: Pomodoro | Todo | Recorder | SysInfo (Manga Bubble with Tabs) -->
+  <!-- Tools Panel: Office | Pomodoro | Todo | Recorder | SysInfo (Manga Bubble with Tabs) -->
   <div id="tools-container" class="hidden">
     <div id="tools-bubble">
       <div id="tools-bubble-header">
         <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="tools-pomodoro"><img src="icons/tab-pomodoro.png" class="cat-icon" alt=""> 专注</button>
+          <button class="panel-tab active" data-tab="tools-quick"><img src="icons/toolbar-quick.png" class="cat-icon" alt=""> 办公</button>
+          <button class="panel-tab" data-tab="tools-pomodoro"><img src="icons/tab-pomodoro.png" class="cat-icon" alt=""> 专注</button>
           <button class="panel-tab" data-tab="tools-todo"><img src="icons/tab-todo.png" class="cat-icon" alt=""> 待办</button>
           <button class="panel-tab" data-tab="tools-recorder"><img src="icons/tab-recorder.png" class="cat-icon" alt=""> 记录器</button>
           <button class="panel-tab" data-tab="tools-clipboard"><img src="icons/tab-clipboard.png" class="cat-icon" alt=""> 剪贴板</button>
@@ -181,8 +181,28 @@
         <button id="tools-close" class="chat-ctrl-btn" title="关闭">×</button>
       </div>
       <div id="tools-body">
+        <!-- Quick/Office Tab -->
+        <div id="tab-tools-quick" class="tab-content active">
+          <div id="quick-input-area" class="quick-input-area" contenteditable="true" data-placeholder="输入问题或粘贴文本/图片..."></div>
+          <div id="quick-paste-image-preview" class="quick-paste-image-preview"></div>
+          <div class="quick-mode-buttons">
+            <button class="quick-mode-btn" data-mode="ask"><img src="icons/qp-ask.png" class="cat-icon" alt=""> 问答</button>
+            <button class="quick-mode-btn active" data-mode="polish"><img src="icons/qp-polish.png" class="cat-icon" alt=""> 润色</button>
+            <button class="quick-mode-btn" data-mode="summarize"><img src="icons/qp-summarize.png" class="cat-icon" alt=""> 总结</button>
+            <button class="quick-mode-btn" data-mode="explain"><img src="icons/qp-explain.png" class="cat-icon" alt=""> 解释</button>
+            <button class="quick-mode-btn" data-mode="screenshot"><img src="icons/qp-screenshot.png" class="cat-icon" alt=""> 识图</button>
+          </div>
+          <div id="quick-result-area" class="quick-result-area"></div>
+          <div class="quick-actions">
+            <span id="quick-status-bar" class="quick-status-bar">ESC 关闭 · Ctrl+Enter 发送</span>
+            <div class="quick-actions-group">
+              <button id="quick-history" class="quick-action-btn quick-action-btn-secondary"><img src="icons/tab-clipboard.png" class="cat-icon" alt=""> 历史</button>
+              <button id="quick-send" class="quick-action-btn"><img src="icons/toolbar-quick.png" class="cat-icon" alt=""> 发送</button>
+            </div>
+          </div>
+        </div>
         <!-- Pomodoro Tab -->
-        <div id="tab-tools-pomodoro" class="tab-content active">
+        <div id="tab-tools-pomodoro" class="tab-content">
           <div id="pomodoro-display">
             <img id="pomodoro-ill" src="illustrations/pomodoro-focus.png" class="ill-pomodoro" alt="">
             <div id="pomodoro-time">25:00</div>
@@ -250,40 +270,6 @@
     </div>
   </div>
 
-  <!-- Quick Panel: Office Assistant (same DOM panel system as others) -->
-  <div id="quick-container" class="hidden">
-    <div id="quick-bubble">
-      <div id="quick-bubble-header">
-        <div class="quick-panel-title">
-          <img src="icons/toolbar-quick.png" class="cat-icon" alt="">
-          办公
-        </div>
-        <button id="quick-maximize" class="chat-ctrl-btn" title="最大化">□</button>
-        <button id="quick-close" class="chat-ctrl-btn" title="关闭">×</button>
-      </div>
-      <div id="quick-body">
-        <div id="quick-input-area" class="quick-input-area" contenteditable="true" data-placeholder="输入问题或粘贴文本/图片..."></div>
-        <div id="quick-paste-image-preview" class="quick-paste-image-preview"></div>
-        <div class="quick-mode-buttons">
-          <button class="quick-mode-btn" data-mode="ask"><img src="icons/qp-ask.png" class="cat-icon" alt=""> 问答</button>
-          <button class="quick-mode-btn active" data-mode="polish"><img src="icons/qp-polish.png" class="cat-icon" alt=""> 润色</button>
-          <button class="quick-mode-btn" data-mode="summarize"><img src="icons/qp-summarize.png" class="cat-icon" alt=""> 总结</button>
-          <button class="quick-mode-btn" data-mode="explain"><img src="icons/qp-explain.png" class="cat-icon" alt=""> 解释</button>
-          <button class="quick-mode-btn" data-mode="screenshot"><img src="icons/qp-screenshot.png" class="cat-icon" alt=""> 识图</button>
-        </div>
-        <div id="quick-result-area" class="quick-result-area"></div>
-        <div class="quick-actions">
-          <span id="quick-status-bar" class="quick-status-bar">ESC 关闭 · Ctrl+Enter 发送</span>
-          <div class="quick-actions-group">
-            <button id="quick-history" class="quick-action-btn quick-action-btn-secondary"><img src="icons/tab-clipboard.png" class="cat-icon" alt=""> 历史</button>
-            <button id="quick-send" class="quick-action-btn"><img src="icons/toolbar-quick.png" class="cat-icon" alt=""> 发送</button>
-          </div>
-        </div>
-      </div>
-      <div id="quick-bubble-tail"></div>
-    </div>
-  </div>
-
   <!-- Fun Panel: Character | Pet Status | Shop | Items (Manga Bubble with Tabs) -->
   <div id="fun-container" class="hidden">
     <div id="fun-bubble">
@@ -293,6 +279,8 @@
           <button class="panel-tab" data-tab="fun-status"><img src="icons/tab-status.png" class="cat-icon" alt=""> 状态</button>
           <button class="panel-tab" data-tab="fun-shop"><img src="icons/tab-shop.png" class="cat-icon" alt=""> 商店</button>
           <button class="panel-tab" data-tab="fun-owned"><img src="icons/tab-items.png" class="cat-icon" alt=""> 物品</button>
+          <button class="panel-tab" data-tab="fun-gacha"><img src="icons/tab-gacha.png" class="cat-icon" alt=""> 扭蛋</button>
+          <button class="panel-tab" data-tab="fun-accessories"><img src="icons/tab-accessory.png" class="cat-icon" alt=""> 饰品</button>
           <button class="panel-tab" data-tab="fun-connection"><img src="icons/tab-connection.png" class="cat-icon" alt=""> 联机</button>
           <button class="panel-tab" data-tab="fun-leaderboard"><img src="icons/tab-leaderboard.png" class="cat-icon" alt=""> 排行</button>
         </div>
@@ -437,6 +425,14 @@
             <span><img src="icons/tab-items.png" class="cat-icon icon-sm" alt=""> <span id="base-slots-2">0/3</span></span>
           </div>
           <div id="base-owned-list" class="base-owned-list"></div>
+        </div>
+        <!-- Gacha Tab -->
+        <div id="tab-fun-gacha" class="tab-content">
+          <div id="gacha-panel"></div>
+        </div>
+        <!-- Accessories Tab -->
+        <div id="tab-fun-accessories" class="tab-content">
+          <div id="accessory-panel"></div>
         </div>
         <!-- Connection Tab -->
         <div id="tab-fun-connection" class="tab-content"></div>

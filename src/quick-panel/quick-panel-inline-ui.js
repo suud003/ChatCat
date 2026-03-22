@@ -1,3 +1,6 @@
+/**
+ * Quick Panel Inline UI - Now lives inside Tools panel as "办公" tab
+ */
 export class QuickPanelInlineUI {
   constructor({ positionFn = null, beforeShow = null } = {}) {
     this.positionFn = positionFn;
@@ -9,7 +12,9 @@ export class QuickPanelInlineUI {
     this._historyVisible = false;
     this._pastedImageBase64 = null;
 
-    this._container = document.getElementById('quick-container');
+    // Now references elements inside tools panel's quick tab
+    this._container = document.getElementById('tools-container');
+    this._tabContent = document.getElementById('tab-tools-quick');
     this._inputArea = document.getElementById('quick-input-area');
     this._resultArea = document.getElementById('quick-result-area');
     this._statusBar = document.getElementById('quick-status-bar');
@@ -17,14 +22,14 @@ export class QuickPanelInlineUI {
   }
 
   init() {
-    if (!this._container) return;
+    if (!this._tabContent) return;
 
-    document.querySelectorAll('#quick-container .quick-mode-btn').forEach((btn) => {
+    // Mode buttons are now inside the tools-quick tab
+    document.querySelectorAll('#tab-tools-quick .quick-mode-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#quick-container .quick-mode-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('#tab-tools-quick .quick-mode-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         this._mode = btn.dataset.mode;
-        // 切换模式时清除上一次的结果、图片预览和状态
         this._resetPanel();
         if (this._mode === 'screenshot') {
           window.electronAPI.qpStartScreenshot?.();
@@ -34,7 +39,6 @@ export class QuickPanelInlineUI {
 
     document.getElementById('quick-send')?.addEventListener('click', () => this._send());
     document.getElementById('quick-history')?.addEventListener('click', () => this._showHistory());
-    document.getElementById('quick-close')?.addEventListener('click', () => this.hide());
 
     document.addEventListener('keydown', (e) => {
       if (!this.isVisible()) return;
@@ -52,7 +56,7 @@ export class QuickPanelInlineUI {
       this.show(data).catch(() => {});
     });
     window.electronAPI.onQpCloseUI?.(() => {
-      document.getElementById('quick-close')?.click();
+      this.hide();
     });
     window.electronAPI.onQpDisplayDirectResult?.((data) => {
       this.showDirectResult(data).catch(() => {});
@@ -106,23 +110,26 @@ export class QuickPanelInlineUI {
   }
 
   isVisible() {
-    return !!this._container && !this._container.classList.contains('hidden');
+    if (!this._container || !this._tabContent) return false;
+    // Visible = tools container is showing AND quick tab is active
+    return !this._container.classList.contains('hidden') &&
+           this._tabContent.classList.contains('active');
   }
 
   async show(data = {}) {
-    if (!this._container) return;
+    if (!this._container || !this._tabContent) return;
     if (this.beforeShow) {
       await this.beforeShow();
     }
+    // Show tools panel
     this._container.classList.remove('hidden');
+    // Switch to quick tab
+    this._switchToQuickTab();
     this._setVisibleState(true);
-    if (this.positionFn && !this._container.classList.contains('maximized')) {
-      positionPanel(this._container, this.positionFn);
-    }
     if (data.clipboardText && !this._inputArea.textContent.trim()) {
       this._inputArea.textContent = data.clipboardText;
     }
-    this._inputArea.focus();
+    this._inputArea?.focus();
   }
 
   hide(report = true) {
@@ -133,12 +140,22 @@ export class QuickPanelInlineUI {
     }
   }
 
+  _switchToQuickTab() {
+    const header = document.getElementById('tools-bubble-header');
+    const body = document.getElementById('tools-body');
+    if (!header || !body) return;
+    header.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    body.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    const quickTab = header.querySelector('.panel-tab[data-tab="tools-quick"]');
+    if (quickTab) quickTab.classList.add('active');
+    if (this._tabContent) this._tabContent.classList.add('active');
+  }
+
   async showDirectResult(data) {
     await this.show();
     this._historyVisible = false;
     this._mode = data.mode;
     this._syncModeButtons();
-    // 清除粘贴图片的 base64 引用（防止重复发送），但保留预览图供用户查看
     this._pastedImageBase64 = null;
     this._resultArea.innerHTML = this._escapeHtml(data.result);
     this._setResultVisible(true);
@@ -310,24 +327,18 @@ export class QuickPanelInlineUI {
     this._previewEl.classList.remove('visible');
   }
 
-  /**
-   * 切换模式时重置面板：清除上一次的结果、图片预览和处理状态
-   */
   _resetPanel() {
-    // 清除结果区
     this._resultArea.innerHTML = '';
     this._setResultVisible(false);
-    // 清除图片预览
     this._pastedImageBase64 = null;
     this._clearPreview();
-    // 重置状态
     this._isProcessing = false;
     this._historyVisible = false;
     this._statusBar.textContent = 'ESC 关闭 · Ctrl+Enter 发送';
   }
 
   _syncModeButtons() {
-    document.querySelectorAll('#quick-container .quick-mode-btn').forEach((btn) => {
+    document.querySelectorAll('#tab-tools-quick .quick-mode-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.mode === this._mode);
     });
   }
@@ -374,8 +385,4 @@ export class QuickPanelInlineUI {
     div.textContent = str;
     return div.innerHTML;
   }
-}
-
-function positionPanel(container, positionFn) {
-  positionFn(container);
 }

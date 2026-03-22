@@ -32,19 +32,16 @@ export class TypeRecorder {
       }
     });
 
-    // "前往设置" button: open chat panel and switch to settings tab
+    // "前往设置" button: open settings panel
     this._gotoSettingsBtn?.addEventListener('click', () => {
       // Close tools panel
       const toolsPanel = document.getElementById('tools-container');
       if (toolsPanel) toolsPanel.classList.add('hidden');
 
-      // Open chat panel and switch to settings tab
-      const chatContainer = document.getElementById('chat-container');
-      if (chatContainer) {
-        chatContainer.classList.remove('hidden');
-        // Trigger settings tab switch via tab button click
-        const settingsTab = chatContainer.querySelector('.panel-tab[data-tab="settings"]');
-        if (settingsTab) settingsTab.click();
+      // Open settings panel
+      const settingsContainer = document.getElementById('settings-container');
+      if (settingsContainer) {
+        settingsContainer.classList.remove('hidden');
       }
     });
   }

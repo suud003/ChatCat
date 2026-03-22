@@ -647,6 +647,13 @@ body {
   min-height: 0;
 }
 
+/* Quick/Office tab needs flex column layout for mode buttons + result area */
+#tab-tools-quick.active {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Settings form inside tab */
 .setting-group {
   margin-bottom: 10px;
@@ -826,11 +833,10 @@ body {
   margin: 0;
 }
 
-/* Arc layout: 4 buttons */
-.toolbar-btn:nth-child(1) { transform: translate(-78px, -8px); }
-.toolbar-btn:nth-child(2) { transform: translate(-26px, -22px); }
-.toolbar-btn:nth-child(3) { transform: translate(26px, -22px); }
-.toolbar-btn:nth-child(4) { transform: translate(78px, -8px); }
+/* Arc layout: 3 buttons */
+.toolbar-btn:nth-child(1) { transform: translate(-52px, -12px); }
+.toolbar-btn:nth-child(2) { transform: translate(0px, -24px); }
+.toolbar-btn:nth-child(3) { transform: translate(52px, -12px); }
 
 .toolbar-btn:hover {
   background: rgba(79, 172, 254, 0.5);
@@ -841,10 +847,9 @@ body {
   color: #fff;
 }
 
-.toolbar-btn:nth-child(1):hover { transform: translate(-78px, -8px) scale(1.12); }
-.toolbar-btn:nth-child(2):hover { transform: translate(-26px, -22px) scale(1.12); }
-.toolbar-btn:nth-child(3):hover { transform: translate(26px, -22px) scale(1.12); }
-.toolbar-btn:nth-child(4):hover { transform: translate(78px, -8px) scale(1.12); }
+.toolbar-btn:nth-child(1):hover { transform: translate(-52px, -12px) scale(1.12); }
+.toolbar-btn:nth-child(2):hover { transform: translate(0px, -24px) scale(1.12); }
+.toolbar-btn:nth-child(3):hover { transform: translate(52px, -12px) scale(1.12); }
 
 
 /* Character Select Panel - Manga Bubble Style */
@@ -1853,6 +1858,280 @@ body {
 
 #quick-container.maximized #quick-bubble-tail {
   display: none;
+}
+
+/* ============================================================ */
+/*  Settings Panel (Independent Manga Bubble)                    */
+/* ============================================================ */
+
+#settings-container {
+  position: absolute;
+  width: 320px;
+  z-index: 60;
+  -webkit-app-region: no-drag;
+  will-change: left, top;
+  animation: bubblePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#settings-bubble {
+  position: relative;
+  background: #fff;
+  border: 3px solid #222;
+  border-radius: 22px;
+  box-shadow: 3px 3px 0 #222;
+  overflow: visible;
+}
+
+#settings-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 2px;
+  cursor: grab;
+}
+
+#settings-bubble-header:active {
+  cursor: grabbing;
+}
+
+#settings-body {
+  padding: 8px 14px 12px;
+  max-height: 420px;
+  opacity: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+#settings-bubble-tail {
+  position: absolute;
+  bottom: -18px;
+  right: 24px;
+  width: 28px;
+  height: 22px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#settings-bubble-tail::before {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 22px;
+  background: #fff;
+  border-right: 3px solid #222;
+  border-bottom: 3px solid #222;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+#settings-close:hover {
+  background: #f5576c;
+  color: #fff;
+  border-color: #f5576c;
+}
+
+#settings-container.maximized {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  bottom: auto;
+  right: auto;
+  animation: none;
+  z-index: 100;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#settings-container.maximized #settings-bubble {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+#settings-container.maximized #settings-bubble-header {
+  padding: 10px 14px 6px;
+  border-bottom: 2px solid #eee;
+}
+
+#settings-container.maximized #settings-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  padding: 8px 16px 12px;
+  overflow-y: auto;
+}
+
+#settings-container.maximized .tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+#settings-container.maximized #settings-bubble-tail {
+  display: none;
+}
+
+/* ============================================================ */
+/*  Inline Chat (left side of pet, always)                       */
+/* ============================================================ */
+
+.inline-chat {
+  position: absolute;
+  left: -10px;
+  bottom: 120px;
+  width: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 45;
+}
+
+/* Default: hide input and send, only show icon */
+.inline-chat .inline-chat-input-row input,
+.inline-chat .inline-chat-input-row button#inline-chat-send {
+  display: none;
+}
+
+/* Expanded: show full input row */
+.inline-chat.force-visible .inline-chat-input-row input,
+.inline-chat.force-visible .inline-chat-input-row button#inline-chat-send {
+  display: flex;
+}
+
+.inline-chat.force-visible {
+  width: 280px;
+  left: auto;
+  right: 100%;
+  bottom: 120px;
+  margin-right: 8px;
+}
+
+#pet-container:hover .inline-chat,
+#pet-container .inline-chat:focus-within,
+.inline-chat.force-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.inline-chat-input-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.inline-chat-icon-btn {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 2px solid #222;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 2px 0 #222;
+  transition: transform 0.15s, background 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.inline-chat-icon-btn:hover {
+  transform: scale(1.1);
+  background: #f0f0f0;
+}
+
+.inline-chat-icon-btn.active {
+  background: #222;
+  color: #fff;
+}
+
+.inline-chat-input-row input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 2px solid #222;
+  border-radius: 16px;
+  padding: 7px 12px;
+  color: #222;
+  font-size: 12px;
+  outline: none;
+  box-shadow: 2px 2px 0 #222;
+  transition: border-color 0.2s;
+}
+
+.inline-chat-input-row input:focus {
+  border-color: #0066cc;
+}
+
+.inline-chat-input-row input::placeholder {
+  color: #aaa;
+}
+
+.inline-chat-input-row button#inline-chat-send {
+  background: #222;
+  border: 2px solid #222;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.inline-chat-input-row button#inline-chat-send:hover {
+  transform: scale(1.1);
+}
+
+.inline-chat-response {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 2px solid #222;
+  border-radius: 14px;
+  box-shadow: 2px 2px 0 #222;
+  padding: 8px 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.inline-chat-response .chat-message {
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  color: #222;
+}
+
+.inline-chat-response .chat-message.user {
+  color: #0066cc;
+  font-weight: 600;
+}
+
+.inline-chat-response .chat-message.user::before {
+  content: '▸ ';
+}
+
+.inline-chat-response .chat-message.error {
+  color: #d32f2f;
 }
 
 /* ============================================================ */

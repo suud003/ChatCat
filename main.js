@@ -89,7 +89,14 @@ const store = new Store({
     mpServerPort: 9527,
     mpExternalUrl: '',
     mpUsername: '',
-    mpToken: ''
+    mpToken: '',
+    // V3: Gacha system
+    gachaOwned: [],
+    gachaPity: 0,
+    gachaSssrPity: 0,
+    gachaTotalPulls: 0,
+    gachaHistory: [],
+    gachaEquipped: []
   }
 });
 

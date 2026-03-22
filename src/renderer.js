@@ -37,6 +37,11 @@ import { TriggerBusRenderer } from './ai-runtime/trigger-bus-renderer.js';
 import { PetBaseSystem } from './pet/pet-base-system.js';
 import { PetBaseUI } from './pet/pet-base-ui.js';
 import { getPrestigeMaterial } from './pet/pet-base-items.js';
+
+// V3 imports — Gacha System
+import { GachaSystem } from './pet/gacha-system.js';
+import { GachaUI } from './pet/gacha-ui.js';
+import { GachaAccessoryUI } from './pet/gacha-accessory-ui.js';
 import { formatNumber } from './utils/format.js';
 import { capturePanelAnchor, applyPanelAnchorTransition } from './ui/panel-tab-transition.js';
 import { QuickPanelInlineUI } from './quick-panel/quick-panel-inline-ui.js';
@@ -289,9 +294,8 @@ async function init() {
   // V1.1: Load personality (saved for Renderer-side usage; chat prompt now built by Main PromptRegistry)
   const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
 
-  // Chat UI (with integrated settings)
+  // Chat UI (simplified inline chat)
   const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
-  chatUI.positionFn = positionAbovePet;
   await chatUI.loadHistory();
 
   // V1.1: Sentiment callback — trigger cat expression
@@ -303,8 +307,8 @@ async function init() {
   };
 
   // Hook chat send to affection
-  const chatSendBtn = document.getElementById('chat-send');
-  const chatInput = document.getElementById('chat-input');
+  const chatSendBtn = document.getElementById('inline-chat-send');
+  const chatInput = document.getElementById('inline-chat-input');
   chatSendBtn?.addEventListener('click', () => { affection.onChat(); });
   chatInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && chatInput.value.trim()) affection.onChat();
@@ -449,18 +453,21 @@ async function init() {
     });
   });
 
-  // Wire proactive reply actions to open chat panel
+  // Wire proactive reply actions to show inline chat
   proactiveEngine.notificationMgr.onOpenChat = () => {
-    chatUI.show();
+    const inlineChat = document.getElementById('inline-chat');
+    inlineChat?.classList.add('force-visible');
+    document.getElementById('inline-chat-input')?.focus();
   };
 
-  // Wire bubble inline reply → open chat panel + display messages + continue conversation
+  // Wire bubble inline reply → show inline chat + display messages + continue conversation
   proactiveEngine.notificationMgr.onBubbleReply = async (userText, catMessage) => {
-    chatUI.show();
-    // Display the cat's original proactive message and user's reply in chat
+    const inlineChat = document.getElementById('inline-chat');
+    inlineChat?.classList.add('force-visible');
+    // Display the cat's original proactive message and user's reply in history
     chatUI.addMessage(catMessage, 'assistant');
     chatUI.addMessage(userText, 'user');
-    // Stream AI response based on user's reply
+    // Stream AI response
     const msgEl = chatUI.addMessage('', 'assistant');
     try {
       let fullResp = '';
@@ -469,6 +476,8 @@ async function init() {
         fullResp += chunk;
         chatUI.scrollToBottom();
       }
+      // Show latest reply in cat bubble
+      if (fullResp) showCatBubble(fullResp.slice(0, 100) + (fullResp.length > 100 ? '...' : ''), 10000);
     } catch (err) {
       msgEl.classList.add('error');
       msgEl.textContent = `错误：${err.message}`;
@@ -485,9 +494,9 @@ async function init() {
     const body = document.getElementById('tools-body');
     header.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
     body.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-    const todoTab = header.querySelector('.panel-tab[data-tab="todo"]');
+    const todoTab = header.querySelector('.panel-tab[data-tab="tools-todo"]');
     if (todoTab) todoTab.classList.add('active');
-    const todoContent = document.getElementById('tab-todo');
+    const todoContent = document.getElementById('tab-tools-todo');
     if (todoContent) todoContent.classList.add('active');
   };
 
@@ -495,6 +504,9 @@ async function init() {
   chatUI.onSettingsSaved = () => {
     proactiveEngine.updateConfig();
   };
+
+  // Settings panel: load settings and setup events
+  setupSettingsPanel(aiService, API_PRESETS, chatUI);
 
   // V1.2: Skill Scheduler (Phase 3: scheduling delegated to Main ScheduledTriggerRegistry)
   const skillScheduler = new SkillScheduler();
@@ -523,23 +535,18 @@ async function init() {
 
   const toolsPanel = document.getElementById('tools-container');
   const funPanel = document.getElementById('fun-container');
+  const settingsPanel = document.getElementById('settings-container');
   quickPanelUI = new QuickPanelInlineUI({
-    positionFn: positionAbovePet,
+    positionFn: null,
     beforeShow: async () => {
-      if (chatUI.isVisible) chatUI.hide();
-      if (toolsPanel && !toolsPanel.classList.contains('hidden')) {
-        document.getElementById('tools-close')?.click();
-      }
-      if (funPanel && !funPanel.classList.contains('hidden')) {
-        document.getElementById('fun-close')?.click();
-      }
+      // Quick panel now lives in tools, so just ensure tools panel is open
     }
   });
   quickPanelUI.init();
 
   // Setup UI
   setupToolbar(chatUI, quickPanelUI);
-  setupTabbedPanel('quick-container', 'quick-bubble-header', 'quick-close', 'quick-maximize');
+  setupTabbedPanel('settings-container', 'settings-bubble-header', 'settings-close', 'settings-maximize');
   setupTabbedPanel('tools-container', 'tools-bubble-header', 'tools-close', 'tools-maximize');
   setupTabbedPanel('fun-container', 'fun-bubble-header', 'fun-close', 'fun-maximize');
   setupToolbarHover();
@@ -555,6 +562,17 @@ async function init() {
   await petBase.init(affection);
   const petBaseUI = new PetBaseUI(petBase, affection);
   petBaseUI.render();
+
+  // V3: Gacha System (capsule machine in fun panel)
+  const gachaSystem = new GachaSystem();
+  await gachaSystem.init(affection);
+  const gachaUI = new GachaUI(gachaSystem, affection);
+  gachaUI.render();
+
+  // V3: Gacha Accessory UI (equip/exchange in fun panel)
+  const gachaAccessoryUI = new GachaAccessoryUI(gachaSystem, affection);
+  gachaAccessoryUI.render();
+  gachaAccessoryUI.renderDecorations();
 
   // Pet Status UI — must come after petBase so prestige can use attemptPrestige
   setupPetStatusUI(affection, petBase);
@@ -996,13 +1014,12 @@ function setupTabbedPanel(containerId, headerId, closeId, maximizeId) {
 
 function setupToolbar(chatUI, quickPanel) {
   const toolbar = document.getElementById('toolbar');
-  const chatPanel = document.getElementById('chat-container');
   const toolsPanel = document.getElementById('tools-container');
   const funPanel = document.getElementById('fun-container');
-  const quickContainer = document.getElementById('quick-container');
+  const settingsPanel = document.getElementById('settings-container');
   const toolsCloseBtn = document.getElementById('tools-close');
   const funCloseBtn = document.getElementById('fun-close');
-  const quickCloseBtn = document.getElementById('quick-close');
+  const settingsCloseBtn = document.getElementById('settings-close');
 
   const closeToolsPanel = () => {
     if (!toolsPanel || toolsPanel.classList.contains('hidden')) return;
@@ -1014,17 +1031,16 @@ function setupToolbar(chatUI, quickPanel) {
     funCloseBtn?.click();
   };
 
-  const closeQuickPanel = () => {
-    if (!quickContainer || quickContainer.classList.contains('hidden')) return;
-    quickCloseBtn?.click();
+  const closeSettingsPanel = () => {
+    if (!settingsPanel || settingsPanel.classList.contains('hidden')) return;
+    settingsCloseBtn?.click();
   };
 
   const closeOtherPanels = async (except) => {
     const panelMap = {
-      chat: chatPanel,
       tools: toolsPanel,
-      'quick-panel': quickContainer,
-      fun: funPanel
+      fun: funPanel,
+      settings: settingsPanel
     };
     for (const [key, panel] of Object.entries(panelMap)) {
       if (key === except) continue;
@@ -1034,17 +1050,14 @@ function setupToolbar(chatUI, quickPanel) {
       }
     }
 
-    if (except !== 'chat' && chatUI.isVisible) {
-      chatUI.hide();
-    }
     if (except !== 'tools') {
       closeToolsPanel();
     }
     if (except !== 'fun') {
       closeFunPanel();
     }
-    if (except !== 'quick-panel') {
-      closeQuickPanel();
+    if (except !== 'settings') {
+      closeSettingsPanel();
     }
   };
 
@@ -1056,16 +1069,6 @@ function setupToolbar(chatUI, quickPanel) {
     const action = btn.dataset.action;
 
     switch (action) {
-      case 'chat': {
-        const shouldShow = !chatUI.isVisible;
-        if (!shouldShow) {
-          chatUI.hide();
-          break;
-        }
-        await closeOtherPanels('chat');
-        chatUI.show();
-        break;
-      }
       case 'tools': {
         const shouldShow = toolsPanel.classList.contains('hidden');
         if (!shouldShow) {
@@ -1075,15 +1078,6 @@ function setupToolbar(chatUI, quickPanel) {
         await closeOtherPanels('tools');
         toolsPanel.classList.remove('hidden');
         positionAbovePet(toolsPanel);
-        break;
-      }
-      case 'quick-panel': {
-        if (quickPanel?.isVisible()) {
-          quickPanel.hide();
-          break;
-        }
-        await closeOtherPanels('quick-panel');
-        await quickPanel?.show();
         break;
       }
       case 'fun': {
@@ -1097,6 +1091,17 @@ function setupToolbar(chatUI, quickPanel) {
         positionAbovePet(funPanel);
         break;
       }
+      case 'settings': {
+        const shouldShow = settingsPanel.classList.contains('hidden');
+        if (!shouldShow) {
+          closeSettingsPanel();
+          break;
+        }
+        await closeOtherPanels('settings');
+        settingsPanel.classList.remove('hidden');
+        positionAbovePet(settingsPanel);
+        break;
+      }
     }
   });
 }
@@ -1104,6 +1109,395 @@ function setupToolbar(chatUI, quickPanel) {
 /**
  * Position a panel above the pet container, centered horizontally
  */
+/**
+ * Setup the independent Settings panel — loads/saves all settings.
+ * Moved from ChatUI to be a standalone panel.
+ */
+function setupSettingsPanel(aiService, apiPresets, chatUI) {
+  const presetSelect = document.getElementById('setting-preset');
+  const modelSelect = document.getElementById('setting-model');
+  const modelCustomInput = document.getElementById('setting-model-custom');
+  const enableThinkingInput = document.getElementById('setting-enable-thinking');
+  const apiUrlInput = document.getElementById('setting-api-url');
+  const urlGroup = document.getElementById('url-group');
+  const apiKeyInput = document.getElementById('setting-api-key');
+  const opacityInput = document.getElementById('setting-opacity');
+  const opacityValue = document.getElementById('opacity-value');
+  const visionModelInput = document.getElementById('setting-vision-model');
+  const personalitySelect = document.getElementById('setting-personality');
+
+  async function populateModels(presetKey, savedModel, savedUrl) {
+    const preset = apiPresets[presetKey];
+    const needsUrl = !preset || (preset && preset.needsUrl);
+    urlGroup.style.display = needsUrl ? '' : 'none';
+    if (needsUrl && savedUrl) {
+      apiUrlInput.value = savedUrl;
+    } else if (!needsUrl) {
+      apiUrlInput.value = preset ? preset.url : '';
+    }
+
+    if (presetKey === 'ollama') {
+      const baseUrl = (needsUrl ? apiUrlInput.value : (preset?.url || '')).trim();
+      modelSelect.style.display = '';
+      modelCustomInput.style.display = 'none';
+      modelSelect.innerHTML = '';
+      const loadingOpt = document.createElement('option');
+      loadingOpt.value = '';
+      loadingOpt.textContent = '正在读取本地 Ollama 模型...';
+      modelSelect.appendChild(loadingOpt);
+
+      const models = await _fetchOllamaModels(baseUrl);
+      if (models.length > 0) {
+        modelSelect.innerHTML = '';
+        for (const m of models) {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          modelSelect.appendChild(opt);
+        }
+        if (savedModel && models.includes(savedModel)) {
+          modelSelect.value = savedModel;
+        } else {
+          modelSelect.value = models[0];
+        }
+      } else {
+        modelSelect.style.display = 'none';
+        modelCustomInput.style.display = '';
+        modelCustomInput.placeholder = '未检测到本地模型，可手动输入（如 llama3.2:3b）';
+        modelCustomInput.value = savedModel || preset?.model || '';
+      }
+      return;
+    }
+
+    if (preset && preset.models && preset.models.length > 0) {
+      modelSelect.style.display = '';
+      modelCustomInput.style.display = 'none';
+      modelSelect.innerHTML = '';
+      for (const m of preset.models) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        modelSelect.appendChild(opt);
+      }
+      if (savedModel && preset.models.includes(savedModel)) {
+        modelSelect.value = savedModel;
+      } else {
+        modelSelect.value = preset.model;
+      }
+    } else {
+      modelSelect.style.display = 'none';
+      modelCustomInput.style.display = '';
+      modelCustomInput.value = savedModel || preset?.model || '';
+    }
+  }
+
+  async function _fetchOllamaModels(baseUrl) {
+    const cleaned = (baseUrl || '').trim().replace(/\/+$/, '');
+    if (!cleaned) return [];
+    const tagsUrl = cleaned.endsWith('/v1') ? `${cleaned.slice(0, -3)}/api/tags` : `${cleaned}/api/tags`;
+    try {
+      const response = await fetch(tagsUrl, { method: 'GET' });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const models = Array.isArray(data.models) ? data.models : [];
+      return models.map(item => item?.name).filter(n => typeof n === 'string' && n.trim()).map(n => n.trim());
+    } catch {
+      return [];
+    }
+  }
+
+  function _renderMemoryList() {
+    const listEl = document.getElementById('memory-list');
+    if (!listEl) return;
+    const mm = aiService._memoryManager;
+    if (!mm) {
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
+      return;
+    }
+    const memories = mm.getAll();
+    if (memories.length === 0) {
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const mem of memories) {
+      const item = document.createElement('div');
+      item.className = 'memory-item';
+      const catBadge = document.createElement('span');
+      catBadge.className = 'memory-category';
+      catBadge.textContent = mem.category;
+      const factEl = document.createElement('span');
+      factEl.className = 'memory-fact';
+      factEl.textContent = mem.fact;
+      const delBtn = document.createElement('button');
+      delBtn.className = 'memory-delete';
+      delBtn.textContent = '×';
+      delBtn.addEventListener('click', () => {
+        mm.deleteMemory(mem.id);
+        _renderMemoryList();
+      });
+      item.appendChild(catBadge);
+      item.appendChild(factEl);
+      item.appendChild(delBtn);
+      listEl.appendChild(item);
+    }
+  }
+
+  async function loadSettings() {
+    apiKeyInput.value = await window.electronAPI.getStore('apiKey') || '';
+    const opacity = await window.electronAPI.getStore('opacity') || 1;
+    opacityInput.value = opacity;
+    opacityValue.textContent = Math.round(opacity * 100) + '%';
+
+    const savedPreset = await window.electronAPI.getStore('apiPreset') || 'custom';
+    presetSelect.value = savedPreset;
+
+    const savedModel = await window.electronAPI.getStore('modelName') || '';
+    const savedUrl = await window.electronAPI.getStore('apiBaseUrl') || '';
+    await populateModels(savedPreset, savedModel, savedUrl);
+    if (enableThinkingInput) {
+      enableThinkingInput.checked = await window.electronAPI.getStore('enableThinking') === true;
+    }
+    if (visionModelInput) {
+      visionModelInput.value = await window.electronAPI.getStore('visionModel') || '';
+    }
+    if (personalitySelect) {
+      personalitySelect.value = await window.electronAPI.getStore('catPersonality') || 'lively';
+    }
+
+    _renderMemoryList();
+
+    const skillsEnabled = await window.electronAPI.getStore('skillsEnabled') || {};
+    const elMap = {
+      'skill-text-converter': skillsEnabled.textConverter !== false,
+      'skill-daily-report': skillsEnabled.dailyReport !== false,
+      'skill-todo-extractor': skillsEnabled.todoExtractor !== false,
+    };
+    for (const [id, val] of Object.entries(elMap)) {
+      const el = document.getElementById(id);
+      if (el) el.checked = val;
+    }
+    const skillReportHour = document.getElementById('skill-report-hour');
+    if (skillReportHour) skillReportHour.value = await window.electronAPI.getStore('dailyReportHour') || 18;
+    const todoIntervalInput = document.getElementById('todo-remind-interval');
+    if (todoIntervalInput) todoIntervalInput.value = await window.electronAPI.getStore('todoRemindInterval') || 30;
+
+    const reportDirInput = document.getElementById('daily-report-dir');
+    if (reportDirInput) reportDirInput.value = await window.electronAPI.getStore('dailyReportOutputDir') || '';
+
+    const proactiveConfig = await window.electronAPI.getStore('proactiveConfig') || {};
+    const proactiveEnabled = document.getElementById('proactive-enabled');
+    const proactiveMaxDaily = document.getElementById('proactive-max-daily');
+    const proactiveFreqValue = document.getElementById('proactive-freq-value');
+    const quietStart = document.getElementById('quiet-start');
+    const quietEnd = document.getElementById('quiet-end');
+
+    if (proactiveEnabled) proactiveEnabled.checked = proactiveConfig.enabled !== false;
+    if (proactiveMaxDaily) {
+      proactiveMaxDaily.value = proactiveConfig.maxDailyInteractions || 8;
+      if (proactiveFreqValue) proactiveFreqValue.textContent = proactiveMaxDaily.value;
+    }
+    if (quietStart) quietStart.value = proactiveConfig.quietHours?.start ?? 23;
+    if (quietEnd) quietEnd.value = proactiveConfig.quietHours?.end ?? 7;
+
+    const enabledTypes = proactiveConfig.enabledSceneTypes || ['info', 'care', 'efficiency', 'chat'];
+    for (const t of ['info', 'care', 'efficiency', 'chat']) {
+      const el = document.getElementById(`scene-${t}`);
+      if (el) el.checked = enabledTypes.includes(t);
+    }
+  }
+
+  // Event listeners
+  presetSelect?.addEventListener('change', async () => {
+    await populateModels(presetSelect.value, null, '');
+  });
+
+  apiUrlInput?.addEventListener('change', async () => {
+    if (presetSelect.value === 'ollama') {
+      await populateModels(presetSelect.value,
+        modelSelect.style.display !== 'none' ? modelSelect.value : modelCustomInput.value.trim(),
+        apiUrlInput.value.trim()
+      );
+    }
+  });
+
+  opacityInput?.addEventListener('input', () => {
+    opacityValue.textContent = Math.round(parseFloat(opacityInput.value) * 100) + '%';
+  });
+
+  const proactiveSlider = document.getElementById('proactive-max-daily');
+  const proactiveFreqDisplay = document.getElementById('proactive-freq-value');
+  if (proactiveSlider && proactiveFreqDisplay) {
+    proactiveSlider.addEventListener('input', () => {
+      proactiveFreqDisplay.textContent = proactiveSlider.value;
+    });
+  }
+
+  // Save button
+  document.getElementById('settings-save')?.addEventListener('click', async () => {
+    const presetKey = presetSelect.value;
+    const preset = apiPresets[presetKey];
+
+    let selectedModel;
+    let apiUrl;
+
+    if (preset && !preset.needsUrl) {
+      apiUrl = preset.url;
+      selectedModel = modelSelect.style.display !== 'none' ? modelSelect.value : modelCustomInput.value.trim();
+    } else {
+      apiUrl = apiUrlInput.value.trim();
+      selectedModel = modelCustomInput.value.trim();
+    }
+
+    await window.electronAPI.setStore('apiBaseUrl', apiUrl);
+    await window.electronAPI.setStore('modelName', selectedModel);
+    await window.electronAPI.setStore('enableThinking', enableThinkingInput?.checked === true);
+    await window.electronAPI.setStore('apiKey', apiKeyInput.value);
+    await window.electronAPI.setStore('opacity', parseFloat(opacityInput.value));
+    await window.electronAPI.setStore('apiPreset', presetKey);
+
+    if (visionModelInput) {
+      await window.electronAPI.setStore('visionModel', visionModelInput.value.trim());
+    }
+    if (personalitySelect) {
+      await window.electronAPI.setStore('catPersonality', personalitySelect.value);
+    }
+
+    await aiService.loadConfig();
+
+    const skillsEnabled = {
+      textConverter: document.getElementById('skill-text-converter')?.checked !== false,
+      dailyReport: document.getElementById('skill-daily-report')?.checked !== false,
+      todoExtractor: document.getElementById('skill-todo-extractor')?.checked !== false
+    };
+    await window.electronAPI.setStore('skillsEnabled', skillsEnabled);
+
+    const reportHour = parseInt(document.getElementById('skill-report-hour')?.value) || 18;
+    await window.electronAPI.setStore('dailyReportHour', reportHour);
+
+    const todoInterval = parseInt(document.getElementById('todo-remind-interval')?.value) || 30;
+    await window.electronAPI.setStore('todoRemindInterval', todoInterval);
+
+    const proactiveConfig = {
+      enabled: document.getElementById('proactive-enabled')?.checked !== false,
+      maxDailyInteractions: parseInt(document.getElementById('proactive-max-daily')?.value) || 8,
+      quietHours: {
+        start: parseInt(document.getElementById('quiet-start')?.value) || 23,
+        end: parseInt(document.getElementById('quiet-end')?.value) || 7
+      },
+      enabledSceneTypes: [
+        ...(document.getElementById('scene-info')?.checked ? ['info'] : []),
+        ...(document.getElementById('scene-care')?.checked ? ['care'] : []),
+        ...(document.getElementById('scene-efficiency')?.checked ? ['efficiency'] : []),
+        ...(document.getElementById('scene-chat')?.checked ? ['chat'] : [])
+      ]
+    };
+    await window.electronAPI.setStore('proactiveConfig', proactiveConfig);
+
+    if (chatUI._onSettingsSaved) chatUI._onSettingsSaved();
+  });
+
+  // Memory clear
+  document.getElementById('memory-clear-btn')?.addEventListener('click', () => {
+    if (aiService._memoryManager) {
+      aiService._memoryManager.clearAll();
+      _renderMemoryList();
+    }
+  });
+
+  // Daily report dir picker
+  const reportDirBtn = document.getElementById('daily-report-dir-btn');
+  const reportDirInput = document.getElementById('daily-report-dir');
+  if (reportDirBtn && reportDirInput) {
+    const pickDir = async () => {
+      const result = await window.electronAPI.dailyReportSetDir();
+      if (result.outputDir) reportDirInput.value = result.outputDir;
+    };
+    reportDirBtn.addEventListener('click', pickDir);
+    reportDirInput.addEventListener('click', pickDir);
+  }
+
+  // Test Connection
+  const testBtn = document.getElementById('test-connection-btn');
+  const testStatus = document.getElementById('test-connection-status');
+  const testMetrics = document.getElementById('test-connection-metrics');
+  const testMessageInput = document.getElementById('test-message-input');
+  if (testBtn && testStatus) {
+    testBtn.addEventListener('click', async () => {
+      const presetKey = presetSelect.value;
+      const preset = apiPresets[presetKey];
+
+      let apiUrl = preset ? preset.url : '';
+      let selectedModel = modelSelect.style.display !== 'none' ? modelSelect.value : modelCustomInput.value.trim();
+
+      if (presetKey === 'custom' || !preset || preset.needsUrl) {
+        apiUrl = apiUrlInput.value.trim();
+        selectedModel = modelCustomInput.style.display !== 'none' ? modelCustomInput.value.trim() : modelSelect.value;
+      }
+
+      const apiKey = apiKeyInput.value.trim();
+      if (presetKey !== 'ollama' && !apiKey) {
+        testStatus.textContent = '❌ 请输入 API Key';
+        testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+        return;
+      }
+      if (!apiUrl) {
+        testStatus.textContent = '❌ 请输入 API 地址';
+        testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+        return;
+      }
+
+      testBtn.disabled = true;
+      testBtn.textContent = '测试中...';
+      testStatus.textContent = '';
+      if (testMetrics) testMetrics.textContent = '';
+
+      try {
+        const testMessage = testMessageInput?.value?.trim() || '请回复：连接测试通过';
+        const probe = await aiService.testConnection(apiUrl, apiKey, selectedModel, { preset: presetKey, testMessage });
+        const latencyMs = Math.max(0, Number(probe?.latencyMs || 0));
+        testStatus.textContent = `✅ 连接成功 · ${latencyMs}ms`;
+        testStatus.style.color = 'var(--text-success, #52c41a)';
+        if (testMetrics) {
+          const text = String(probe?.output || '').trim();
+          let evalText = '无有效回复';
+          if (text && text.length >= 2) {
+            if (/error|invalid|forbidden|unauthorized|错误|失败/i.test(text)) evalText = '返回异常内容';
+            else {
+              const hint = testMessage && text.includes(testMessage.slice(0, 4)) ? '（偏复述）' : '';
+              evalText = `回复正常，${text.length}字${hint}`;
+            }
+          } else if (text.length < 2 && text.length > 0) evalText = '回复过短';
+          testMetrics.textContent = `测评: ${evalText}`;
+          testMetrics.style.color = '#888';
+        }
+      } catch (err) {
+        testStatus.textContent = `❌ 失败: ${err.message}`;
+        testStatus.style.color = 'var(--text-danger, #ff4d4f)';
+        if (testMetrics) testMetrics.textContent = '';
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = '测试连接';
+      }
+    });
+  }
+
+  // Load settings on panel open
+  // Use MutationObserver to detect when settings panel becomes visible
+  const settingsContainer = document.getElementById('settings-container');
+  if (settingsContainer) {
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === 'class' && !settingsContainer.classList.contains('hidden')) {
+          loadSettings();
+          break;
+        }
+      }
+    });
+    observer.observe(settingsContainer, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+
 function positionAbovePet(panel) {
   if (panel.classList.contains('maximized')) return;
 
@@ -1217,7 +1611,7 @@ function setupDrag() {
     isDraggingPet: false,
     syncToolbarVisibility: null,
   });
-  const panelIds = ['chat-container', 'tools-container', 'quick-container', 'fun-container'];
+  const panelIds = ['settings-container', 'tools-container', 'fun-container'];
   let isDragging = false;
   let lastX, lastY;
 
@@ -1233,6 +1627,7 @@ function setupDrag() {
       const rect = petContainer.getBoundingClientRect();
       petContainer.style.left = rect.left + 'px';
       petContainer.style.top = rect.top + 'px';
+      petContainer.style.bottom = 'auto';
       petContainer.style.cursor = 'grabbing';
     }
   });
@@ -1307,7 +1702,7 @@ function setupDrag() {
 }
 
 function setupClickThrough() {
-  const selectors = '#pet-container, #chat-container, #tools-container, #quick-container, #fun-container, .mini-cat, .drag-action-menu';
+  const selectors = '#pet-container, #settings-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
 
   document.addEventListener('mouseenter', (e) => {
@@ -1569,8 +1964,9 @@ function setupPetStatusUI(affection, petBase) {
       const mat = getPrestigeMaterial(tier);
       const matName = mat ? `${mat.icon} ${mat.name}` : '转生石';
       prestigeBtn.innerHTML = `<img src="icons/stat-sparkle.png" class="cat-icon icon-sm" alt=""> 转生 (${formatNumber(cost)}<img src="icons/stat-coin.png" class="cat-icon icon-sm" alt=""> + ${matName})`;
-      // Enable if coins sufficient (material check happens on click)
-      prestigeBtn.disabled = !affection.canPrestige;
+      // Enable only if coins sufficient AND material available
+      const hasMaterial = mat && petBase && petBase.getOwnedCount(mat.id) > 0;
+      prestigeBtn.disabled = !affection.canPrestige || !hasMaterial;
     }
   }
 
@@ -1673,7 +2069,7 @@ async function setupConsentToggle() {
   });
   
   // Attach to settings tab, before the save button
-  const settingsTab = document.getElementById('tab-settings');
+  const settingsTab = document.getElementById('tab-settings-main');
   const saveActions = settingsTab?.querySelector('.setting-actions-bottom');
   if (settingsTab && saveActions) {
     const privacySection = document.createElement('div');
