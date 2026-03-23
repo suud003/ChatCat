@@ -145,11 +145,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // A1: Active window tracking
   getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
 
+  // C4: Skill semantic routing
+  skillSemanticMatch: (text, catalog) => ipcRenderer.invoke('skill-semantic-match', text, catalog),
+
   // C4: Skill import
   importSkillFile: (filePath) => ipcRenderer.invoke('skill-import-file', filePath),
   importSkillContent: (name, content) => ipcRenderer.invoke('skill-import-content', name, content),
   getImportedSkills: () => ipcRenderer.invoke('skill-get-imported'),
   removeImportedSkill: (name) => ipcRenderer.invoke('skill-remove-imported', name),
+  onSkillsChanged: (cb) => ipcRenderer.on('skills-changed', () => cb()),
 
   // C4: MCP import
   importMcpConfig: (configPath) => ipcRenderer.invoke('mcp-import-config', configPath),

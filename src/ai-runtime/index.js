@@ -72,23 +72,51 @@ console.log(
 function registerSkillPrompts(skillRegistry) {
   const skillMetas = skillRegistry.getAllMeta();
 
+  const contextMap = {
+    rawTyping: 'raw-typing',
+    convertedText: 'converted-text',
+    todos: 'todo',
+    pomodoroStats: 'pomodoro',
+  };
+
   for (const meta of skillMetas) {
     const templateId = `skill.${meta.name}`;
-    if (PromptRegistry.hasPrompt(templateId)) continue;
 
-    PromptRegistry.register({
-      templateId,
-      version: '1.0.0',
-      source: 'adapter:skill-registry',
-      // Lazy resolver: reads SKILL.md body on demand
-      resolver: () => {
-        const body = skillRegistry.readSkillBody(meta.name);
-        return {
-          system: body || '',
-          userTemplate: null,
-        };
-      },
-    });
+    // Register prompt
+    if (!PromptRegistry.hasPrompt(templateId)) {
+      PromptRegistry.register({
+        templateId,
+        version: '1.0.0',
+        source: 'adapter:skill-registry',
+        // Lazy resolver: reads SKILL.md body on demand
+        resolver: () => {
+          const body = skillRegistry.readSkillBody(meta.name);
+          return {
+            system: body || '',
+            userTemplate: null,
+          };
+        },
+      });
+    }
+
+    // Register scene if not already defined (e.g. imported skills)
+    if (!SceneRegistry.hasScene(templateId)) {
+      const contextProviders = (meta.context || [])
+        .map(k => contextMap[k] || k)
+        .filter(Boolean);
+
+      SceneRegistry.register({
+        id: templateId,
+        category: 'skill',
+        description: meta.description || `Skill: ${meta.name}`,
+        prompt: { templateId, mode: 'instruction' },
+        contextProviders,
+        modelProfile: 'skill-complete',
+        outputMode: 'markdown',
+        memoryPolicy: 'none',
+        postProcessors: [],
+      });
+    }
   }
 
   console.log(`[AIRuntime] Registered ${skillMetas.length} skill prompts`);

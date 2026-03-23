@@ -3063,19 +3063,21 @@ body {
 
 .cat-bubble {
   position: absolute;
-  top: -60px;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
+  margin-bottom: 8px;
   background: #fff;
   border: 2px solid #222;
   border-radius: 16px;
   padding: 8px 14px;
   font-size: 12px;
   color: #333;
-  white-space: nowrap;
-  max-width: 280px;
+  max-width: 360px;
   white-space: normal;
   word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
   box-shadow: 2px 2px 0 #222;
   z-index: 55;
   animation: catBubbleFadeIn 0.3s ease;

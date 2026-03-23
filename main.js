@@ -14,6 +14,7 @@ const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
 const { AIClientMain } = require('./src/shared/ai-client-main');
 const { SkillImporter } = require('./src/skills/skill-importer');
 const { McpConfigImporter } = require('./src/skills/mcp-config-importer');
+const { SkillsManager } = require('./src/skills/skills-manager');
 
 // AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer + Phase 3: trigger bus)
 const aiRuntimeDefs = require('./src/ai-runtime');
@@ -122,6 +123,7 @@ let skillEngine = null;
 let quickPanelManager = null;
 let skillImporter = null;
 let mcpImporter = null;
+let skillsManager = null;
 
 function createWindow() {
   // Use the primary display for initial window placement.
@@ -231,6 +233,12 @@ function createTray() {
       click: () => {
         mainWindow.show();
         mainWindow.webContents.send('open-settings');
+      }
+    },
+    {
+      label: '管理技能/MCP',
+      click: () => {
+        if (skillsManager) skillsManager.show();
       }
     },
     {
@@ -399,6 +407,27 @@ Rules:
   } catch (e) {
     console.warn('[Main] Todo parse failed:', e.message);
     return { hasTodo: false };
+  }
+});
+
+// C4: Skill semantic routing — lightweight AI call to match user intent to a skill
+ipcMain.handle('skill-semantic-match', async (_, userText, skillCatalog) => {
+  try {
+    const aiClient = new AIClientMain(store);
+    const skillList = skillCatalog.map(s => `${s.name}: ${s.description}`).join('\n');
+
+    const content = await aiClient.complete({
+      messages: [
+        { role: 'system', content: `Match user intent to a skill. Skills:\n${skillList}\n\nReply with ONLY the skill name if matched, or "none" if no match.` },
+        { role: 'user', content: userText },
+      ],
+      temperature: 0.1,
+    });
+
+    return (content || 'none').trim().toLowerCase();
+  } catch (e) {
+    console.warn('[Main] Skill semantic match failed:', e.message);
+    return 'none';
   }
 });
 
@@ -1043,6 +1072,12 @@ ipcMain.handle('dialog-open-file', async (_, options) => {
   return { filePath: null };
 });
 
+// C4: Skills manager window close
+ipcMain.on('skills-manager-close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.hide();
+});
+
 app.whenReady().then(() => {
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -1168,6 +1203,9 @@ app.whenReady().then(() => {
     // C4: Initialize skill importer and MCP importer
     skillImporter = new SkillImporter(path.join(__dirname, 'src', 'skills', 'skills'), skillRegistry);
     mcpImporter = new McpConfigImporter(store, skillImporter);
+
+    // C4: Initialize skills manager window
+    skillsManager = new SkillsManager(mainWindow);
 
     // Phase 2: Inject late-initialized services into AIRuntime
     aiRuntime.setServices({ keyboardRecorder, skillRegistry });

@@ -145,9 +145,9 @@ export class ChatUI {
 
     this.isStreaming = false;
 
-    // Show final reply in bubble (truncated)
+    // Show final reply in bubble
     if (fullResp) {
-      this._showBubbleText(fullResp.slice(0, 120) + (fullResp.length > 120 ? '...' : ''));
+      this._showBubbleText(fullResp);
     }
 
     // V1.1: Sentiment-based cat expression
@@ -224,7 +224,10 @@ export class ChatUI {
       } else {
         waitEl.textContent = result.output || '(无输出)';
       }
-      this._showBubbleText((result.output || '').slice(0, 100));
+      this._showBubbleText(result.output || '(无输出)');
+
+      // Auto-import if AI output contains a valid SKILL.md (e.g. from skill-creator)
+      await this._tryAutoImportSkill(result.output);
     } catch (err) {
       waitEl.textContent = `执行错误: ${err.message}`;
       waitEl.classList.add('error');
@@ -232,6 +235,49 @@ export class ChatUI {
     }
 
     this.scrollToBottom();
+  }
+
+  /**
+   * Auto-detect and import SKILL.md content from AI output.
+   * Extracts content between ```markdown or ``` fences that starts with ---.
+   */
+  async _tryAutoImportSkill(output) {
+    if (!output) return;
+
+    // Try to extract SKILL.md from fenced code block
+    let skillContent = null;
+    const fenceMatch = output.match(/```(?:markdown|md|yaml)?\s*\n(---[\s\S]*?---[\s\S]*?)```/);
+    if (fenceMatch) {
+      skillContent = fenceMatch[1].trim();
+    } else if (output.trim().startsWith('---')) {
+      // Raw output is the SKILL.md itself
+      skillContent = output.trim();
+    }
+
+    if (!skillContent) return;
+
+    // Validate: must have frontmatter with name + description + body
+    const endIdx = skillContent.indexOf('---', 3);
+    if (endIdx === -1) return;
+    const yaml = skillContent.slice(3, endIdx);
+    if (!yaml.includes('name:') || !yaml.includes('description:')) return;
+    const body = skillContent.slice(endIdx + 3).trim();
+    if (!body) return;
+
+    // Extract name from frontmatter
+    const nameMatch = yaml.match(/name:\s*(.+)/);
+    if (!nameMatch) return;
+    const name = nameMatch[1].trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff_-]/g, '-');
+
+    try {
+      const result = await window.electronAPI.importSkillContent(name, skillContent);
+      if (result.success) {
+        this._showBubbleText(`✅ 技能「${name}」已自动导入！`);
+        console.log(`[ChatUI] Auto-imported skill: ${name}`);
+      }
+    } catch (err) {
+      console.warn('[ChatUI] Auto-import skill failed:', err.message);
+    }
   }
 
   /**
@@ -301,9 +347,8 @@ export class ChatUI {
 
   _updateBubbleText(text) {
     if (!this.bubbleEl) return;
-    // Show truncated streaming text in bubble
-    const truncated = text.slice(0, 120) + (text.length > 120 ? '...' : '');
-    this.bubbleEl.textContent = truncated;
+    // Show streaming text in bubble
+    this.bubbleEl.textContent = text;
   }
 
   _toggleHistory() {
