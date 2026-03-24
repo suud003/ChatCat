@@ -39,7 +39,12 @@
       "Bash(npm ls:*)",
       "Bash(npm run:*)",
       "Bash(ls:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git clone:*)",
+      "Bash(export PATH=\"$HOME/.bun/bin:$PATH\")",
+      "Read(//Users/leopptang/.claude/skills/gstack/**)",
+      "Bash(./setup)",
+      "Bash(export PATH=$HOME/.bun/bin:$PATH)"
     ]
   }
 }

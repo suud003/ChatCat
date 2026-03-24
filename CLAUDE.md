@@ -1,5 +1,5 @@
 # ChatCat Desktop Pet - Architecture & Development Standards
-
+## 始终使用中文和用户交流
 ## Project Overview
 
 ChatCat 是一个基于 Electron 的桌面宠物应用，支持 AI 聊天、生产力工具、节奏分析、多人联机等功能。
@@ -297,3 +297,33 @@ npm run build      # 构建 Windows 安装包
 npm run build:mac  # 构建 macOS 安装包
 npm run build:all  # 全平台构建
 ```
+
+### Available Skills
+
+- `/office-hours` - Office hours
+- `/plan-ceo-review` - Plan CEO review
+- `/plan-eng-review` - Plan engineering review
+- `/plan-design-review` - Plan design review
+- `/design-consultation` - Design consultation
+- `/review` - Code review
+- `/ship` - Ship code
+- `/land-and-deploy` - Land and deploy
+- `/canary` - Canary deployment
+- `/benchmark` - Benchmarking
+- `/browse` - Web browsing (**use this instead of mcp__claude-in-chrome__**)
+- `/qa` - QA testing
+- `/qa-only` - QA only
+- `/design-review` - Design review
+- `/setup-browser-cookies` - Setup browser cookies
+- `/setup-deploy` - Setup deployment
+- `/retro` - Retrospective
+- `/investigate` - Investigate issues
+- `/document-release` - Document release
+- `/codex` - Codex
+- `/cso` - CSO
+- `/autoplan` - Auto planning
+- `/careful` - Careful mode
+- `/freeze` - Freeze
+- `/guard` - Guard
+- `/unfreeze` - Unfreeze
+- `/gstack-upgrade` - Upgrade gstack
