@@ -28,41 +28,22 @@ class QuickPanelManager {
     this._setupIPC();
   }
 
+  /**
+   * Send IPC message to both panel window and main window (inline UI).
+   * The inline QuickPanel UI lives inside mainWindow, so we must send there too.
+   */
+  _sendToUI(channel, ...args) {
+    if (this._panelWindow && !this._panelWindow.isDestroyed()) {
+      this._panelWindow.webContents.send(channel, ...args);
+    }
+    if (this._mainWindow && !this._mainWindow.isDestroyed()) {
+      this._mainWindow.webContents.send(channel, ...args);
+    }
+  }
+
   _createPanel() {
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    
-    this._panelWindow = new BrowserWindow({
-      width: 420,
-      height: 260,
-      x: Math.round(width / 2 - 210),   // 屏幕居中
-      y: Math.round(height * 0.3),       // 上方1/3位置
-      frame: false,
-      transparent: true,
-      alwaysOnTop: true,
-      skipTaskbar: true,
-      resizable: false,
-      show: false,
-      webPreferences: {
-        preload: path.join(__dirname, 'quick-panel-preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false
-      }
-    });
-    
-    this._panelWindow.loadFile(path.join(__dirname, 'quick-panel.html'));
-    
-    // 失焦自动隐藏 (可选，用户可在设置中关闭)
-    this._panelWindow.on('blur', () => {
-      if (this._store.get('quickPanelAutoHide', true)) {
-        this.hide();
-      }
-    });
-    
-    this._panelWindow.on('closed', () => {
-      this._panelWindow = null;
-      this._isVisible = false;
-    });
+    // quick-panel.html has been removed — QuickPanel now uses inline UI inside mainWindow.
+    // Standalone panel window is no longer created.
   }
 
   _clamp(value, min, max) {
@@ -239,9 +220,7 @@ class QuickPanelManager {
           // Subscribe to chunks for streaming to QuickPanel window
           const chunkHandler = (evt) => {
             if (evt.correlationId === correlationId) {
-              if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-                this._panelWindow.webContents.send('qp-stream-chunk', evt.chunk);
-              }
+              this._sendToUI('qp-stream-chunk', evt.chunk);
             }
           };
           this._triggerBus.on('trigger:chunk', chunkHandler);
@@ -257,23 +236,17 @@ class QuickPanelManager {
         } else {
           // Phase 2 fallback: direct AIRuntime
           result = await this._aiRuntime.runStream(trigger, (chunk) => {
-            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
-            }
+            this._sendToUI('qp-stream-chunk', chunk);
           });
         }
-        
+
         this._saveToHistory(mode, text, result);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-end', result);
-        }
-        
+        this._sendToUI('qp-stream-end', result);
+
         return result;
       } catch (err) {
         console.error('[QuickPanel] AI 请求失败:', err.message);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-error', err.message);
-        }
+        this._sendToUI('qp-stream-error', err.message);
         throw err;
       }
     });
@@ -290,9 +263,7 @@ class QuickPanelManager {
 
           const chunkHandler = (evt) => {
             if (evt.correlationId === correlationId) {
-              if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-                this._panelWindow.webContents.send('qp-stream-chunk', evt.chunk);
-              }
+              this._sendToUI('qp-stream-chunk', evt.chunk);
             }
           };
           this._triggerBus.on('trigger:chunk', chunkHandler);
@@ -308,26 +279,20 @@ class QuickPanelManager {
         } else {
           // Phase 2 fallback: direct AIRuntime
           result = await this._aiRuntime.runStream(trigger, (chunk) => {
-            if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-              this._panelWindow.webContents.send('qp-stream-chunk', chunk);
-            }
+            this._sendToUI('qp-stream-chunk', chunk);
           });
         }
-        
+
         const lastMsg = Array.isArray(history) && history.length > 0
           ? history[history.length - 1].content
           : question;
         this._saveToHistory('ask', lastMsg, result);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-end', result);
-        }
-        
+        this._sendToUI('qp-stream-end', result);
+
         return result;
       } catch (err) {
         console.error('[QuickPanel] AI 请求失败:', err.message);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-stream-error', err.message);
-        }
+        this._sendToUI('qp-stream-error', err.message);
         throw err;
       }
     });
@@ -376,6 +341,13 @@ class QuickPanelManager {
             dataUrl: image.toDataURL()
           });
         }
+        // Also send to main window inline UI
+        if (this._mainWindow && !this._mainWindow.isDestroyed()) {
+          this._mainWindow.webContents.send('qp-auto-recognize-image', {
+            base64,
+            dataUrl: image.toDataURL()
+          });
+        }
         
         return { success: true, message: '已打开 QuickPanel，请点击"开始识别"按钮' };
       } catch (err) {
@@ -387,38 +359,32 @@ class QuickPanelManager {
     // 粘贴图片识别
     ipcMain.handle('qp-recognize-image', async (event, base64) => {
       try {
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: '⏳ 正在识别图片内容，请稍候...'
-          });
-        }
-        
+        this._sendToUI('qp-display-direct-result', {
+          mode: 'screenshot',
+          result: '⏳ 正在识别图片内容，请稍候...'
+        });
+
         const config = {
           visionModel: this._store.get('visionModel'),
           modelName: this._store.get('modelName'),
         };
-        
+
         const result = await this._screenshotOCR.processImage(base64, config);
-        
+
         this._saveToHistory('ocr', '[粘贴图片]', result);
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: result
-          });
-        }
-        
+
+        this._sendToUI('qp-display-direct-result', {
+          mode: 'screenshot',
+          result: result
+        });
+
         return result;
       } catch (err) {
         console.error('[QuickPanel] 粘贴图片识别失败:', err.message);
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: `❌ 图片识别失败:\n${err.message}`
-          });
-        }
+        this._sendToUI('qp-display-direct-result', {
+          mode: 'screenshot',
+          result: `❌ 图片识别失败:\n${err.message}`
+        });
         throw err;
       }
     });
@@ -432,9 +398,7 @@ class QuickPanelManager {
     ipcMain.on('qp-show-result', (event, data) => {
       this.show();
       setTimeout(() => {
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', data);
-        }
+        this._sendToUI('qp-display-direct-result', data);
       }, 500);
     });
   }
@@ -466,6 +430,11 @@ class QuickPanelManager {
   async show() {
     if (!this._panelWindow || this._panelWindow.isDestroyed()) {
       this._createPanel();
+    }
+    // _createPanel() is a no-op (panel HTML removed) — skip panel window operations
+    if (!this._panelWindow || this._panelWindow.isDestroyed()) {
+      this._isVisible = true;
+      return;
     }
     if (!this._panelWindow.webContents.isLoadingMainFrame()) {
       // no-op
@@ -575,39 +544,33 @@ class QuickPanelManager {
       const base64 = await this._screenshotOCR.captureScreen();
       if (base64) {
         this.show();
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: '⏳ 正在识别图片内容，请稍候...'
-          });
-        }
-        
+
+        this._sendToUI('qp-display-direct-result', {
+          mode: 'screenshot',
+          result: '⏳ 正在识别图片内容，请稍候...'
+        });
+
         const config = {
           visionModel: this._store.get('visionModel'),
           modelName: this._store.get('modelName'),
         };
-        
+
         const result = await this._screenshotOCR.processImage(base64, config);
-        
+
         this._saveToHistory('ocr', '[图片截图]', result);
-        
-        if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: result
-          });
-        }
+
+        this._sendToUI('qp-display-direct-result', {
+          mode: 'screenshot',
+          result: result
+        });
       }
     } catch (err) {
       console.error('[QuickPanel] 截图识别失败:', err.message);
-      if (this._panelWindow && !this._panelWindow.isDestroyed()) {
-          this.show();
-          this._panelWindow.webContents.send('qp-display-direct-result', {
-            mode: 'screenshot',
-            result: `❌ 截图或识别失败:\n${err.message}`
-          });
-      }
+      this.show();
+      this._sendToUI('qp-display-direct-result', {
+        mode: 'screenshot',
+        result: `❌ 截图或识别失败:\n${err.message}`
+      });
     }
   }
 

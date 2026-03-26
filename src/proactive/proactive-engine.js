@@ -297,8 +297,9 @@ export class ProactiveEngine {
     };
 
     // Try to push through timing judge
-    // For app-switch scenes, bypass timing judge interval since they have their own cooldown
-    const bypassTimingJudge = scene.signal === 'app-switch';
+    // For app-switch and clipboard scenes, bypass timing judge interval since they have their own cooldown
+    const isClipboardScene = scene.signal === 'clipboard-content';
+    const bypassTimingJudge = scene.signal === 'app-switch' || isClipboardScene;
     if (bypassTimingJudge) {
       // Directly push, bypassing min interval check (scene cooldown handles rate limiting)
       this.notificationMgr.push(notification);

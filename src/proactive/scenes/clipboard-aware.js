@@ -1,92 +1,126 @@
 /**
- * Scene 24: Clipboard Aware — L0/L1 notifications
+ * Scene 24: Clipboard Aware — L3 notifications with AI actions
  * Reacts to clipboard content changes.
  *
- * | Content       | Condition              | Behavior                                | Level |
- * |--------------|------------------------|-----------------------------------------|-------|
- * | URL          | Contains http(s)://     | Suggest saving as note                  | L1    |
- * | Code         | Contains code patterns  | Encouragement                           | L0    |
- * | Long text    | >200 chars              | Comment                                 | L0    |
- * | Repeat copy  | Same content ≥3 times   | Suggest saving as template              | L1    |
+ * | Content       | Condition              | Behavior                                    | Level |
+ * |--------------|------------------------|--------------------------------------------|-------|
+ * | URL          | Contains http(s)://     | Suggest translate / polish / explain         | L3    |
+ * | Code         | Contains code patterns  | Suggest translate / explain code             | L3    |
+ * | Long text    | >200 chars              | Suggest translate / polish / explain         | L3    |
+ * | Repeat copy  | Same content ≥3 times   | Suggest saving as template                   | L1    |
  */
+
+const textActions = [
+  { label: '🌐 翻译', action: 'clipboard-translate' },
+  { label: '✨ 润色', action: 'clipboard-polish' },
+  { label: '💡 解释', action: 'clipboard-explain' },
+];
+const codeActions = [
+  { label: '🌐 翻译', action: 'clipboard-translate' },
+  { label: '💡 解释代码', action: 'clipboard-explain' },
+];
 
 export const clipboardUrlScene = {
   id: 24,
   name: 'clipboard-url',
   type: 'efficiency',
-  level: 'L1',
+  level: 'L3',
   signal: 'clipboard-content',
   condition: (ctx) => ctx.type === 'url' && !ctx.isRepeat,
   getMessage: (ctx, personality) => {
     const messages = {
       lively: [
-        '🔗 复制了一个链接！要用 /note 保存起来吗？',
-        '🌐 发现一个 URL！要记下来吗？/note 帮你保存~',
-        '📎 这个链接看起来很重要！/note 一键保存~'
+        '🔗 复制了一个链接！要翻译、润色还是解释一下？',
+        '🌐 发现一个 URL！猫猫可以帮你处理~',
+        '📎 这个链接里的内容，要怎么处理呀？'
       ],
       cool: [
-        '一个链接。要存吗？/note',
-        '...URL。需要记录的话用 /note。',
-        '链接已检测。自己决定存不存。'
+        '一个链接。要处理吗？',
+        '...URL。翻译还是解释？',
+        '链接已检测。自己选。'
       ],
       soft: [
-        '🌸 复制了一个链接呢~ 要记下来吗？',
-        '🌸 这个链接要保存起来吗？猫咪帮你记~',
-        '🌸 用 /note 保存这个链接吧~ 以后好找~'
+        '🌸 复制了一个链接呢~ 要翻译或者解释吗？',
+        '🌸 这个链接要处理一下吗？猫咪帮你~',
+        '🌸 需要猫咪帮你翻译或润色吗~'
       ],
       scholar: [
-        '🔗 检测到 URL。建议使用 /note 存档以便后续引用。',
-        '📌 知识管理建议：重要链接应及时归档。/note <描述>',
-        '🗂️ 链接捕获。建议附加标签后存入笔记。'
+        '🔗 检测到 URL。可以翻译、润色或解释内容。',
+        '📌 链接捕获。选择一个操作吧。',
+        '🗂️ 需要对链接内容进行什么处理？'
       ]
     };
     const pool = messages[personality] || messages.lively;
     return pool[Math.floor(Math.random() * pool.length)];
   },
-  actions: [],
-  cooldown: 5 * 60 * 1000 // 5 minutes
+  actions: textActions,
+  cooldown: 30 * 1000 // 30 seconds
 };
 
 export const clipboardCodeScene = {
   id: 241,
   name: 'clipboard-code',
   type: 'chat',
-  level: 'L0',
+  level: 'L3',
   signal: 'clipboard-content',
-  condition: (ctx) => ctx.type === 'code',
+  condition: (ctx) => ctx.type === 'code' && !ctx.isRepeat,
   getMessage: (ctx, personality) => {
     const messages = {
-      lively: ['💻 在研究代码呀~ 加油！'],
-      cool: ['...代码。'],
-      soft: ['🌸 在看代码呢~ 好厉害~'],
-      scholar: ['📝 代码片段已检测。']
+      lively: [
+        '💻 在研究代码呀~ 要翻译还是让猫猫解释一下？',
+        '💻 代码！要帮你翻译或解释吗？',
+      ],
+      cool: [
+        '...代码。翻译还是解释？',
+        '代码片段。要处理吗。',
+      ],
+      soft: [
+        '🌸 在看代码呢~ 要猫咪帮你翻译或解释吗？',
+        '🌸 好多代码~ 需要帮忙吗？',
+      ],
+      scholar: [
+        '📝 代码片段已检测。可翻译注释或逐行解释。',
+        '💻 检测到代码。选择操作。',
+      ]
     };
     const pool = messages[personality] || messages.lively;
     return pool[Math.floor(Math.random() * pool.length)];
   },
-  actions: [],
-  cooldown: 15 * 60 * 1000 // 15 minutes
+  actions: codeActions,
+  cooldown: 30 * 1000 // 30 seconds
 };
 
 export const clipboardLongTextScene = {
   id: 242,
   name: 'clipboard-long-text',
   type: 'chat',
-  level: 'L0',
+  level: 'L3',
   signal: 'clipboard-content',
   condition: (ctx) => ctx.type === 'text' && ctx.length > 200,
   getMessage: (ctx, personality) => {
     const messages = {
-      lively: ['📋 复制了好多内容！是在整理资料吗？'],
-      cool: ['...复制了不少。'],
-      soft: ['🌸 好多内容呢~ 辛苦整理了~'],
-      scholar: [`📊 ${ctx.length} 字符已复制。建议核实内容完整性。`]
+      lively: [
+        '📋 好多内容！要翻译、润色还是解释一下？',
+        '📋 复制了一大段！猫猫可以帮你处理~',
+      ],
+      cool: [
+        '...复制了不少。要处理吗？',
+        '一大段文字。翻译、润色还是解释。',
+      ],
+      soft: [
+        '🌸 好多内容呢~ 要猫咪帮你翻译或润色吗？',
+        '🌸 这么多字~ 需要帮忙处理吗？',
+      ],
+      scholar: [
+        `📊 ${ctx.length} 字符已复制。可翻译、润色或解释。`,
+        '📋 大段文本检测。选择操作。',
+      ]
     };
     const pool = messages[personality] || messages.lively;
     return pool[Math.floor(Math.random() * pool.length)];
   },
-  actions: [],
-  cooldown: 10 * 60 * 1000 // 10 minutes
+  actions: textActions,
+  cooldown: 30 * 1000 // 30 seconds
 };
 
 export const clipboardRepeatScene = {
@@ -123,5 +157,5 @@ export const clipboardRepeatScene = {
     return pool[Math.floor(Math.random() * pool.length)];
   },
   actions: [],
-  cooldown: 30 * 60 * 1000 // 30 minutes
+  cooldown: 60 * 1000 // 60 seconds
 };

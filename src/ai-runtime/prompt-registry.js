@@ -256,6 +256,21 @@ PromptRegistry.register({
   userTemplate: '请解释以下内容：\n\n{text}',
 });
 
+// Quick Panel: Translate (中英互译)
+PromptRegistry.register({
+  templateId: 'quick-translate',
+  version: '1.0.0',
+  source: 'inline',
+  system: `你是一个专业的翻译助手。
+要求：
+1. 如果原文是中文，翻译为英文
+2. 如果原文是英文或其他语言，翻译为中文
+3. 保持原文的语气和风格
+4. 专业术语保留原文并在括号中注释
+5. 只输出翻译结果，不要解释`,
+  userTemplate: '请翻译以下内容：\n\n{text}',
+});
+
 // Quick Panel: Ask (from src/quick-panel/quick-panel-main.js:129)
 PromptRegistry.register({
   templateId: 'quick-ask',

@@ -44,6 +44,8 @@ export class SpriteSheetCharacter {
     this._nextBlink = this._randomBlink();
     this._blinkTimer = 0;
     this._happyTimer = null;
+    this._intentTimer = null;
+    this._workingInterval = null;
 
     // Typing alternation
     this._lastTypingPaw = 'right';
@@ -134,9 +136,56 @@ export class SpriteSheetCharacter {
     }, HAPPY_DURATION);
   }
 
+  triggerIntent(name) {
+    console.log('[SpriteSheetCharacter] triggerIntent:', name);
+    clearTimeout(this._intentTimer);
+    if (this._workingInterval) { clearInterval(this._workingInterval); this._workingInterval = null; }
+    switch (name) {
+      case 'curious':
+        this._setState('click-react');
+        this._resetIdle();
+        this._intentTimer = setTimeout(() => {
+          if (this._state === 'click-react') this._setState('idle');
+        }, 2500);
+        break;
+      case 'working':
+        this._workingInterval = setInterval(() => this.triggerTyping(), 200);
+        break;
+      case 'proud':
+        this.triggerHappy();
+        break;
+      case 'sleepy':
+        this._setState('sleep');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 3000);
+        break;
+      case 'alert':
+        clearTimeout(this._intentTimer);
+        this._setState('click-react');
+        this._resetIdle();
+        this._intentTimer = setTimeout(() => {
+          if (this._state === 'click-react') this._setState('idle');
+        }, 2000);
+        break;
+      case 'encouraging':
+        this.triggerHappy();
+        break;
+      case 'idle':
+        // Don't interrupt active intent animations (like curious/click-react)
+        if (this._state === 'click-react' || this._state === 'happy') break;
+        // falls through
+      default:
+        this._setState('idle');
+        break;
+        this._setState('idle');
+        break;
+    }
+  }
+
   destroy() {
     this.stop();
     clearTimeout(this._happyTimer);
+    clearTimeout(this._intentTimer);
+    if (this._workingInterval) clearInterval(this._workingInterval);
   }
 
   /* ------------------------------------------------------------------ */

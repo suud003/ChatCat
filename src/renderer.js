@@ -98,6 +98,9 @@ let quickPanelUI = null;
 // Affection system reference (used by pet status UI)
 let affectionSystem = null;
 
+// NotificationMgr reference (used by switchCharacter to update character)
+let _notificationMgr = null;
+
 /**
  * Show a floating cat bubble above the pet.
  * Supports both simple text and structured L2/L3 notifications.
@@ -362,6 +365,8 @@ async function init() {
   proactiveEngine.setPersonality(savedPersonality);
   proactiveEngine.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
+  proactiveEngine.notificationMgr.setCharacter(activeCharacter);
+  _notificationMgr = proactiveEngine.notificationMgr;
 
   // ========== A4: 离线冒险检测 ==========
   try {
@@ -800,34 +805,6 @@ async function init() {
           } catch (err) {
             showCatBubble(`😿 识别失败: ${err.message}`, 5000);
           }
-        }
-      }
-    });
-  });
-
-  // V2: Clipboard text detection — offer actions when user copies text
-  window.electronAPI.onClipboardUpdate((item) => {
-    const text = item?.text?.trim();
-    console.log('[ClipboardDetect] text length:', text?.length || 0);
-    if (!text || text.length < 10) return; // ignore very short copies
-
-    showNotification({
-      level: 'L3',
-      message: '🐱 检测到复制的文字，要我帮你处理吗？',
-      actions: [
-        { label: '✏️ 润色', action: 'polish' },
-        { label: '📋 总结', action: 'summarize' },
-        { label: '🔍 解释', action: 'explain' },
-        { label: '忽略', action: 'dismiss' }
-      ],
-      onAction: async (action) => {
-        if (action === 'dismiss') return;
-        showCatBubble('🐱 处理中...');
-        try {
-          const result = await window.electronAPI.qpProcessText(action, text);
-          displayResult(result, action);
-        } catch (err) {
-          showCatBubble('🐱 哎呀，处理出错了...');
         }
       }
     });
@@ -1960,6 +1937,8 @@ function setupCharacterSelect(canvas) {
       }
     }
     await window.electronAPI.setStore('character', preset.id);
+    // Update character reference in notification manager
+    if (_notificationMgr) _notificationMgr.setCharacter(activeCharacter);
     // Push skin change to multiplayer immediately (if connected)
     try { _mpClient?.sendStateUpdate({ skinId: preset.id }, true); } catch(e) {}
     renderGrid();

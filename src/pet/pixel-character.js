@@ -95,8 +95,23 @@ export class SpriteCharacter {
     this.mouthOpen = false;
 
     // Click expression state
-    this._clickExpr = null;     // { emoji, startTime, duration }
+    this._clickExpr = null;     // { icon, startTime, duration }
     this._clickExprTimer = null;
+
+    // Preload pixel-art expression icons
+    this._exprImages = {};
+    const exprFiles = {
+      curious: 'icons/expr-curious.png', working: 'icons/expr-working.png',
+      proud: 'icons/expr-proud.png', sleepy: 'icons/expr-sleepy.png',
+      alert: 'icons/expr-alert.png', star: 'icons/expr-star.png',
+      heart: 'icons/expr-heart.png', anger: 'icons/expr-anger.png',
+      note: 'icons/expr-note.png', sweat: 'icons/expr-sweat.png',
+    };
+    for (const [key, file] of Object.entries(exprFiles)) {
+      const img = new Image();
+      img.src = file;
+      this._exprImages[key] = img;
+    }
 
     // Typing alternation
     this._lastTypingPaw = 'right';
@@ -105,6 +120,7 @@ export class SpriteCharacter {
     this._leftTimer = null;
     this._rightTimer = null;
     this._mouthTimer = null;
+    this._intentTimer = null;
 
     this._animate = this._animate.bind(this);
   }
@@ -157,10 +173,10 @@ export class SpriteCharacter {
   }
 
   triggerClick() {
-    // Show a random expression emoji near the cat's face instead of paw slap
-    const expressions = ['✨', '❗', '💢', '❤', '❓', '💫', '⭐', '♪', '😳', '💤'];
-    const emoji = expressions[Math.floor(Math.random() * expressions.length)];
-    this._clickExpr = { emoji, startTime: performance.now(), duration: 500 };
+    // Show a random pixel-art expression icon near the cat's face instead of paw slap
+    const expressions = ['proud', 'alert', 'anger', 'heart', 'curious', 'star', 'note', 'sweat', 'sleepy'];
+    const icon = expressions[Math.floor(Math.random() * expressions.length)];
+    this._clickExpr = { icon, startTime: performance.now(), duration: 500 };
     clearTimeout(this._clickExprTimer);
     this._clickExprTimer = setTimeout(() => { this._clickExpr = null; }, 500);
   }
@@ -171,12 +187,71 @@ export class SpriteCharacter {
     this._mouthTimer = setTimeout(() => { this.mouthOpen = false; }, 1500);
   }
 
+  triggerIntent(name) {
+    console.log('[SpriteCharacter] triggerIntent:', name);
+    clearTimeout(this._intentTimer);
+    const intentIcons = {
+      curious: 'curious',
+      working: 'working',
+      proud: 'proud',
+      sleepy: 'sleepy',
+      alert: 'alert',
+      encouraging: 'star',
+    };
+    const icon = intentIcons[name];
+    if (icon) {
+      this._clickExpr = { icon, startTime: performance.now(), duration: name === 'working' ? 999999 : 2500 };
+      clearTimeout(this._clickExprTimer);
+      if (name !== 'working') {
+        this._clickExprTimer = setTimeout(() => { this._clickExpr = null; }, 2500);
+      }
+    }
+
+    // Pose changes for specific intents
+    if (name === 'curious' || name === 'alert') {
+      // Lift both paws + open mouth = surprised/curious pose
+      this.leftPawDown = true;
+      this.rightPawDown = true;
+      this.mouthOpen = true;
+      clearTimeout(this._leftTimer);
+      clearTimeout(this._rightTimer);
+      clearTimeout(this._mouthTimer);
+      this._intentTimer = setTimeout(() => {
+        this.leftPawDown = false;
+        this.rightPawDown = false;
+        this.mouthOpen = false;
+      }, 2500);
+    } else if (name === 'proud' || name === 'encouraging') {
+      this.mouthOpen = true;
+      clearTimeout(this._mouthTimer);
+      this._mouthTimer = setTimeout(() => { this.mouthOpen = false; }, 1500);
+    } else if (name === 'idle') {
+      // Always clear working intent (duration 999999 would block idle forever)
+      // For other intents, let short animations finish naturally
+      if (this._clickExpr) {
+        const isWorking = this._clickExpr.duration > 10000;
+        const elapsed = performance.now() - this._clickExpr.startTime;
+        if (!isWorking && elapsed < this._clickExpr.duration) {
+          return; // Let animation finish naturally
+        }
+      }
+      this._clickExpr = null;
+      this.mouthOpen = false;
+      this.leftPawDown = false;
+      this.rightPawDown = false;
+    } else if (name === 'sleepy') {
+      this._clickExpr = null;
+      this.mouthOpen = false;
+    }
+  }
+
   destroy() {
     this.stop();
     clearTimeout(this._leftTimer);
     clearTimeout(this._rightTimer);
     clearTimeout(this._mouthTimer);
     clearTimeout(this._clickExprTimer);
+    clearTimeout(this._intentTimer);
   }
 
   // --- Internal ---
@@ -289,14 +364,21 @@ export class SpriteCharacter {
     if (this._clickExpr) {
       const elapsed = performance.now() - this._clickExpr.startTime;
       const progress = Math.min(elapsed / this._clickExpr.duration, 1);
-      const alpha = 1 - progress * 0.7;
-      const floatY = progress * 50;
+      const alpha = 1 - progress * 0.5;
+      const floatY = progress * 40;
+      // Scale-in bounce effect at start
+      const scaleProgress = Math.min(elapsed / 300, 1);
+      const exprScale = scaleProgress < 1 ? 0.5 + 0.5 * scaleProgress + 0.2 * Math.sin(scaleProgress * Math.PI) : 1.0;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = 'bold 36px serif';
-      ctx.textAlign = 'center';
-      // Draw near top-right of the visible cat area
-      ctx.fillText(this._clickExpr.emoji, cw * 0.72, ch * 0.58 - floatY);
+      // Draw pixel-art icon instead of emoji text
+      const img = this._exprImages[this._clickExpr.icon];
+      if (img?.complete && img.naturalWidth > 0) {
+        const size = Math.round(48 * exprScale);
+        const drawX = cw * 0.72 - size / 2;
+        const drawY = ch * 0.52 - floatY - size / 2;
+        ctx.drawImage(img, drawX, drawY, size, size);
+      }
       ctx.restore();
     }
   }

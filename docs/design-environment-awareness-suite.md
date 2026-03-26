@@ -343,8 +343,12 @@ ChatCat 的假设是：一只能感知你工作状态的桌面猫，在正确时
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
 | Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 0 | — | — |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 6 issues, 2 critical gaps |
 | Design Review | `/plan-design-review` | UI/UX gaps | 1 | issues_open | score: 3/10 → 7/10, 6 decisions |
+| Outside Voice | claude subagent | Independent plan challenge | 1 | issues_found | 10 findings, 4 cross-model tensions |
 
-- **UNRESOLVED:** 0 design decisions pending
-- **VERDICT:** DESIGN REVIEWED (3→7) — eng review required before implementation
+- **CRITICAL GAPS:** (1) 剪贴板完整文本从点击按钮到 AI 的数据通路不存在; (2) 应用自身复制结果会触发新气泡循环
+- **OUTSIDE VOICE KEY FINDINGS:** L3 气泡需要状态机重写；日限 8 条通知预算会被剪贴板耗尽；8 秒自动消失与 AI 处理时间竞争
+- **TODOS:** 3 items (敏感过滤策略、翻译 Prompt、测试基础设施)
+- **UNRESOLVED:** 0 decisions pending
+- **VERDICT:** ENG REVIEW + DESIGN REVIEW done — 2 critical gaps need resolution before implementation

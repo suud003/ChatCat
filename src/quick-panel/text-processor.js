@@ -15,12 +15,14 @@ const MODE_TO_TEMPLATE = {
   polish: 'quick-polish',
   summarize: 'quick-summarize',
   explain: 'quick-explain',
+  translate: 'quick-translate',
 };
 
 const MODE_TO_PROFILE = {
   polish: 'quick-polish',
   summarize: 'quick-summarize',
   explain: 'quick-explain',
+  translate: 'quick-polish',
 };
 
 class TextProcessor {

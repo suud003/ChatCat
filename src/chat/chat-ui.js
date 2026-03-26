@@ -71,8 +71,12 @@ export class ChatUI {
       this._toggleHistory();
     });
 
-    // Click on cat bubble to toggle history
-    this.bubbleEl?.addEventListener('click', () => {
+    // Click on cat bubble to toggle history (but not when clicking action buttons)
+    this.bubbleEl?.addEventListener('click', (e) => {
+      // Don't toggle history when clicking on action buttons, inputs, or other interactive elements
+      if (e.target.closest('.bubble-action-btn, .bubble-dismiss-btn, .bubble-reply-input, .bubble-reply-send, .bubble-actions, .bubble-input-row')) {
+        return;
+      }
       this._toggleHistory();
     });
 

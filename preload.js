@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Clipboard
   clipboardGetHistory: () => ipcRenderer.invoke('clipboard-get-history'),
   clipboardCopy: (text) => ipcRenderer.invoke('clipboard-copy', text),
+  clipboardGetLatest: () => ipcRenderer.invoke('clipboard-get-latest'),
   clipboardClear: () => ipcRenderer.invoke('clipboard-clear'),
   onClipboardUpdate: (callback) => {
     const listener = (_, data) => callback(data);

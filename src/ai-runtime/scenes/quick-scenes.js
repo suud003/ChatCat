@@ -70,6 +70,25 @@ SceneRegistry.register({
   postProcessors: [],
 });
 
+// ─── quick.translate ─────────────────────────────────────────────────────
+
+SceneRegistry.register({
+  id: 'quick.translate',
+  category: 'quick',
+  description: '文本翻译 — 中英互译',
+
+  prompt: {
+    templateId: 'quick-translate',
+    mode: 'instruction',
+  },
+
+  contextProviders: [],
+  modelProfile: 'quick-polish',
+  outputMode: 'stream-text',
+  memoryPolicy: 'none',
+  postProcessors: [],
+});
+
 // ─── quick.ask ───────────────────────────────────────────────────────────
 
 SceneRegistry.register({

@@ -62,7 +62,7 @@ export class QuickPanelInlineUI {
       this.showDirectResult(data).catch(() => {});
     });
     window.electronAPI.onQpAutoRecognizeImage?.((data) => {
-      this.show().then(() => {
+      this.show().then(async () => {
         if (this._previewEl && data.dataUrl) {
           this._showPreview(`
             <img src="${data.dataUrl}" style="max-width:100%;max-height:80px;border-radius:8px;margin-bottom:4px;">
@@ -70,9 +70,12 @@ export class QuickPanelInlineUI {
           `);
         }
         this._historyVisible = false;
+        this._pastedImageBase64 = data.base64;
         this._mode = 'screenshot';
         this._syncModeButtons();
         this._statusBar.textContent = '⏳ 正在自动识别剪贴板图片...';
+        // 自动触发识别
+        await this._send();
       }).catch(() => {});
     });
     window.electronAPI.onQpStreamChunk?.((chunk) => {

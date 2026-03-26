@@ -1,0 +1,54 @@
+{
+  "frameWidth": 300,
+  "frameHeight": 300,
+  "columns": 4,
+  "tintable": true,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 4,
+      "frameDuration": 200,
+      "loop": true
+    },
+    "idle-blink": {
+      "row": 1,
+      "frames": 3,
+      "frameDuration": 80,
+      "loop": false,
+      "next": "idle"
+    },
+    "typing-left": {
+      "row": 2,
+      "frames": 2,
+      "frameDuration": 100,
+      "loop": false,
+      "next": "idle"
+    },
+    "typing-right": {
+      "row": 3,
+      "frames": 2,
+      "frameDuration": 100,
+      "loop": false,
+      "next": "idle"
+    },
+    "click-react": {
+      "row": 4,
+      "frames": 3,
+      "frameDuration": 150,
+      "loop": false,
+      "next": "idle"
+    },
+    "happy": {
+      "row": 5,
+      "frames": 4,
+      "frameDuration": 150,
+      "loop": true
+    },
+    "sleep": {
+      "row": 6,
+      "frames": 4,
+      "frameDuration": 500,
+      "loop": true
+    }
+  }
+}

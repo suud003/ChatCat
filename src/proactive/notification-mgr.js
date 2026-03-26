@@ -22,6 +22,16 @@ export class NotificationMgr {
     this._onOpenTodoPanel = null; // callback() — open tools panel to todo tab
     this._triggerBus = null;     // Phase 3: TriggerBusRenderer
     this._streamLock = false;    // Prevent other notifications from overwriting stream bubble
+    this._character = null;      // Active character reference for intent animations
+  }
+
+  /**
+   * Set the active character for intent-based animations.
+   * @param {object} character - Character instance with triggerIntent() method
+   */
+  setCharacter(character) {
+    this._character = character;
+    console.log('[NotificationMgr] setCharacter:', character?.constructor?.name, 'hasTriggerIntent:', typeof character?.triggerIntent);
   }
 
   async init(showBubbleFn) {
@@ -35,10 +45,12 @@ export class NotificationMgr {
    * @returns {boolean} whether the notification was delivered
    */
   async push(config) {
+    console.log('[NotificationMgr] push:', config.sceneName, 'level:', config.level, 'actions:', JSON.stringify(config.actions?.map(a => a.action)));
     // Check daily limit (app-switch scenes exempt — they have their own cooldown)
     await this._loadDailyCount();
     const isAppSwitch = config.sceneId >= 30 && config.sceneId <= 304 && String(config.sceneName || '').startsWith('app-switch');
-    if (!isAppSwitch && this._dailyCount >= this._maxDaily) {
+    const isClipboard = String(config.sceneName || '').startsWith('clipboard-');
+    if (!isAppSwitch && !isClipboard && this._dailyCount >= this._maxDaily) {
       return false;
     }
 
@@ -74,6 +86,20 @@ export class NotificationMgr {
         break;
 
       case 'L3':
+        // Trigger curious animation for clipboard notifications
+        console.log('[NotificationMgr] L3: isClipboard:', isClipboard, 'hasCharacter:', !!this._character, 'hasTriggerIntent:', typeof this._character?.triggerIntent);
+        if (isClipboard && this._character?.triggerIntent) {
+          console.log('[NotificationMgr] → triggerIntent(curious)');
+          this._character.triggerIntent('curious');
+        }
+        // Clipboard 首次引导：第一次触发时显示特殊引导文案
+        if (isClipboard) {
+          const onboarded = await window.electronAPI.getStore('clipboardOnboarded');
+          if (!onboarded) {
+            config = { ...config, message: '嗯？你复制了一段文字！我可以帮你翻译、润色或解释哦~ 试试看？' };
+            await window.electronAPI.setStore('clipboardOnboarded', true);
+          }
+        }
         this._showActionBubble(config);
         if (!isAppSwitch) this._saveToChatHistory(config.message, 'assistant');
         break;
@@ -249,9 +275,21 @@ export class NotificationMgr {
   }
 
   _showActionBubble(config) {
-    this._streamLock = false; // New action bubble cancels any streaming bubble
+    console.log('[NotificationMgr] _showActionBubble:', config.sceneName, 'actions:', JSON.stringify(config.actions));
     const bubble = document.getElementById('cat-bubble');
-    if (!bubble) return;
+    if (!bubble) { console.warn('[NotificationMgr] cat-bubble element not found!'); return; }
+
+    // Guard: don't let lower-priority scenes overwrite an active clipboard bubble
+    const isClipboard = String(config.sceneName || '').startsWith('clipboard-');
+    if (!isClipboard && bubble._activeClipboard && !bubble.classList.contains('hidden')) {
+      console.log('[NotificationMgr] Skipping', config.sceneName, '— clipboard bubble is active');
+      return;
+    }
+
+    this._streamLock = false; // New action bubble cancels any streaming bubble
+
+    // Track whether this is a clipboard bubble
+    bubble._activeClipboard = isClipboard;
 
     // Clear existing
     bubble.classList.remove('hidden', 'fade-out', 'bubble-l3');
@@ -279,9 +317,9 @@ export class NotificationMgr {
         btn.className = 'bubble-action-btn';
         btn.textContent = act.label;
         btn.addEventListener('click', () => {
-          this._handleAction(config, act.action);
-          // Don't hide bubble for extract-todo (managed by _handleAction)
-          if (act.action !== 'extract-todo') {
+          this._handleAction(config, act.action).catch(err => console.error('[NotificationMgr] action error:', err));
+          // Don't hide bubble for extract-todo and clipboard actions (managed by _handleAction)
+          if (act.action !== 'extract-todo' && !act.action.startsWith('clipboard-')) {
             this._hideBubble(bubble);
           }
         });
@@ -337,13 +375,25 @@ export class NotificationMgr {
     if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
     if (bubble._removeTimer) clearTimeout(bubble._removeTimer);
 
-    // L3 stays until user clicks, auto-dismiss after 10s then 2s fade
+    // L3 stays until user clicks, auto-dismiss after 8s then 2s fade
     bubble._hideTimer = setTimeout(() => {
       this._hideBubble(bubble);
-    }, 10000);
+    }, 8000);
+
+    // Snapshot clipboard text at notification time for TOCTOU protection
+    if (typeof window !== 'undefined' && window.electronAPI?.clipboardGetLatest) {
+      window.electronAPI.clipboardGetLatest().then(text => {
+        bubble._clipboardSnapshot = text || '';
+      }).catch(() => {});
+    }
   }
 
   _hideBubble(bubble) {
+    // Only reset character to idle if bubble is actually visible (not already replaced by a new bubble)
+    if (!bubble.classList.contains('hidden') && !bubble.classList.contains('fade-out')) {
+      if (this._character?.triggerIntent) this._character.triggerIntent('idle');
+    }
+    bubble._activeClipboard = false; // Allow other scenes to show again
     if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
     bubble.classList.add('fade-out');
     setTimeout(() => {
@@ -371,6 +421,12 @@ export class NotificationMgr {
     // Open chat panel for reply actions
     if (action.startsWith('reply') && this._onOpenChat) {
       this._onOpenChat();
+    }
+
+    // Trigger clipboard AI actions (translate/polish/explain)
+    if (['clipboard-translate', 'clipboard-polish', 'clipboard-explain'].includes(action)) {
+      await this._handleClipboardAction(config, action);
+      return;
     }
 
     // Trigger todo extraction with progress display
@@ -450,6 +506,261 @@ export class NotificationMgr {
         }
       }
       return; // Don't hide bubble — managed above
+    }
+  }
+
+  // --- Clipboard AI Actions ---
+
+  async _handleClipboardAction(config, action) {
+    const bubble = document.getElementById('cat-bubble');
+    if (!bubble) return;
+
+    // Cancel auto-dismiss
+    if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+
+    // Map action to scene and loading text
+    const actionMap = {
+      'clipboard-translate': { sceneId: 'quick.translate', loading: '🔄 正在翻译...' },
+      'clipboard-polish': { sceneId: 'quick.polish', loading: '🔄 正在润色...' },
+      'clipboard-explain': { sceneId: 'quick.explain', loading: '🔄 正在解释...' },
+    };
+    const { sceneId, loading } = actionMap[action] || actionMap['clipboard-explain'];
+
+    // Trigger working animation
+    if (this._character?.triggerIntent) this._character.triggerIntent('working');
+
+    // Show loading state
+    bubble.innerHTML = '';
+    const msgEl = document.createElement('div');
+    msgEl.className = 'bubble-message';
+    msgEl.textContent = loading;
+    bubble.appendChild(msgEl);
+
+    try {
+      // Get full clipboard text — prefer snapshot taken at notification time (TOCTOU protection)
+      const fullText = bubble._clipboardSnapshot || await window.electronAPI.clipboardGetLatest();
+      if (!fullText || !fullText.trim()) {
+        msgEl.textContent = '❌ 剪贴板内容为空，无法处理~';
+        bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 3000);
+        return;
+      }
+
+      // Limit text size to prevent excessive API costs (max 10000 chars)
+      const MAX_CLIPBOARD_TEXT = 10000;
+      const trimmedText = fullText.trim().length > MAX_CLIPBOARD_TEXT
+        ? fullText.trim().substring(0, MAX_CLIPBOARD_TEXT) + '\n\n[... 内容已截断]'
+        : fullText.trim();
+
+      if (!this._triggerBus) {
+        msgEl.textContent = '❌ AI 未就绪，稍后再试~';
+        bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 3000);
+        return;
+      }
+
+      // Submit trigger to TriggerBus
+      const trigger = {
+        type: 'quick-text',
+        sceneId,
+        payload: {
+          text: trimmedText,
+          userMessage: trimmedText,
+        },
+      };
+
+      // Stream results into bubble
+      let resultText = '';
+      let finished = false;
+      let correlationId = Symbol('pending'); // sentinel — never matches any real correlationId
+
+      // Cleanup helper
+      const cleanup = () => {
+        finished = true;
+        clearTimeout(timeoutTimer);
+        removeChunk();
+        removeCompleted();
+        removeError();
+      };
+
+      // 30s timeout protection
+      const timeoutTimer = setTimeout(() => {
+        if (!finished) {
+          cleanup();
+          if (!resultText.trim()) {
+            msgEl.textContent = '⏰ 处理超时了，稍后再试吧~';
+            bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 3000);
+          } else {
+            this._showClipboardResultButtons(bubble, msgEl, resultText);
+          }
+        }
+      }, 30000);
+
+      // IMPORTANT: Register listeners BEFORE submit to avoid race condition
+      // (TriggerBus may complete before listeners are ready)
+      const removeChunk = window.electronAPI.onTriggerChunk((data) => {
+        if (data.correlationId !== correlationId || finished) return;
+        if (!msgEl.parentNode) { cleanup(); return; }
+        resultText += (data.chunk || '');
+        msgEl.textContent = resultText;
+      });
+
+      const removeCompleted = window.electronAPI.onTriggerCompleted((data) => {
+        if (data.correlationId !== correlationId || finished) return;
+        cleanup();
+
+        // If no streaming chunks, use the full result
+        if (!resultText.trim() && data.result) {
+          resultText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+          msgEl.textContent = resultText;
+        }
+
+        if (resultText.trim()) {
+          this._showClipboardResultButtons(bubble, msgEl, resultText);
+        } else {
+          msgEl.textContent = '❌ 没有获得结果，稍后再试~';
+          bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 3000);
+        }
+      });
+
+      const removeError = window.electronAPI.onTriggerError((data) => {
+        if (data.correlationId !== correlationId || finished) return;
+        cleanup();
+        console.warn('[NotificationMgr] clipboard action error:', data.error);
+        this._showClipboardError(bubble, msgEl, config, action, data.error || '');
+      });
+
+      // NOW submit — listeners are already in place
+      correlationId = await this._triggerBus.submit(trigger, { priority: 'HIGH' });
+
+    } catch (err) {
+      console.warn('[NotificationMgr] clipboard action failed:', err);
+      this._showClipboardError(bubble, msgEl, config, action, err.message || String(err));
+    }
+  }
+
+  _showClipboardResultButtons(bubble, msgEl, resultText) {
+    // Trigger proud animation
+    if (this._character?.triggerIntent) this._character.triggerIntent('proud');
+    // Remove existing action buttons if any
+    const existingActions = bubble.querySelector('.bubble-actions');
+    if (existingActions) existingActions.remove();
+    const existingInput = bubble.querySelector('.bubble-input-row');
+    if (existingInput) existingInput.remove();
+
+    const actionsEl = document.createElement('div');
+    actionsEl.className = 'bubble-actions';
+
+    // Copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'bubble-action-btn';
+    copyBtn.textContent = '📋 复制';
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.clipboardCopy(resultText);
+        copyBtn.textContent = '✅ 已复制';
+        setTimeout(() => this._hideBubble(bubble), 1000);
+      } catch {
+        copyBtn.textContent = '❌ 复制失败';
+      }
+    });
+    actionsEl.appendChild(copyBtn);
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'bubble-action-btn bubble-dismiss-btn';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', () => {
+      this._hideBubble(bubble);
+    });
+    actionsEl.appendChild(closeBtn);
+
+    bubble.appendChild(actionsEl);
+
+    // Auto-dismiss after 15s
+    if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+    bubble._hideTimer = setTimeout(() => {
+      this._hideBubble(bubble);
+    }, 15000);
+  }
+
+  /**
+   * Show clipboard error with contextual UI based on error type.
+   * - Network error → [重试][忽略]
+   * - API quota/rate limit → [查看设置][忽略]
+   * - Other → generic message with auto-dismiss
+   */
+  _showClipboardError(bubble, msgEl, config, action, errorMsg) {
+    // Trigger alert animation on error
+    if (this._character?.triggerIntent) this._character.triggerIntent('alert');
+    const errorLower = (errorMsg || '').toLowerCase();
+    const isNetwork = errorLower.includes('网络') || errorLower.includes('network') ||
+      errorLower.includes('econnrefused') || errorLower.includes('etimedout') ||
+      errorLower.includes('fetch');
+    const isQuota = errorLower.includes('429') || errorLower.includes('rate') ||
+      errorLower.includes('quota') || errorLower.includes('额度') ||
+      errorLower.includes('limit');
+
+    // Track retry count on bubble to limit retries
+    bubble._retryCount = (bubble._retryCount || 0) + 1;
+    const MAX_RETRIES = 3;
+
+    // Remove existing actions/input
+    const existingActions = bubble.querySelector('.bubble-actions');
+    if (existingActions) existingActions.remove();
+    const existingInput = bubble.querySelector('.bubble-input-row');
+    if (existingInput) existingInput.remove();
+
+    if (isNetwork && bubble._retryCount <= MAX_RETRIES) {
+      msgEl.textContent = `😿 喵呜...网络不太好，稍后再试？(${bubble._retryCount}/${MAX_RETRIES})`;
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'bubble-actions';
+
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'bubble-action-btn';
+      retryBtn.textContent = '🔄 重试';
+      retryBtn.addEventListener('click', () => {
+        this._handleClipboardAction(config, action).catch(err =>
+          console.error('[NotificationMgr] retry error:', err));
+      });
+      actionsEl.appendChild(retryBtn);
+
+      const ignoreBtn = document.createElement('button');
+      ignoreBtn.className = 'bubble-action-btn bubble-dismiss-btn';
+      ignoreBtn.textContent = '忽略';
+      ignoreBtn.addEventListener('click', () => this._hideBubble(bubble));
+      actionsEl.appendChild(ignoreBtn);
+
+      bubble.appendChild(actionsEl);
+      if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+      bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 15000);
+
+    } else if (isQuota) {
+      msgEl.textContent = '😿 今天的 AI 额度用完啦~ 明天再来？';
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'bubble-actions';
+
+      const settingsBtn = document.createElement('button');
+      settingsBtn.className = 'bubble-action-btn';
+      settingsBtn.textContent = '⚙️ 查看设置';
+      settingsBtn.addEventListener('click', () => {
+        if (this._onOpenChat) this._onOpenChat(); // Open panel so user can access settings
+        this._hideBubble(bubble);
+      });
+      actionsEl.appendChild(settingsBtn);
+
+      const ignoreBtn = document.createElement('button');
+      ignoreBtn.className = 'bubble-action-btn bubble-dismiss-btn';
+      ignoreBtn.textContent = '忽略';
+      ignoreBtn.addEventListener('click', () => this._hideBubble(bubble));
+      actionsEl.appendChild(ignoreBtn);
+
+      bubble.appendChild(actionsEl);
+      if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+      bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 15000);
+
+    } else {
+      // Generic error
+      msgEl.textContent = '❌ 处理失败了，稍后再试吧~';
+      bubble._hideTimer = setTimeout(() => this._hideBubble(bubble), 3000);
     }
   }
 

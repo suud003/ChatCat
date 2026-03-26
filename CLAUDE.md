@@ -247,6 +247,12 @@ Skill prompt body goes here
 - **Pillar B**: 快捷面板 - 截图 OCR、文本处理 (润色/解释/总结)
 - **Pillar C**: 隐私与内容分析 - 授权管理、内容分段、敏感过滤
 
+## Design System
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, animation intents, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
 ## Coding Conventions
 
 ### Module System

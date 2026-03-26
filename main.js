@@ -1,7 +1,15 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
+
+// === File Logging ===
+const log = require('electron-log/main');
+log.initialize({ preload: true });
+log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB 轮转
+log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}';
+Object.assign(console, log.functions);  // 重定向全局 console
+log.errorHandler.startCatching();       // 捕获未处理异常/rejection
 const { KeyboardRecorder } = require('./src/recorder/keyboard-recorder');
 const { TextConverter } = require('./src/skills/text-converter');
 const { DailyReport } = require('./src/skills/daily-report');
@@ -239,6 +247,13 @@ function createTray() {
       label: '管理技能/MCP',
       click: () => {
         if (skillsManager) skillsManager.show();
+      }
+    },
+    {
+      label: '打开日志文件夹',
+      click: () => {
+        const logPath = log.transports.file.getFile().path;
+        shell.showItemInFolder(logPath);
       }
     },
     {
@@ -549,6 +564,11 @@ ipcMain.handle('clipboard-copy', (_, text) => {
 
 ipcMain.handle('clipboard-clear', () => {
   store.set('clipboardHistory', []);
+});
+
+ipcMain.handle('clipboard-get-latest', () => {
+  try { return clipboard.readText() || ''; }
+  catch { return ''; }
 });
 
 // Skill IPC handlers
