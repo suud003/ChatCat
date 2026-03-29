@@ -44,7 +44,12 @@
       "Bash(export PATH=\"$HOME/.bun/bin:$PATH\")",
       "Read(//Users/leopptang/.claude/skills/gstack/**)",
       "Bash(./setup)",
-      "Bash(export PATH=$HOME/.bun/bin:$PATH)"
+      "Bash(export PATH=$HOME/.bun/bin:$PATH)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(find /g/tianyishao/Bongocat/src -name *gacha* -o -name *surprise*)",
+      "Bash(grep -h \"level:\" /g/tianyishao/Bongocat/src/proactive/scenes/*.js)",
+      "Bash(grep -h \"^export const\" /g/tianyishao/Bongocat/src/proactive/scenes/*.js)"
     ]
   }
 }

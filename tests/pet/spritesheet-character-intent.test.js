@@ -54,16 +54,15 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
   // --- working ---
 
   describe('working', () => {
-    it('starts typing interval', () => {
+    it('sets state to idle if previously sleeping or thinking', () => {
+      character._state = 'sleep';
       character.triggerIntent('working');
-      expect(character._workingInterval).not.toBeNull();
+      expect(character._state).toBe('idle');
     });
 
-    it('calls triggerTyping every 200ms', () => {
-      const spy = vi.spyOn(character, 'triggerTyping');
+    it('no longer starts typing interval', () => {
       character.triggerIntent('working');
-      vi.advanceTimersByTime(600);
-      expect(spy).toHaveBeenCalledTimes(3);
+      expect(character._workingInterval).toBeNull();
     });
   });
 
@@ -71,7 +70,7 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
 
   describe('proud', () => {
     it('clears working interval', () => {
-      character.triggerIntent('working');
+      character.triggerIntent('skill-working');
       character.triggerIntent('proud');
       expect(character._workingInterval).toBeNull();
     });
@@ -92,7 +91,7 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
 
   describe('sleepy', () => {
     it('clears working interval', () => {
-      character.triggerIntent('working');
+      character.triggerIntent('skill-working');
       character.triggerIntent('sleepy');
       expect(character._workingInterval).toBeNull();
     });
@@ -128,7 +127,7 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
 
   describe('encouraging', () => {
     it('clears working interval', () => {
-      character.triggerIntent('working');
+      character.triggerIntent('skill-working');
       character.triggerIntent('encouraging');
       expect(character._workingInterval).toBeNull();
     });
@@ -143,7 +142,7 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
 
   describe('idle', () => {
     it('clears working interval', () => {
-      character.triggerIntent('working');
+      character.triggerIntent('skill-working');
       character.triggerIntent('idle');
       expect(character._workingInterval).toBeNull();
     });
@@ -176,12 +175,12 @@ describe('SpriteSheetCharacter.triggerIntent', () => {
 
   // --- State chain ---
 
-  describe('state chain: curious → working → proud → idle', () => {
+  describe('state chain: curious → skill-working → proud → idle', () => {
     it('transitions through full chain correctly', () => {
       character.triggerIntent('curious');
       expect(character._state).toBe('click-react');
 
-      character.triggerIntent('working');
+      character.triggerIntent('skill-working');
       expect(character._workingInterval).not.toBeNull();
 
       character.triggerIntent('proud');

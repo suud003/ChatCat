@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatCat 竞品分析与迭代规划 - 思维导图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    overflow: auto;
+  }
+  .header {
+    text-align: center;
+    padding: 32px 20px 16px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f4c89a, #ffb5b5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header p { color: #888; font-size: 14px; }
+  .slogan {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 6px 20px;
+    background: rgba(244,200,154,0.12);
+    border: 1px solid rgba(244,200,154,0.3);
+    border-radius: 20px;
+    font-size: 15px;
+    color: #f4c89a;
+    letter-spacing: 1px;
+  }
+
+  /* Mind Map Container */
+  .mindmap {
+    max-width: 1400px;
+    margin: 32px auto;
+    padding: 0 24px 60px;
+  }
+
+  /* Central Node */
+  .central {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .central-node {
+    display: inline-block;
+    padding: 20px 40px;
+    background: linear-gradient(135deg, #f4c89a 0%, #e8998d 100%);
+    color: #1a1a2e;
+    font-size: 20px;
+    font-weight: 700;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(244,200,154,0.3);
+    position: relative;
+  }
+  .central-sub {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .central-tag {
+    padding: 4px 14px;
+    background: rgba(79,172,254,0.12);
+    border: 1px solid rgba(79,172,254,0.3);
+    border-radius: 12px;
+    font-size: 12px;
+    color: #4facfe;
+  }
+
+  /* Triangle Position Diagram */
+  .position-diagram {
+    display: flex;
+    justify-content: center;
+    margin: 24px 0 40px;
+  }
+  .triangle-wrap {
+    position: relative;
+    width: 320px;
+    height: 200px;
+  }
+  .tri-label {
+    position: absolute;
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+  }
+  .tri-label.top { top: 0; left: 50%; transform: translateX(-50%); }
+  .tri-label.bl { bottom: 0; left: 0; }
+  .tri-label.br { bottom: 0; right: 0; }
+  .tri-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 6px 14px;
+    background: rgba(244,200,154,0.2);
+    border: 1px solid #f4c89a;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #f4c89a;
+  }
+  .triangle-wrap svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Section Grid */
+  .sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 900px) {
+    .sections { grid-template-columns: 1fr; }
+  }
+  .section.full-width {
+    grid-column: 1 / -1;
+  }
+
+  /* Section Card */
+  .section {
+    background: #1a1a2e;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  .section-header:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  .section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    flex: 1;
+  }
+  .section-badge {
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .section-toggle {
+    font-size: 18px;
+    color: #666;
+    transition: transform 0.3s;
+  }
+  .section.open .section-toggle {
+    transform: rotate(180deg);
+  }
+  .section-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+  }
+  .section.open .section-body {
+    max-height: 5000px;
+  }
+  .section-content {
+    padding: 0 20px 20px;
+  }
+
+  /* Branch */
+  .branch {
+    margin-bottom: 16px;
+  }
+  .branch-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-left: 12px;
+    border-left: 3px solid;
+    line-height: 1.4;
+  }
+  .branch-items {
+    padding-left: 16px;
+  }
+
+  /* Leaf Node */
+  .leaf {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    transition: background 0.15s;
+  }
+  .leaf:hover {
+    background: rgba(255,255,255,0.04);
+  }
+  .leaf-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+  .leaf-text { flex: 1; }
+  .leaf-tag {
+    padding: 1px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* Competitor Table */
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 8px 0;
+  }
+  .comp-table th {
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 600;
+    color: #aaa;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 11px;
+  }
+  .comp-table td {
+    padding: 6px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .comp-table .product-name {
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .comp-table .highlight-col {
+    background: rgba(244,200,154,0.08);
+    font-weight: 600;
+    color: #f4c89a;
+  }
+  .check { color: #34c759; }
+  .cross { color: #555; }
+  .warn { color: #f5a623; }
+
+  /* Priority Badge */
+  .p0 { background: rgba(255,71,87,0.15); color: #ff4757; }
+  .p1 { background: rgba(245,166,35,0.15); color: #f5a623; }
+  .p2 { background: rgba(79,172,254,0.15); color: #4facfe; }
+  .p3 { background: rgba(136,136,136,0.15); color: #999; }
+
+  /* Color themes */
+  .theme-compete .section-icon { background: rgba(255,71,87,0.15); }
+  .theme-compete .branch-title { border-color: #ff4757; color: #ff6b7a; }
+  .theme-compete .leaf-dot { background: #ff4757; }
+  .theme-compete .section-badge { background: rgba(255,71,87,0.15); color: #ff4757; }
+
+  .theme-onboard .section-icon { background: rgba(52,199,89,0.15); }
+  .theme-onboard .branch-title { border-color: #34c759; color: #4dd86a; }
+  .theme-onboard .leaf-dot { background: #34c759; }
+  .theme-onboard .section-badge { background: rgba(52,199,89,0.15); color: #34c759; }
+
+  .theme-visual .section-icon { background: rgba(175,82,222,0.15); }
+  .theme-visual .branch-title { border-color: #af52de; color: #c77dff; }
+  .theme-visual .leaf-dot { background: #af52de; }
+  .theme-visual .section-badge { background: rgba(175,82,222,0.15); color: #af52de; }
+
+  .theme-skill .section-icon { background: rgba(79,172,254,0.15); }
+  .theme-skill .branch-title { border-color: #4facfe; color: #6fbfff; }
+  .theme-skill .leaf-dot { background: #4facfe; }
+  .theme-skill .section-badge { background: rgba(79,172,254,0.15); color: #4facfe; }
+
+  .theme-social .section-icon { background: rgba(245,166,35,0.15); }
+  .theme-social .branch-title { border-color: #f5a623; color: #ffbe4f; }
+  .theme-social .leaf-dot { background: #f5a623; }
+  .theme-social .section-badge { background: rgba(245,166,35,0.15); color: #f5a623; }
+
+  .theme-selling .section-icon { background: rgba(244,200,154,0.2); }
+  .theme-selling .branch-title { border-color: #f4c89a; color: #f4c89a; }
+  .theme-selling .leaf-dot { background: #f4c89a; }
+  .theme-selling .section-badge { background: rgba(244,200,154,0.15); color: #f4c89a; }
+
+  .theme-action .section-icon { background: rgba(255,255,255,0.08); }
+  .theme-action .branch-title { border-color: #e0e0e0; color: #e0e0e0; }
+  .theme-action .leaf-dot { background: #e0e0e0; }
+  .theme-action .section-badge { background: rgba(255,255,255,0.08); color: #e0e0e0; }
+
+  /* Risk / Validated */
+  .validated {
+    padding: 6px 12px;
+    margin: 4px 0;
+    border-radius: 8px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .validated.good { background: rgba(52,199,89,0.08); border-left: 3px solid #34c759; }
+  .validated.bad { background: rgba(255,71,87,0.08); border-left: 3px solid #ff4757; }
+  .validated .val-icon { flex-shrink: 0; }
+
+  /* Phase Timeline */
+  .timeline {
+    display: flex;
+    gap: 12px;
+    margin: 12px 0;
+    flex-wrap: wrap;
+  }
+  .timeline-item {
+    flex: 1;
+    min-width: 180px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .timeline-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .timeline-item ul {
+    list-style: none;
+    font-size: 12px;
+    line-height: 1.8;
+    padding-left: 0;
+  }
+  .timeline-item li::before {
+    content: ">";
+    margin-right: 6px;
+    opacity: 0.4;
+  }
+
+  /* Awareness Level */
+  .level-bar {
+    display: flex;
+    margin: 12px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .level-bar > div {
+    padding: 8px 6px;
+    text-align: center;
+    transition: flex 0.3s;
+  }
+
+  /* Summary Box */
+  .summary-box {
+    margin-top: 32px;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(244,200,154,0.08), rgba(232,153,141,0.08));
+    border: 1px solid rgba(244,200,154,0.2);
+    border-radius: 16px;
+    text-align: center;
+  }
+  .summary-box h3 {
+    font-size: 16px;
+    color: #f4c89a;
+    margin-bottom: 12px;
+  }
+  .summary-formula {
+    font-size: 14px;
+    line-height: 2;
+    color: #ccc;
+  }
+  .summary-formula strong {
+    color: #f4c89a;
+  }
+  .risk-box {
+    margin-top: 16px;
+    padding: 12px 20px;
+    background: rgba(255,71,87,0.08);
+    border: 1px solid rgba(255,71,87,0.2);
+    border-radius: 10px;
+    display: inline-block;
+  }
+  .risk-box .risk-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ff4757;
+    margin-bottom: 6px;
+  }
+  .risk-box .risk-items {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #ccc;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ChatCat 竞品分析与迭代规划</h1>
+  <p>2026 Q1 | 五维分析思维导图</p>
+  <div class="slogan">「桌面角落，有只懂你的猫」</div>
+</div>
+
+<!-- Central Node -->
+<div class="mindmap">
+  <div class="central">
+    <div class="central-node">ChatCat = 感知式AI + 桌宠陪伴 + 轻量生产力</div>
+    <div class="central-sub">
+      <span class="central-tag">Electron 桌面宠物</span>
+      <span class="central-tag">20-30岁知识工作者</span>
+      <span class="central-tag">竞品空白区</span>
+    </div>
+  </div>
+
+  <!-- Position Triangle -->
+  <div class="position-diagram">
+    <div class="triangle-wrap">
+      <svg viewBox="0 0 320 200">
+        <polygon points="160,20 30,180 290,180" fill="none" stroke="rgba(244,200,154,0.2)" stroke-width="1.5" stroke-dasharray="6,4"/>
+        <circle cx="160" cy="100" r="4" fill="#f4c89a"/>
+      </svg>
+      <div class="tri-label top">AI Assistant (效率工具)</div>
+      <div class="tri-label bl">AI Companion (情感陪伴)</div>
+      <div class="tri-label br">Desktop Pet (审美趣味)</div>
+      <div class="tri-center">ChatCat</div>
+    </div>
+  </div>
+
+  <div class="sections">
+
+    <!-- ========== 1. 竞品全景 ========== -->
+    <div class="section full-width theme-compete open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x1F3AF;</div>
+        <div class="section-title">一、竞品全景</div>
+        <span class="section-badge">6大竞品</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <table class="comp-table">
+          <tr>
+            <th>维度</th><th>Bongo Cat</th><th>Shimeji</th><th>VPet</th><th>Desktop Mate</th><th>Replika</th><th>AI助手</th><th class="highlight-col">ChatCat</th>
+          </tr>
+          <tr>
+            <td class="product-name">桌面宠物</td>
+            <td class="check">&#10003;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">-</td><td class="cross">-</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">AI聊天</td>
+            <td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">生产力工具</td>
+            <td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="check">&#10003;</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">主动交互</td>
+            <td class="cross">-</td><td class="warn">~</td><td class="warn">~</td><td class="cross">-</td><td class="warn">~</td><td class="cross">-</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">行为感知</td>
+            <td class="warn">~</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">养成系统</td>
+            <td class="cross">-</td><td class="cross">-</td><td class="check">&#10003;</td><td class="warn">~</td><td class="warn">~</td><td class="cross">-</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+          <tr>
+            <td class="product-name">多人联机</td>
+            <td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="cross">-</td><td class="highlight-col check">&#10003;</td>
+          </tr>
+        </table>
+
+        <div class="branch" style="margin-top:16px">
+          <div class="branch-title">已验证有效的卖点</div>
+          <div class="branch-items">
+            <div class="validated good"><span class="val-icon">&#10003;</span> 记忆连续性 — Replika/Character.ai付费转化最高功能</div>
+            <div class="validated good"><span class="val-icon">&#10003;</span> 视觉定制(换装/皮肤) — VPet/Tamagotchi验证，收入占比40%+</div>
+            <div class="validated good"><span class="val-icon">&#10003;</span> 可爱+实用组合 — Finch 3年1000万下载</div>
+            <div class="validated good"><span class="val-icon">&#10003;</span> 成长/进化系统 — Tamagotchi/旅行青蛙长期留存核心</div>
+          </div>
+        </div>
+        <div class="branch">
+          <div class="branch-title">被证伪/高风险的卖点</div>
+          <div class="branch-items">
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 纯情感陪伴无实用功能 — 3个月后DAU断崖</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> "AI无所不能"万能助手 — Cortana/Bixby期望管理失败</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 高频主动打扰 — Clippy效应：不被需要时出现=骚扰</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 复杂功能堆砌 — Z世代偏好"做好一件事"</div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 2. 新手上手 ========== -->
+    <div class="section theme-onboard open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x1F331;</div>
+        <div class="section-title">二、AI新手上手</div>
+        <span class="section-badge">4阶段</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">核心原则</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>消灭Prompt概念</strong> — 让用户永远不需要知道prompt存在</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>把AI藏在"养猫"背后</strong> — 用户知道怎么和猫说话</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">阶段一：初见 (0-30秒)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">猫咪自我介绍+主动破冰</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">取名仪式（建立情感锚点）</div><span class="leaf-tag p1">P1</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">阶段二：熟悉 (第1-3天)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">"观察模式"先行，对话后置</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">预设快捷互动替代自由输入</div><span class="leaf-tag p1">P1</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">气泡式选项回复（2-3个按钮）</div><span class="leaf-tag p0">P0</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">阶段三：深入 (第4-14天)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">功能通过"猫咪故事"解锁</div><span class="leaf-tag p2">P2</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">好感度=上手进度条</div><span class="leaf-tag p1">P1</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">阶段四：高级 (2周后)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">"教猫咪新技能"替代"学习prompt"</div><span class="leaf-tag p2">P2</span></div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 3. 视觉交互 ========== -->
+    <div class="section theme-visual open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x1F3A8;</div>
+        <div class="section-title">三、视觉交互与Avatar</div>
+        <span class="section-badge">4层惊艳</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">惊艳感层级模型</div>
+          <div class="level-bar">
+            <div style="flex:1;background:rgba(136,136,136,0.2);color:#999">L0 好看</div>
+            <div style="flex:1.2;background:rgba(175,82,222,0.15);color:#c77dff">L1 活着</div>
+            <div style="flex:1.4;background:rgba(175,82,222,0.25);color:#c77dff">L2 看见我</div>
+            <div style="flex:1.2;background:rgba(175,82,222,0.35);color:#fff">L3 懂我</div>
+            <div style="flex:1;background:rgba(175,82,222,0.5);color:#fff">L4 惊喜</div>
+          </div>
+          <div class="leaf" style="margin-top:4px"><div class="leaf-dot"></div><div class="leaf-text" style="font-size:12px;color:#999">竞品停在L0-1 | Desktop Mate达L1-2 | <strong style="color:#c77dff">ChatCat目标 L2-4</strong></div></div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">视觉签名</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>墨迹耳尖</strong> — 耳朵尖端微微晕染的墨水效果</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>会变的瞳孔</strong> — 圆瞳(好奇) / 竖瞳(专注) / 星星瞳(开心) / 心形瞳(喜欢)</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">缩到16x16托盘图标也能一眼认出</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">P0 微交互（立即提升惊艳感）</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">眼球跟踪鼠标</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">打字伴奏 + 字符粒子</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">呼吸动画 + 耳朵抖动</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">惊醒反应（长idle后弹起）</div><span class="leaf-tag p0">P0</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">P1 微交互（情感连接）</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">边缘探头、尾巴情绪、打哈欠、天气感知</div><span class="leaf-tag p1">P1</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">P2 微交互（惊喜记忆点）</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">墨水泼溅庆祝、渐进式毛色进化、第四面墙</div><span class="leaf-tag p2">P2</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">独特性进化系统</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">Day 1-7: 小猫笨拙 | Day 8-30: 个性化花纹 | Day 31-90: 特殊动作 | Day 90+: 定型微进化</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">花纹由使用数据hash生成 — <strong>每只猫都独一无二</strong></div></div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 4. MCP/Skill ========== -->
+    <div class="section theme-skill open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x1F9E9;</div>
+        <div class="section-title">四、MCP/Skill 接入深度</div>
+        <span class="section-badge">Skill优先</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">核心判断：Skill-first, MCP-second</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">MCP生态90%+面向开发者，consumer app成功案例接近零</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">SKILL.md（低门槛Markdown）才是ChatCat技能生态核心</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">防止产品变重</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>表层极简</strong> — 主界面永远是猫+气泡</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>深层丰富</strong> — 自然语言触发，无需理解Skill/MCP概念</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>渐进暴露</strong> — 新用户3个Skill / 进阶发现更多 / 开发者导入MCP</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>功能预算</strong> — 每版本最多新增2-3个Skill</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">版本路线</div>
+        </div>
+        <div class="timeline">
+          <div class="timeline-item" style="border-top:3px solid #4facfe">
+            <div class="timeline-label" style="color:#4facfe">V2.0</div>
+            <ul>
+              <li>打磨现有6个Skill体验闭环</li>
+              <li>不动MCP</li>
+            </ul>
+          </div>
+          <div class="timeline-item" style="border-top:3px solid #af52de">
+            <div class="timeline-label" style="color:#af52de">V2.5</div>
+            <ul>
+              <li>加入日历/邮箱Skill</li>
+              <li>比通用MCP更有价值</li>
+            </ul>
+          </div>
+          <div class="timeline-item" style="border-top:3px solid #f5a623">
+            <div class="timeline-label" style="color:#f5a623">V3.0</div>
+            <ul>
+              <li>UGC Skill市场开放</li>
+              <li>MCP精选集成(3-5个)</li>
+              <li>GUI包装McpConfigImporter</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">不建议做</div>
+          <div class="branch-items">
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 通用MCP Hub（用户门槛太高）</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 一次性暴露所有技能</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> MCP优先于Skill（倒置需求层级）</div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 5. 联机社交 ========== -->
+    <div class="section theme-social open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x1F91D;</div>
+        <div class="section-title">五、联机社交深化</div>
+        <span class="section-badge">猫主导社交</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">核心理念：让猫而非用户成为社交主体</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">用户不需要主动社交，猫咪自主产生社交行为</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">"我不需要主动社交，我的猫自己会去交朋友"</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">创新玩法</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>AI社交卡片</strong> — 猫生成"主人周报"，脱敏分享到房间</div><span class="leaf-tag p1">V2.0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>联机表情互动</strong> — 在ACTION协议上加emoji reaction</div><span class="leaf-tag p1">V2.0</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>猫咪串门+AI对话</strong> — 两猫相遇自动生成对话</div><span class="leaf-tag p2">V2.5</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>团队番茄钟</strong> — 全员完成=集体庆祝+团队加成</div><span class="leaf-tag p2">V2.5</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>异步消息</strong> — 串门留言条、猫咪代送礼物</div><span class="leaf-tag p2">V2.5</span></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text"><strong>猫咪配对/后代</strong> — 混合性格/外观的小猫</div><span class="leaf-tag p3">V3.0</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">不建议做</div>
+          <div class="branch-items">
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 实时语音/视频社交（偏离桌宠定位）</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 公开社交广场（内容审核成本高）</div>
+            <div class="validated bad"><span class="val-icon">&#10007;</span> 复杂交易市场（V3.0前不引入经济系统）</div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 6. 核心卖点 ========== -->
+    <div class="section theme-selling open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x2B50;</div>
+        <div class="section-title">六、核心卖点</div>
+        <span class="section-badge">3大卖点</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">付费驱动力排名</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">1. 情感连接与陪伴感 &#9733;&#9733;&#9733;&#9733;&#9733;</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">2. 个性化与成长感 &#9733;&#9733;&#9733;&#9733;&#9733;</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">3. 实用价值(生产力) &#9733;&#9733;&#9733;&#9733;</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">4. 审美与自我表达 &#9733;&#9733;&#9733;&#9733;</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">5. 惊喜与探索 &#9733;&#9733;&#9733; | 6. 社交货币 &#9733;&#9733;&#9733;</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">TOP 1：感知式陪伴 — "它知道你在忙"</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">不是你去找AI，而是AI感知你的状态主动出现</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">支撑：rhythm-analyzer + work-phase-detect + timing-judge，竞品中几乎没有</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">TOP 2：成长型关系 — "越用越懂你"</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">三个月后的猫和第一天完全不同</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">支撑：好感度 + 长期记忆 + 性格系统 + 惊喜事件</div></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">TOP 3：可爱的实力派 — "不只陪伴，还能帮忙"</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">截图解释、选中翻译、下班生成日报 — 都在桌面角落完成</div></div>
+            <div class="leaf"><div class="leaf-dot"></div><div class="leaf-text">支撑：Finch验证cute+useful组合（3年1000万下载）</div></div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+    <!-- ========== 7. 立即行动 ========== -->
+    <div class="section full-width theme-action open">
+      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="section-icon">&#x26A1;</div>
+        <div class="section-title">七、现在需要调整的部分</div>
+        <span class="section-badge">行动清单</span>
+        <span class="section-toggle">&#9660;</span>
+      </div>
+      <div class="section-body"><div class="section-content">
+
+        <div class="branch">
+          <div class="branch-title">P0 紧急调整</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot" style="background:#ff4757"></div><div class="leaf-text"><strong>新手引导流程</strong> — 加入取名仪式+猫咪破冰+渐进解锁（空白输入框是最大流失点）</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#ff4757"></div><div class="leaf-text"><strong>对话交互方式</strong> — 增加气泡快捷回复选项（2-3个按钮）</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#ff4757"></div><div class="leaf-text"><strong>猫咪回复风格</strong> — 调整为短回复+口语化（每条1-2句）</div><span class="leaf-tag p0">P0</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#ff4757"></div><div class="leaf-text"><strong>眼球跟踪+呼吸动画</strong> — 立即提升"活着"的感觉</div><span class="leaf-tag p0">P0</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">P1 短期优化 (V2.0-V2.5)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot" style="background:#f5a623"></div><div class="leaf-text">好感度驱动功能解锁 — 新用户只看到3个核心功能</div><span class="leaf-tag p1">P1</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#f5a623"></div><div class="leaf-text">猫咪视觉签名 — 墨迹耳尖+变化瞳孔</div><span class="leaf-tag p1">P1</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#f5a623"></div><div class="leaf-text">AI生成社交卡片 — 复用daily-report+sensitive-filter</div><span class="leaf-tag p1">P1</span></div>
+            <div class="leaf"><div class="leaf-dot" style="background:#f5a623"></div><div class="leaf-text">Skill体验打磨 — 先让现有6个闭环可靠</div><span class="leaf-tag p1">P1</span></div>
+          </div>
+        </div>
+
+        <div class="branch">
+          <div class="branch-title">P2 中期规划 (V2.5-V3.0)</div>
+          <div class="branch-items">
+            <div class="leaf"><div class="leaf-dot" style="background:#4facfe"></div><div class="leaf-text">猫咪串门AI对话 | 团队番茄钟 | 日历邮箱Skill | 毛色进化 | UGC Skill市场</div><span class="leaf-tag p2">P2</span></div>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-box">
+    <h3>核心竞争力公式</h3>
+    <div class="summary-formula">
+      <strong>感知式AI</strong>（懂得什么时候出现）<br/>
+      &times; <strong>桌宠陪伴</strong>（情感连接 + 成长感）<br/>
+      &times; <strong>轻量生产力</strong>（截图翻译日报）<br/>
+      = <strong>桌面角落的AI老朋友</strong>
+    </div>
+    <div class="risk-box">
+      <div class="risk-title">最大风险："看几天就腻" &mdash; 三管齐下对策</div>
+      <div class="risk-items">
+        <span>1. AI深度（记忆+感知，每次互动不同）</span>
+        <span>2. 养成进化（好感度+毛色+功能解锁）</span>
+        <span>3. 实用价值（不只好看，还真能帮忙）</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

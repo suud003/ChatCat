@@ -38,6 +38,7 @@ export { INSTRUMENT_NAMES };
 
 export const CHARACTER_PRESETS = [
   // === Color skins ===
+  { id: 'hachiware',     name: '哈奇猫',   colorName: '白蓝色', instrument: 'keyboard', color: { from: '#a1c4fd', to: '#c2e9fb' }, type: 'skin', category: 'color', description: 'AI生成的哈奇猫序列帧' },
   { id: 'bongo-classic', name: '经典猫',   colorName: '原色',  instrument: 'keyboard', color: avatarColor(6),  type: 'skin', category: 'color', description: '原版邦戈猫' },
   { id: 'bongo-orange',  name: '橘猫',     colorName: '橘色',  instrument: 'keyboard', color: avatarColor(11), type: 'skin', category: 'color', description: '温暖的橘色猫' },
   { id: 'bongo-pink',    name: '粉猫',     colorName: '粉色',  instrument: 'keyboard', color: avatarColor(3),  type: 'skin', category: 'color', description: '可爱的粉色猫' },

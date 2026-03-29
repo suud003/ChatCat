@@ -25,10 +25,10 @@ describe('SpriteCharacter.triggerIntent', () => {
   // --- curious ---
 
   describe('curious', () => {
-    it('sets _clickExpr with emoji ❓', () => {
+    it('sets _clickExpr with icon curious', () => {
       character.triggerIntent('curious');
       expect(character._clickExpr).not.toBeNull();
-      expect(character._clickExpr.emoji).toBe('❓');
+      expect(character._clickExpr.icon).toBe('curious');
     });
 
     it('has duration 2500ms', () => {
@@ -61,9 +61,9 @@ describe('SpriteCharacter.triggerIntent', () => {
   // --- working ---
 
   describe('working', () => {
-    it('sets _clickExpr with emoji ⚡', () => {
+    it('sets _clickExpr with icon working', () => {
       character.triggerIntent('working');
-      expect(character._clickExpr.emoji).toBe('⚡');
+      expect(character._clickExpr.icon).toBe('working');
     });
 
     it('has very long duration (persistent)', () => {
@@ -82,9 +82,9 @@ describe('SpriteCharacter.triggerIntent', () => {
   // --- proud ---
 
   describe('proud', () => {
-    it('sets _clickExpr with emoji ✨', () => {
+    it('sets _clickExpr with icon proud', () => {
       character.triggerIntent('proud');
-      expect(character._clickExpr.emoji).toBe('✨');
+      expect(character._clickExpr.icon).toBe('proud');
     });
 
     it('opens mouth', () => {
@@ -124,9 +124,9 @@ describe('SpriteCharacter.triggerIntent', () => {
   // --- alert ---
 
   describe('alert', () => {
-    it('sets _clickExpr with emoji ❗', () => {
+    it('sets _clickExpr with icon alert', () => {
       character.triggerIntent('alert');
-      expect(character._clickExpr.emoji).toBe('❗');
+      expect(character._clickExpr.icon).toBe('alert');
     });
 
     it('has duration 2500ms', () => {
@@ -138,9 +138,9 @@ describe('SpriteCharacter.triggerIntent', () => {
   // --- encouraging ---
 
   describe('encouraging', () => {
-    it('sets _clickExpr with emoji ⭐', () => {
+    it('sets _clickExpr with icon star', () => {
       character.triggerIntent('encouraging');
-      expect(character._clickExpr.emoji).toBe('⭐');
+      expect(character._clickExpr.icon).toBe('star');
     });
 
     it('opens mouth', () => {
@@ -157,7 +157,7 @@ describe('SpriteCharacter.triggerIntent', () => {
       // Immediately sending idle should NOT cancel the ongoing curious animation
       character.triggerIntent('idle');
       expect(character._clickExpr).not.toBeNull();
-      expect(character._clickExpr.emoji).toBe('❓');
+      expect(character._clickExpr.icon).toBe('curious');
     });
 
     it('does not reset pose while animation is still active', () => {
@@ -194,7 +194,7 @@ describe('SpriteCharacter.triggerIntent', () => {
     it('does not set _clickExpr for unmapped intent', () => {
       character._clickExpr = null;
       character.triggerIntent('nonexistent');
-      // Since emoji is undefined for unknown name, the if(emoji) block doesn't run
+      // Since icon is undefined for unknown name, the if(icon) block doesn't run
       expect(character._clickExpr).toBeNull();
     });
   });

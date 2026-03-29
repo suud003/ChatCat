@@ -41,7 +41,6 @@ class AIClientMain {
       model: model || config.modelName,
       messages: messages || [{ role: 'user', content: prompt }],
       temperature,
-      max_tokens: maxTokens,
     };
     this._applyThinkingOptions(body);
 
@@ -82,7 +81,6 @@ class AIClientMain {
       messages,
       stream: true,
       temperature,
-      max_tokens: maxTokens,
     };
     this._applyThinkingOptions(body);
 
@@ -143,7 +141,6 @@ class AIClientMain {
     const body = {
       model: visionModel,
       messages,
-      max_tokens: maxTokens,
       temperature,
     };
 

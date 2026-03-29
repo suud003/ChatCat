@@ -16,6 +16,7 @@ if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 // 角色列表 — 对应 live2d-character.js 的 CHARACTER_PRESETS
 const avatars = [
   // Color skins
+  { id: 'hachiware', color: '白蓝相间', instrument: '无', desc: '来自吉伊卡哇的哈奇猫' },
   { id: 'bongo-classic', color: '白灰色', instrument: '键盘', desc: '原版经典邦戈猫' },
   { id: 'bongo-orange',  color: '橘黄色', instrument: '键盘', desc: '温暖的橘色猫' },
   { id: 'bongo-pink',    color: '粉红色', instrument: '键盘', desc: '可爱粉色猫' },

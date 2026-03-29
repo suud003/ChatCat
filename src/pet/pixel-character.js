@@ -31,6 +31,7 @@ const SPRITE_NAMES = [
 const SKINS = {
   // === Color skins (keyboard) ===
   'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: null },
+  'hachiware':     { name: 'Hachiware',     tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: 'default' },
   'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard', spriteSheet: null },

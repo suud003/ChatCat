@@ -11,7 +11,7 @@
 const CANVAS_SIZE = 300;
 
 // Timing constants
-const SLEEP_TIMEOUT = 30_000;       // 30 s idle → sleep
+const SLEEP_TIMEOUT = 2_000;       // 2 s idle → sleep (缩短用于快速测试休息动画)
 const BLINK_MIN     = 3_000;        // random blink interval 3-5 s
 const BLINK_MAX     = 5_000;
 const HAPPY_DURATION = 2_000;       // happy state lasts 2 s
@@ -116,10 +116,21 @@ export class SpriteSheetCharacter {
   }
 
   triggerTyping() {
-    const paw = this._lastTypingPaw === 'left' ? 'right' : 'left';
-    this._lastTypingPaw = paw;
-    this._setState(paw === 'left' ? 'typing-left' : 'typing-right');
     this._resetIdle();
+
+    // Setup an intent timer to keep typing continuous if keys are pressed rapidly
+    this._typingActive = true;
+    clearTimeout(this._typingTimer);
+    this._typingTimer = setTimeout(() => {
+      this._typingActive = false;
+    }, 250);
+
+    // Only set state if we are not already typing to allow animation to complete its loop
+    if (this._state !== 'typing-left' && this._state !== 'typing-right') {
+      const paw = this._lastTypingPaw === 'left' ? 'right' : 'left';
+      this._lastTypingPaw = paw;
+      this._setState(paw === 'left' ? 'typing-left' : 'typing-right');
+    }
   }
 
   triggerClick() {
@@ -140,6 +151,16 @@ export class SpriteSheetCharacter {
     console.log('[SpriteSheetCharacter] triggerIntent:', name);
     clearTimeout(this._intentTimer);
     if (this._workingInterval) { clearInterval(this._workingInterval); this._workingInterval = null; }
+
+    // Helper: try named state first, fall back to fallback state
+    const setState = (primary, fallback) => {
+      if (this._meta?.states[primary]) {
+        this._setState(primary);
+      } else if (fallback) {
+        this._setState(fallback);
+      }
+    };
+
     switch (name) {
       case 'curious':
         this._setState('click-react');
@@ -148,34 +169,121 @@ export class SpriteSheetCharacter {
           if (this._state === 'click-react') this._setState('idle');
         }, 2500);
         break;
+
       case 'working':
-        this._workingInterval = setInterval(() => this.triggerTyping(), 200);
+        // 让实际键盘敲击直接驱动动画，不再循环播放固定动画
+        if (this._state === 'sleep' || this._state === 'chat-ai-thinking' || this._state === 'mood-rushing') {
+          this._setState('idle');
+        }
         break;
+
       case 'proud':
-        this.triggerHappy();
+        // Use chat-ai-done if available, else happy
+        if (this._meta?.states['chat-ai-done']) {
+          setState('chat-ai-done', 'happy');
+          const dur = (this._meta.states['chat-ai-done'].frames * this._meta.states['chat-ai-done'].frameDuration) + 200;
+          this._intentTimer = setTimeout(() => { if (this._state === 'chat-ai-done') this._setState('idle'); }, dur);
+        } else {
+          this.triggerHappy();
+        }
         break;
+
       case 'sleepy':
         this._setState('sleep');
         this._intentTimer = setTimeout(() => { this._setState('idle'); }, 3000);
         break;
+
       case 'alert':
-        clearTimeout(this._intentTimer);
         this._setState('click-react');
         this._resetIdle();
         this._intentTimer = setTimeout(() => {
           if (this._state === 'click-react') this._setState('idle');
         }, 2000);
         break;
+
       case 'encouraging':
         this.triggerHappy();
         break;
+
+      // ── P0 新增 intent ──
+      case 'frustrated':
+        setState('mood-frustrated', 'click-react');
+        this._resetIdle();
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 2500);
+        break;
+
+      case 'rushing':
+        setState('mood-rushing', 'click-react');
+        this._resetIdle();
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 1500);
+        break;
+
+      case 'greeting-morning':
+        setState('greeting-morning', 'happy');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 1500);
+        break;
+
+      case 'greeting':
+        setState('daily-greeting', 'happy');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 1200);
+        break;
+
+      case 'skill-working':
+        if (this._meta?.states['skill-start']) {
+          this._setState('skill-start');
+          // skill-start loops, end with triggerIntent('idle') or 'skill-done'
+        } else {
+          this._workingInterval = setInterval(() => this.triggerTyping(), 200);
+        }
+        break;
+
+      case 'skill-done':
+        setState('skill-done', 'happy');
+        const skillDoneDur = this._meta?.states['skill-done']
+          ? (this._meta.states['skill-done'].frames * this._meta.states['skill-done'].frameDuration) + 200
+          : 2000;
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, skillDoneDur);
+        break;
+
+      case 'pomo-start':
+        setState('pomo-focus-start', 'click-react');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 1200);
+        break;
+
+      case 'pomo-done':
+        setState('pomo-focus-done', 'happy');
+        const pomoDoneDur = this._meta?.states['pomo-focus-done']
+          ? (this._meta.states['pomo-focus-done'].frames * this._meta.states['pomo-focus-done'].frameDuration) + 200
+          : 2500;
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, pomoDoneDur);
+        break;
+
+      case 'todo-check':
+        setState('todo-check', 'happy');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 1000);
+        break;
+
+      case 'level-up':
+        setState('level-up', 'happy');
+        const levelUpDur = this._meta?.states['level-up']
+          ? (this._meta.states['level-up'].frames * this._meta.states['level-up'].frameDuration) + 200
+          : 2000;
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, levelUpDur);
+        break;
+
+      case 'wake-up':
+        setState('wake-up', 'idle');
+        break;
+
       case 'idle':
-        // Don't interrupt active intent animations (like curious/click-react)
+        // Don't interrupt active non-looping intent animations
         if (this._state === 'click-react' || this._state === 'happy') break;
-        // falls through
-      default:
+        if (this._workingInterval) { clearInterval(this._workingInterval); this._workingInterval = null; }
         this._setState('idle');
         break;
+
+      default:
+        if (this._workingInterval) { clearInterval(this._workingInterval); this._workingInterval = null; }
         this._setState('idle');
         break;
     }
@@ -247,6 +355,14 @@ export class SpriteSheetCharacter {
         if (stateMeta.loop) {
           this._frame = 0;
         } else {
+          // If typing and user is still actively pressing keys, switch paw and loop
+          if (this._typingActive && (this._state === 'typing-left' || this._state === 'typing-right')) {
+            const nextPaw = this._state === 'typing-left' ? 'typing-right' : 'typing-left';
+            this._lastTypingPaw = nextPaw === 'typing-right' ? 'right' : 'left';
+            this._setState(nextPaw);
+            return;
+          }
+
           // Non-loop animation ended → transition
           const next = stateMeta.next || 'idle';
           this._setState(next);

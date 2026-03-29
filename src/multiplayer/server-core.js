@@ -135,7 +135,7 @@ class MultiplayerServerCore {
       username,
       passwordHash: storedHash,
       token,
-      state: { level: 1, affinity: 0, rebirthCount: 0, mood: 'normal', isInFlow: false, skinId: 'bongo-classic', totalCPS: 0 },
+      state: { level: 1, affinity: 0, rebirthCount: 0, mood: 'normal', isInFlow: false, skinId: 'hachiware', totalCPS: 0 },
       createdAt: Date.now()
     };
     this._saveAccounts();
@@ -197,7 +197,7 @@ class MultiplayerServerCore {
     }
 
     const account = this._accounts[userId];
-    const state = account ? { ...account.state } : { level: 1, affinity: 0, rebirthCount: 0, mood: 'normal', isInFlow: false, skinId: 'bongo-classic', totalCPS: 0 };
+    const state = account ? { ...account.state } : { level: 1, affinity: 0, rebirthCount: 0, mood: 'normal', isInFlow: false, skinId: 'hachiware', totalCPS: 0 };
 
     this.clients.set(ws, { userId, username, state, token });
 

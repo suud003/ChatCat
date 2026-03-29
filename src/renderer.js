@@ -240,7 +240,7 @@ async function init() {
 
   // Restore saved skin
   const savedCharId = await window.electronAPI.getStore('character');
-  const charId = savedCharId || 'bongo-classic';
+  const charId = savedCharId || 'hachiware';
 
   // Create character via factory
   activeCharacter = await createCharacter(canvas, charId);

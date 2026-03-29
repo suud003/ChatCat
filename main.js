@@ -40,7 +40,7 @@ const store = new Store({
     apiKey: '',
     modelName: 'gpt-3.5-turbo',
     opacity: 1.0,
-    character: 'bongo-classic',
+    character: 'hachiware',
     windowPosition: null,
     chatHistory: [],
     recorderOutputDir: '',

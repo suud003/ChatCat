@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatCat — 一只待在你桌面的 AI 猫</title>
+<style>
+  /* ===== Reset & Base ===== */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; font-size: 16px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: #2d2d2d;
+    background: #fefcf9;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  /* ===== Utility ===== */
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  .text-center { text-align: center; }
+  .section-gap { padding: 100px 0; }
+  .accent { color: #ff6b4a; }
+  .accent-purple { color: #9b6dff; }
+  .accent-blue { color: #4a9eff; }
+  .accent-green { color: #4ac29a; }
+  .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .badge-orange { background: #fff0eb; color: #ff6b4a; }
+  .badge-purple { background: #f3edff; color: #9b6dff; }
+  .badge-blue   { background: #edf5ff; color: #4a9eff; }
+
+  /* ===== Navigation ===== */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(254, 252, 249, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    transition: box-shadow 0.3s;
+  }
+  .nav.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,0.06); }
+  .nav-inner {
+    max-width: 1080px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 700;
+  }
+  .nav-logo .cat-emoji { font-size: 26px; }
+  .nav-links { display: flex; gap: 32px; }
+  .nav-links a {
+    font-size: 14px; font-weight: 500; color: #666;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: #ff6b4a; }
+  .nav-cta {
+    padding: 8px 20px; border-radius: 20px;
+    background: #ff6b4a; color: #fff;
+    font-size: 14px; font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer; border: none;
+  }
+  .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255,107,74,0.35); }
+
+  /* ===== Hero ===== */
+  .hero {
+    padding: 160px 0 100px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 800px; height: 800px;
+    background: radial-gradient(circle, rgba(255,107,74,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 16px; border-radius: 20px;
+    background: #fff0eb; color: #ff6b4a;
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: 52px; font-weight: 800; line-height: 1.25;
+    margin-bottom: 20px;
+    letter-spacing: -1px;
+  }
+  .hero h1 .highlight {
+    background: linear-gradient(135deg, #ff6b4a, #ff8f6b);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 20px; color: #666; max-width: 600px; margin: 0 auto 40px;
+    line-height: 1.6;
+  }
+  .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    padding: 14px 36px; border-radius: 28px;
+    background: linear-gradient(135deg, #ff6b4a, #ff8f6b);
+    color: #fff; font-size: 16px; font-weight: 700;
+    border: none; cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,107,74,0.35); }
+  .btn-secondary {
+    padding: 14px 36px; border-radius: 28px;
+    background: #fff; color: #2d2d2d; font-size: 16px; font-weight: 600;
+    border: 2px solid #e0e0e0; cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .btn-secondary:hover { border-color: #ff6b4a; transform: translateY(-2px); }
+
+  .hero-visual {
+    margin-top: 60px;
+    position: relative;
+  }
+  .hero-mockup {
+    max-width: 720px; margin: 0 auto;
+    background: #1e1e2e; border-radius: 16px;
+    padding: 40px 60px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+    position: relative;
+    min-height: 320px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mockup-content {
+    color: #cdd6f4; font-size: 14px; font-family: 'Consolas', 'Monaco', monospace;
+    text-align: left; line-height: 1.8; width: 100%;
+  }
+  .mockup-content .line { opacity: 0.5; }
+  .mockup-content .line.active { opacity: 1; }
+  .cat-bubble {
+    position: absolute; bottom: -20px; right: 40px;
+    background: #fff; border-radius: 20px 20px 4px 20px;
+    padding: 14px 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 320px; text-align: left;
+    font-size: 14px; color: #2d2d2d; line-height: 1.6;
+    animation: bubbleFloat 3s ease-in-out infinite;
+  }
+  .cat-bubble::after {
+    content: '🐱'; position: absolute; bottom: -30px; right: 16px;
+    font-size: 28px;
+  }
+  @keyframes bubbleFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  /* ===== Stats Bar ===== */
+  .stats-bar {
+    padding: 40px 0;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    background: #fff;
+  }
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+    text-align: center;
+  }
+  .stat-item .stat-num {
+    font-size: 36px; font-weight: 800;
+    background: linear-gradient(135deg, #ff6b4a, #9b6dff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .stat-item .stat-label { font-size: 14px; color: #999; margin-top: 4px; }
+
+  /* ===== Section Titles ===== */
+  .section-title {
+    font-size: 36px; font-weight: 800; text-align: center;
+    margin-bottom: 12px; letter-spacing: -0.5px;
+  }
+  .section-desc {
+    font-size: 17px; color: #888; text-align: center;
+    max-width: 560px; margin: 0 auto 48px;
+  }
+
+  /* ===== 3-Second Hook ===== */
+  .hook-section { padding: 100px 0 60px; text-align: center; }
+  .hook-statement {
+    font-size: 28px; font-weight: 700; color: #444;
+    max-width: 700px; margin: 0 auto;
+    line-height: 1.6;
+    position: relative;
+  }
+  .hook-statement::before, .hook-statement::after {
+    content: '"'; font-size: 80px; color: rgba(255,107,74,0.15);
+    position: absolute; font-family: Georgia, serif;
+  }
+  .hook-statement::before { top: -30px; left: -30px; }
+  .hook-statement::after { bottom: -50px; right: -30px; }
+
+  /* ===== Core Features (30-second Value) ===== */
+  .features-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px;
+  }
+  .feature-card {
+    background: #fff; border-radius: 16px; padding: 36px 28px;
+    border: 1px solid rgba(0,0,0,0.06);
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+  }
+  .feature-icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; margin-bottom: 20px;
+  }
+  .icon-orange { background: #fff0eb; }
+  .icon-purple { background: #f3edff; }
+  .icon-blue   { background: #edf5ff; }
+  .icon-green  { background: #e8f8f0; }
+  .icon-pink   { background: #ffedf2; }
+  .icon-yellow { background: #fef9e7; }
+  .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+  .feature-card p { font-size: 14px; color: #888; line-height: 1.7; }
+
+  /* ===== How It Works ===== */
+  .steps-section { background: #fff; }
+  .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; }
+  .step-item { text-align: center; position: relative; }
+  .step-item:not(:last-child)::after {
+    content: '→'; position: absolute; top: 36px; right: -24px;
+    font-size: 24px; color: #ddd; font-weight: 700;
+  }
+  .step-num {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b4a, #ff8f6b);
+    color: #fff; font-size: 22px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+  }
+  .step-item h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .step-item p { font-size: 14px; color: #888; line-height: 1.6; }
+
+  /* ===== Dual Core ===== */
+  .dual-core-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .core-card {
+    border-radius: 20px; padding: 40px 32px;
+    position: relative; overflow: hidden;
+  }
+  .core-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    opacity: 0.04; pointer-events: none;
+  }
+  .core-work {
+    background: linear-gradient(135deg, #fff5f2, #fff);
+    border: 2px solid rgba(255,107,74,0.15);
+  }
+  .core-fun {
+    background: linear-gradient(135deg, #f5f0ff, #fff);
+    border: 2px solid rgba(155,109,255,0.15);
+  }
+  .core-card .core-tag {
+    display: inline-block; padding: 4px 14px; border-radius: 12px;
+    font-size: 12px; font-weight: 700; margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+  .core-work .core-tag { background: #ff6b4a; color: #fff; }
+  .core-fun .core-tag { background: #9b6dff; color: #fff; }
+  .core-card h3 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .core-card .core-sub { font-size: 14px; color: #999; margin-bottom: 20px; }
+  .core-list { list-style: none; }
+  .core-list li {
+    padding: 8px 0; font-size: 15px; color: #555;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .core-list li .icon { font-size: 18px; flex-shrink: 0; }
+
+  /* ===== Scenario Showcase ===== */
+  .scenario-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+  }
+  .scenario-card {
+    display: flex; align-items: flex-start; gap: 16px;
+    background: #fff; border-radius: 14px; padding: 24px;
+    border: 1px solid rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+  }
+  .scenario-card:hover { transform: translateY(-2px); }
+  .scenario-emoji { font-size: 32px; flex-shrink: 0; }
+  .scenario-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .scenario-card p { font-size: 13px; color: #999; line-height: 1.5; }
+  .scenario-card .cat-says {
+    margin-top: 8px; padding: 8px 12px;
+    background: #fef5f2; border-radius: 10px;
+    font-size: 13px; color: #e06040;
+    font-style: italic;
+  }
+
+  /* ===== Personality ===== */
+  .personality-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .personality-card {
+    text-align: center; padding: 28px 16px;
+    background: #fff; border-radius: 16px;
+    border: 1px solid rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+  }
+  .personality-card:hover { transform: translateY(-3px); }
+  .personality-card .p-emoji { font-size: 40px; margin-bottom: 12px; }
+  .personality-card h4 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .personality-card p { font-size: 13px; color: #999; line-height: 1.5; }
+
+  /* ===== Not Section ===== */
+  .not-section { background: #faf8f5; }
+  .not-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; max-width: 720px; margin: 0 auto; }
+  .not-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 20px; background: #fff; border-radius: 12px;
+  }
+  .not-item .not-icon { font-size: 24px; flex-shrink: 0; }
+  .not-item h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .not-item p { font-size: 13px; color: #999; }
+
+  /* ===== Trust / Privacy ===== */
+  .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .trust-card {
+    text-align: center; padding: 32px 24px;
+    background: #fff; border-radius: 16px;
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .trust-card .trust-icon { font-size: 36px; margin-bottom: 14px; }
+  .trust-card h4 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .trust-card p { font-size: 13px; color: #999; line-height: 1.6; }
+
+  /* ===== CTA ===== */
+  .cta-section {
+    padding: 100px 0; text-align: center;
+    background: linear-gradient(135deg, #fff5f2, #f5f0ff);
+    position: relative;
+  }
+  .cta-section h2 { font-size: 36px; font-weight: 800; margin-bottom: 16px; }
+  .cta-section p { font-size: 17px; color: #888; margin-bottom: 36px; }
+  .cta-platforms {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .platform-tag {
+    padding: 6px 16px; border-radius: 20px;
+    background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.08);
+    font-size: 13px; color: #666;
+  }
+
+  /* ===== Footer ===== */
+  .footer {
+    padding: 40px 0; text-align: center;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    font-size: 13px; color: #bbb;
+  }
+  .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 12px; }
+  .footer-links a { color: #999; transition: color 0.2s; }
+  .footer-links a:hover { color: #ff6b4a; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 32px; }
+    .hero-sub { font-size: 16px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .features-grid { grid-template-columns: 1fr; }
+    .steps-grid { grid-template-columns: 1fr; }
+    .step-item:not(:last-child)::after { display: none; }
+    .dual-core-grid { grid-template-columns: 1fr; }
+    .scenario-grid { grid-template-columns: 1fr; }
+    .personality-grid { grid-template-columns: repeat(2, 1fr); }
+    .not-grid { grid-template-columns: 1fr; }
+    .trust-grid { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    .hook-statement { font-size: 22px; }
+    .section-title { font-size: 28px; }
+  }
+
+  /* ===== Scroll Animation ===== */
+  .fade-up {
+    opacity: 0; transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .fade-up.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <span class="cat-emoji">🐱</span>
+      <span>ChatCat</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">核心能力</a>
+      <a href="#dual-core">双核驱动</a>
+      <a href="#scenarios">使用场景</a>
+      <a href="#trust">隐私承诺</a>
+    </div>
+    <button class="nav-cta" onclick="document.getElementById('download').scrollIntoView({behavior:'smooth'})">免费下载</button>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">🚀 Windows / macOS / Linux 全平台支持</div>
+    <h1>桌面上有一只猫<br><span class="highlight">它知道你在忙什么</span></h1>
+    <p class="hero-sub">不是聊天玩具，不是功能挂件。<br>它帮你秒解碎任务、主动收口工作、在合适时机安静帮忙——<br>然后和你一起成长。</p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="document.getElementById('download').scrollIntoView({behavior:'smooth'})">
+        <span>🐾</span> 免费领养一只
+      </button>
+      <button class="btn-secondary" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">
+        看看它能做什么 →
+      </button>
+    </div>
+
+    <div class="hero-visual">
+      <div class="hero-mockup">
+        <div class="mockup-content">
+          <div class="line active">// 你正在专心写代码……</div>
+          <div class="line">const handleSubmit = async (data) => {</div>
+          <div class="line">&nbsp;&nbsp;const result = await api.post('/submit', data);</div>
+          <div class="line">&nbsp;&nbsp;if (result.ok) {</div>
+          <div class="line">&nbsp;&nbsp;&nbsp;&nbsp;notify('提交成功');</div>
+          <div class="line">&nbsp;&nbsp;}</div>
+          <div class="line">}</div>
+          <br>
+          <div class="line active" style="opacity: 0.3;">// 猫咪在旁边安静陪着你 🐱💤</div>
+          <div class="line active" style="opacity: 0.3;">// ……它注意到你已经连续工作 2 小时了</div>
+        </div>
+        <div class="cat-bubble">
+          你已经连续写了 2 小时代码了，站起来伸个懒腰吧～<br>
+          <span style="color:#999; font-size:12px;">顺便说，你刚才 TODO 里的"明天提测"我帮你加到待办了 ✅</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3-SECOND HOOK ===== -->
+<section class="hook-section fade-up">
+  <div class="container">
+    <div class="hook-statement">
+      它不只是好看的桌宠——<br>
+      它帮你 OCR、总结、写日报，<br>
+      还知道什么时候该安静、什么时候该提醒你。
+    </div>
+  </div>
+</section>
+
+<!-- ===== STATS ===== -->
+<section class="stats-bar fade-up">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-num">36+</div>
+        <div class="stat-label">主动交互场景</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">10s</div>
+        <div class="stat-label">碎任务平均解决</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">0</div>
+        <div class="stat-label">数据上传到云端</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">∞</div>
+        <div class="stat-label">免费使用</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CORE FEATURES ===== -->
+<section class="section-gap" id="features">
+  <div class="container">
+    <div class="badge badge-orange" style="display:block; text-align:center; margin-bottom:16px;">30 秒了解核心能力</div>
+    <h2 class="section-title fade-up">六件你每天会用到的事</h2>
+    <p class="section-desc fade-up">不堆功能列表。这六项是你打开猫咪后最快感知到价值的能力。</p>
+    <div class="features-grid">
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-orange">⚡</div>
+        <h3>Quick Panel 秒解碎任务</h3>
+        <p>一个快捷键唤出面板。OCR 截图取字、润色文案、翻译段落、总结长文——10 秒拿到可直接用的结果，不用打开任何其他应用。</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-purple">🧠</div>
+        <h3>主动帮忙，不用你说</h3>
+        <p>它观察你的工作节奏——发现你提到"明天提测"，自动建议加入待办；检测到你连续工作 2 小时，温柔提醒站起来。不是打扰，是在对的时候做对的事。</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-blue">📋</div>
+        <h3>自动收口，信息不散</h3>
+        <p>碎片信息→日报，聊天提到的事→待办，零散想法→笔记。你不用操心整理，它帮你在一天结束时把工作收得干干净净。</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-green">🤫</div>
+        <h3>知道什么时候该安静</h3>
+        <p>你打字连续超过 3 秒？它不弹任何东西。番茄钟专注中？它在旁边安静打盹。只有你真的停下来时，它才会适时出现。</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-pink">📝</div>
+        <h3>/report 一句生成日报</h3>
+        <p>基于你一天的工作上下文，AI 自动整理出结构清晰的工作日报。也支持 /todo 管理待办、/note 速记想法——全是 0-token 本地操作。</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon icon-yellow">🐱</div>
+        <h3>越用越懂你</h3>
+        <p>前 5 天通过闲聊了解你的作息和偏好——不是问卷轰炸，是猫咪好奇地问你。之后它越来越知道什么时候该帮忙、用什么方式帮忙。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== HOW IT WORKS ===== -->
+<section class="section-gap steps-section fade-up">
+  <div class="container">
+    <h2 class="section-title">它是怎么工作的</h2>
+    <p class="section-desc">不需要教程。安装→打开→猫出现。它自己会搞定剩下的。</p>
+    <div class="steps-grid">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <h3>猫咪来了</h3>
+        <p>下载安装后，一只猫出现在你的桌面。它会先问你叫什么名字、做什么工作——像一只真的好奇的猫。</p>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <h3>它开始帮忙</h3>
+        <p>你正常工作，它在旁边看着。当你需要时，一个快捷键唤出 Quick Panel；当它发现可以帮忙时，它会在你停下来的那一刻出现。</p>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <h3>你们越来越默契</h3>
+        <p>几天后它知道你几点开始工作、什么时候容易犯困、喜不喜欢被打扰。它变成了一只真正懂你的猫。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== DUAL CORE ===== -->
+<section class="section-gap" id="dual-core" style="background: #faf8f5;">
+  <div class="container">
+    <h2 class="section-title fade-up">两个核心，一只猫</h2>
+    <p class="section-desc fade-up">它同时是你的桌面副驾驶和数字伙伴。工作时帮你省事，下班后让你不想关掉它。</p>
+    <div class="dual-core-grid">
+      <div class="core-card core-work fade-up">
+        <span class="core-tag">工作核 · 桌面副驾驶</span>
+        <h3>为什么每天工作时都开着它</h3>
+        <p class="core-sub">解决"碎任务太多、信息太散、自己忘记收口"这三个问题</p>
+        <ul class="core-list">
+          <li><span class="icon">⚡</span> Quick Panel：一个快捷键解决 OCR / 润色 / 总结 / 翻译</li>
+          <li><span class="icon">📋</span> 自动收口：碎片→日报、聊天→待办、想法→笔记</li>
+          <li><span class="icon">🔔</span> 主动提醒：合适时机提建议，不替你操作</li>
+          <li><span class="icon">🧠</span> 渐进记忆：连续使用 7 天后明显更懂你</li>
+          <li><span class="icon">⏱️</span> 番茄钟 + 待办：轻量专注和任务管理</li>
+        </ul>
+      </div>
+      <div class="core-card core-fun fade-up">
+        <span class="core-tag">情感核 · 数字伙伴</span>
+        <h3>为什么下班了也不想关掉它</h3>
+        <p class="core-sub">解决"桌面太空、工作太枯燥、缺少小确幸"这三个感受</p>
+        <ul class="core-list">
+          <li><span class="icon">🐱</span> 陪伴感：它跟着你的节奏——你忙它安静，你闲它说话</li>
+          <li><span class="icon">⭐</span> 成长感：等级、转生、里程碑——你们一起经历了时间</li>
+          <li><span class="icon">🎁</span> 惊喜感：猫咪偶尔送礼物、学新动作、说出让你笑的话</li>
+          <li><span class="icon">🎨</span> 表达感：29 种皮肤 + 饰品 + 场景——这只猫像你</li>
+          <li><span class="icon">👥</span> 社交感：联机看到朋友的猫、排行榜、分享战报</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SCENARIO SHOWCASE ===== -->
+<section class="section-gap" id="scenarios">
+  <div class="container">
+    <h2 class="section-title fade-up">你和它的一天</h2>
+    <p class="section-desc fade-up">这不是功能列表，是你真实会遇到的场景。</p>
+    <div class="scenario-grid">
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">☀️</div>
+        <div>
+          <h4>9:00 · 开机第一句话</h4>
+          <p>猫咪检测到你今天第一次活跃</p>
+          <div class="cat-says">"早上好呀～今天有 3 个待办等着你，先从哪个开始？"</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">⌨️</div>
+        <div>
+          <h4>10:30 · 进入心流状态</h4>
+          <p>你连续打字超过 5 分钟，猫咪安静切换为陪伴模式</p>
+          <div class="cat-says">🔥 心流模式！亲密度加倍获取中～猫咪在旁边安静看书</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">🍜</div>
+        <div>
+          <h4>12:00 · 你忘记吃饭了</h4>
+          <p>猫咪检测到你连续工作超过 3 小时</p>
+          <div class="cat-says">"你已经工作 3 小时了……去吃饭吧，我帮你守着桌面～"</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">📋</div>
+        <div>
+          <h4>14:00 · 碎任务来了</h4>
+          <p>Ctrl+Shift+C 唤出 Quick Panel</p>
+          <div class="cat-says">截图 → OCR 取字 → 自动识别为英文 → 一键翻译 → 复制。全程 10 秒。</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">✅</div>
+        <div>
+          <h4>16:00 · 它帮你记住了</h4>
+          <p>猫咪从你的打字内容中识别到待办</p>
+          <div class="cat-says">"你刚才说'明天把方案发给老板'——要帮你加到待办吗？"</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">📝</div>
+        <div>
+          <h4>18:00 · 日报自动好了</h4>
+          <p>猫咪基于你今天的工作上下文生成日报</p>
+          <div class="cat-says">"今天的工作日报帮你整理好了！主要做了 3 件事，点击查看～"</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">🎁</div>
+        <div>
+          <h4>19:30 · 猫咪的小惊喜</h4>
+          <p>随机触发惊喜事件</p>
+          <div class="cat-says">"嘿嘿，我今天给你叼来了一个小礼物！🎀 看看是什么～"</div>
+        </div>
+      </div>
+      <div class="scenario-card fade-up">
+        <div class="scenario-emoji">🌙</div>
+        <div>
+          <h4>22:00 · 深夜关怀</h4>
+          <p>猫咪检测到你 22 点后仍在工作</p>
+          <div class="cat-says">"已经很晚了……今天辛苦了，早点休息吧。明天猫咪继续陪你～"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== PERSONALITY ===== -->
+<section class="section-gap" style="background: #fff;">
+  <div class="container">
+    <h2 class="section-title fade-up">四种性格，你喜欢哪种</h2>
+    <p class="section-desc fade-up">同一件事，不同性格的猫咪说法完全不一样。</p>
+    <div class="personality-grid">
+      <div class="personality-card fade-up">
+        <div class="p-emoji">😸</div>
+        <h4>活泼猫</h4>
+        <p>"喂喂喂！你已经坐了 2 小时了！快起来和我一起蹦蹦跳跳！🐾"</p>
+      </div>
+      <div class="personality-card fade-up">
+        <div class="p-emoji">😼</div>
+        <h4>高冷猫</h4>
+        <p>"……你坐太久了。起来活动一下。别让我担心。"</p>
+      </div>
+      <div class="personality-card fade-up">
+        <div class="p-emoji">🥺</div>
+        <h4>软萌猫</h4>
+        <p>"呜……主人坐了好久了，腰会不会疼呀？陪我去走走好不好嘛～"</p>
+      </div>
+      <div class="personality-card fade-up">
+        <div class="p-emoji">🤓</div>
+        <h4>学者猫</h4>
+        <p>"研究表明，每 90 分钟站立活动 5 分钟可提升 15% 认知效率。建议现在休息。"</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== NOT SECTION ===== -->
+<section class="section-gap not-section">
+  <div class="container">
+    <h2 class="section-title fade-up">它不是什么</h2>
+    <p class="section-desc fade-up">清楚地告诉你它的边界，也是一种诚意。</p>
+    <div class="not-grid">
+      <div class="not-item fade-up">
+        <div class="not-icon">🚫</div>
+        <div>
+          <h4>不是通用 AI 聊天助手</h4>
+          <p>核心入口不是聊天框，而是 Quick Panel 和主动交互。它帮你做事，不是陪你闲扯。</p>
+        </div>
+      </div>
+      <div class="not-item fade-up">
+        <div class="not-icon">🚫</div>
+        <div>
+          <h4>不是纯桌宠挂件</h4>
+          <p>它不只可爱——它真能帮你 OCR、写日报、管待办。可爱是入口，有用是留下来的原因。</p>
+        </div>
+      </div>
+      <div class="not-item fade-up">
+        <div class="not-icon">🚫</div>
+        <div>
+          <h4>不是全自动 Agent</h4>
+          <p>它不会替你操作电脑。它是低打扰、高可靠的副驾驶——提建议，不代驾。</p>
+        </div>
+      </div>
+      <div class="not-item fade-up">
+        <div class="not-icon">🚫</div>
+        <div>
+          <h4>不是社交 App</h4>
+          <p>社交是增强层，不是核心。先自己用好，然后你自然想晒给朋友看。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TRUST ===== -->
+<section class="section-gap" id="trust">
+  <div class="container">
+    <h2 class="section-title fade-up">你的数据，只属于你</h2>
+    <p class="section-desc fade-up">这是我们的底线，不是营销话术。</p>
+    <div class="trust-grid">
+      <div class="trust-card fade-up">
+        <div class="trust-icon">💾</div>
+        <h4>纯本地存储</h4>
+        <p>所有聊天记录、打字数据、用户画像、待办笔记——全部存在你自己的电脑上。没有云端，没有服务器。</p>
+      </div>
+      <div class="trust-card fade-up">
+        <div class="trust-icon">🔒</div>
+        <h4>密码框自动过滤</h4>
+        <p>打字记录功能会自动识别并过滤密码输入框。敏感内容不记录，你不需要手动关闭。</p>
+      </div>
+      <div class="trust-card fade-up">
+        <div class="trust-icon">🎛️</div>
+        <h4>每项功能独立开关</h4>
+        <p>打字记录、日报生成、待办识别、主动交互——每一项都可以单独关闭。你说了算。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="cta-section" id="download">
+  <div class="container">
+    <div style="font-size:64px; margin-bottom:20px;">🐱</div>
+    <h2 class="fade-up">领养一只，免费的</h2>
+    <p class="fade-up">下载安装后，一只猫就出现在你的桌面。<br>不用注册，不用配置，不收费。</p>
+    <div class="hero-actions" style="margin-bottom:20px;">
+      <button class="btn-primary">
+        <span>⬇️</span> 下载 ChatCat
+      </button>
+    </div>
+    <div class="cta-platforms">
+      <span class="platform-tag">🪟 Windows</span>
+      <span class="platform-tag">🍎 macOS</span>
+      <span class="platform-tag">🐧 Linux</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="#">GitHub</a>
+      <a href="#">文档</a>
+      <a href="#">社区</a>
+      <a href="#">反馈</a>
+    </div>
+    <p>ChatCat — 一只待在你桌面的 AI 猫 🐱</p>
+  </div>
+</footer>
+
+<!-- ===== SCRIPTS ===== -->
+<script>
+  // Nav scroll effect
+  window.addEventListener('scroll', () => {
+    document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 10);
+  });
+
+  // Fade-up on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

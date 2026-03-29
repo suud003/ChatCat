@@ -113,6 +113,8 @@ body {
 
 #pet-canvas {
   pointer-events: auto;
+  width: 220px;
+  height: 220px;
 }
 
 /* Widget Container - Manga Bubble Style */
