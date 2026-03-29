@@ -11,20 +11,29 @@
     "build:mac": "electron-builder --mac",
     "build:all": "electron-builder --win --mac",
     "build:dir": "electron-builder --win --dir",
-    "gen-icon": "node scripts/generate-icon.js"
+    "gen-icon": "node scripts/generate-icon.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@google/genai": "^1.46.0",
+    "adm-zip": "^0.5.16",
     "bcryptjs": "^2.4.3",
+    "electron-log": "^5.4.3",
     "electron-store": "^8.1.0",
     "uiohook-napi": "^1.5.4",
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.1",
     "electron": "^35.7.5",
     "electron-builder": "^26.8.1",
-    "sharp": "^0.34.5"
+    "jsdom": "^29.0.1",
+    "sharp": "^0.34.5",
+    "vitest": "^4.1.1"
   },
   "build": {
     "appId": "com.chatcat.desktop-pet",

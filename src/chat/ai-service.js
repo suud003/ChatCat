@@ -1,131 +1,93 @@
 /**
- * AI Service - OpenAI-compatible API client with streaming support
- * V1.1: Dynamic system prompt via personality + memory integration, sentiment detection
- * V2: Refactored to use centralized AIClientRenderer for HTTP calls
+ * AI Service - Chat orchestration via TriggerBus
+ *
+ * V6: Phase 5 — Chat system prompt now built entirely in Main process
+ *     by PromptRegistry 'chat-system-prompt' v2.0.0 resolver, using
+ *     ContextHub-assembled data (personality, memory, behavior, todo).
+ *     This module no longer builds system prompts or injects context.
+ *
+ * Scene: chat.default / chat.followup (AI Runtime SceneRegistry)
+ * Model config sourced from AI Runtime ModelProfiles 'chat-stream' (via Main AIRuntime).
  */
 
-import { buildSystemPrompt, detectSentiment } from './personality.js';
-import { AIClientRenderer } from '../shared/ai-client-renderer.js';
+import { detectSentiment } from './personality.js';
 
 export class AIService {
   constructor() {
-    this._client = new AIClientRenderer();
+    this._triggerBus = null;  // TriggerBusRenderer, set via setTriggerBus()
     this.conversationHistory = [];
 
-    // V1.1: personality & memory context
-    this._personality = 'lively';
-    this._affectionSystem = null;
-    this._memoryManager = null;
+    // Sentiment tracking (for cat expression animation)
     this.lastSentiment = 'neutral';
     this.lastFullResponse = '';
 
-    // V2: rhythm context
-    this._rhythmAnalyzer = null;
-    this._compositeEngine = null;
+    // Memory manager reference (for fire-and-forget extraction after each response)
+    this._memoryManager = null;
   }
 
   /**
-   * Set context objects for dynamic prompt building.
+   * Phase 3: Set TriggerBusRenderer for unified trigger bus.
+   * @param {import('../ai-runtime/trigger-bus-renderer').TriggerBusRenderer} triggerBus
    */
-  setContext(personality, affectionSystem, memoryManager) {
-    this._personality = personality || 'lively';
-    this._affectionSystem = affectionSystem;
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
+  }
+
+  /**
+   * Set memory manager for post-response memory extraction.
+   * @param {import('./memory-manager').MemoryManager} memoryManager
+   */
+  setMemoryManager(memoryManager) {
     this._memoryManager = memoryManager;
   }
 
-  /**
-   * V2: Set rhythm modules for activity context injection
-   */
-  setRhythmContext(rhythmAnalyzer, compositeEngine) {
-    this._rhythmAnalyzer = rhythmAnalyzer;
-    this._compositeEngine = compositeEngine;
-  }
-
-  setPersonality(p) {
-    this._personality = p || 'lively';
-  }
-
   async loadConfig() {
-    await this._client.loadConfig();
-
     const history = await window.electronAPI.getStore('chatHistory');
     if (Array.isArray(history)) {
       this.conversationHistory = history.slice(-20); // Keep last 20 messages
     }
   }
 
-  isConfigured() {
-    return this._client.isConfigured();
-  }
-
-  /** Expose underlying client for modules that need direct access (e.g. MemoryManager) */
-  get client() {
-    return this._client;
-  }
-
-  // Backward-compatible getters for external code that reads these directly
-  get baseUrl() { return this._client.baseUrl; }
-  get apiKey() { return this._client.apiKey; }
-  get modelName() { return this._client.modelName; }
-
-  _buildSystemPrompt() {
-    const level = this._affectionSystem?.level || 1;
-    const mood = this._affectionSystem?.mood || 'normal';
-    const memories = this._memoryManager?.getTopMemories(10) || [];
-    let prompt = buildSystemPrompt(this._personality, level, mood, memories);
-
-    // V2: Inject real-time rhythm data if available
-    if (this._rhythmAnalyzer || this._compositeEngine) {
-      prompt += '\n--- 实时数据上下文 ---\n';
-      prompt += '以下是主人当前的行为数据，你可以根据这些数据回答主人的问题：\n';
-
-      if (this._rhythmAnalyzer) {
-        const signals = this._rhythmAnalyzer.getCurrentSignals?.() || {};
-        const state = this._rhythmAnalyzer.currentState || 'idle';
-        const stateNames = {
-          flow: '心流状态', stuck: '卡壳状态', reading: '阅读思考',
-          chatting: '沟通模式', typing: '打字中', away: '离开', idle: '空闲'
-        };
-        prompt += `- 当前状态: ${stateNames[state] || state}\n`;
-        prompt += `- 打字速度: ${Math.round(signals.avgCPM || 0)} CPM (字符/分钟)\n`;
-        prompt += `- 退格率: ${Math.round((signals.deleteRate || 0) * 100)}%\n`;
-        prompt += `- 鼠标: ${signals.mouseActive ? '活跃' : '静止'}\n`;
-      }
-
-      if (this._compositeEngine) {
-        const fullData = this._compositeEngine.getTodayFullData?.() || {};
-        prompt += `- 今日打字时长: ${Math.round(fullData.totalTypingMin || 0)} 分钟\n`;
-        prompt += `- 今日心流时长: ${Math.round(fullData.totalFlowMin || 0)} 分钟\n`;
-        prompt += `- 今日按键数: ${this._compositeEngine.todayTypingCount || 0}\n`;
-      }
-
-      prompt += '你现在可以在回答中引用这些具体数据来回应主人的提问。\n';
+  /**
+   * Phase 4: Check if AI is configured via Main process IPC.
+   * @returns {Promise<boolean>}
+   */
+  async isConfigured() {
+    try {
+      return await window.electronAPI.isAIConfigured();
+    } catch {
+      return false;
     }
-
-    return prompt;
   }
 
   async *sendMessageStream(userMessage) {
-    if (!this.isConfigured()) {
+    if (!await this.isConfigured()) {
       yield 'Please configure your API key in Settings first! (=^.^=)';
+      return;
+    }
+
+    if (!this._triggerBus) {
+      yield '[Error: TriggerBus not available]';
       return;
     }
 
     this.conversationHistory.push({ role: 'user', content: userMessage });
 
-    const messages = [
-      { role: 'system', content: this._buildSystemPrompt() },
-      ...this.conversationHistory
-    ];
-
     try {
       let fullResponse = '';
 
-      for await (const chunk of this._client.stream({
-        messages,
-        temperature: 0.8,
-        maxTokens: 500,
-      })) {
+      const trigger = {
+        type: 'chat',
+        sceneId: 'chat.default',
+        payload: {
+          // System prompt is now built by Main-side PromptRegistry v2.0.0
+          // using ContextHub-assembled context (personality, memory, behavior, todo).
+          // Only conversation history is passed from Renderer.
+          history: this.conversationHistory,
+        },
+      };
+
+      for await (const chunk of this._triggerBus.submitAndStream(trigger, { priority: 'HIGH' })) {
         fullResponse += chunk;
         yield chunk;
       }
@@ -139,11 +101,11 @@ export class AIService {
         }
         await window.electronAPI.setStore('chatHistory', this.conversationHistory);
 
-        // V1.1: Detect sentiment from response
+        // Detect sentiment from response (for cat expression animation)
         this.lastFullResponse = fullResponse;
         this.lastSentiment = detectSentiment(fullResponse);
 
-        // V1.1: Fire-and-forget memory extraction
+        // Fire-and-forget memory extraction
         if (this._memoryManager) {
           this._memoryManager.extractMemories(userMessage, fullResponse).catch(err => {
             console.error('[AIService] Memory extraction failed:', err);
@@ -165,9 +127,9 @@ export class AIService {
   }
 
   /**
-   * Test API Connection with given credentials
+   * Phase 4: Test API Connection via Main process IPC.
    */
   async testConnection(apiUrl, apiKey, modelName, options = {}) {
-    return this._client.testConnection(apiUrl, apiKey, modelName, options);
+    return window.electronAPI.testAIConnection(apiUrl, apiKey, modelName, options);
   }
 }

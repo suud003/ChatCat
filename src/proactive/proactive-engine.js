@@ -37,6 +37,9 @@ import { catSelfReportFocusedScene, catSelfReportReturnScene, catSelfReportLateN
 import { relationshipDeepenScene } from './scenes/relationship-deepen.js';
 import { rhythmScenes } from './scenes/rhythm-scenes.js';
 
+// A1: App context awareness scenes
+import { appContextScenes } from './scenes/app-context-aware.js';
+
 const ALL_SCENES = [
   dailyReportScene,
   todoDetectScene,
@@ -76,7 +79,9 @@ const ALL_SCENES = [
   catSelfReportLateNightScene,
   catSelfReportMorningScene,
   relationshipDeepenScene,
-  ...rhythmScenes
+  ...rhythmScenes,
+  // A1: App context awareness scenes
+  ...appContextScenes
 ];
 
 export class ProactiveEngine {
@@ -94,11 +99,20 @@ export class ProactiveEngine {
     this._pomodoroTimer = null;
     this._todoList = null;
     this._aiService = null;
+    this._triggerBus = null;  // Phase 3: TriggerBusRenderer for AI-generated messages
   }
 
   setRhythmModules(rhythmAnalyzer, compositeEngine) {
     this._rhythmAnalyzer = rhythmAnalyzer;
     this._compositeEngine = compositeEngine;
+  }
+
+  /**
+   * Phase 3: Set TriggerBusRenderer for AI-generated proactive messages.
+   * @param {import('../ai-runtime/trigger-bus-renderer.js').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   processExternalSignal(signalName, data) {
@@ -185,7 +199,9 @@ export class ProactiveEngine {
     const signals = [
       'typing-pause', 'typing-speed-change', 'long-work', 'time-trigger', 'idle',
       // V1.5: New signals
-      'typing-rhythm-change', 'clipboard-content', 'work-phase', 'short-idle', 'periodic'
+      'typing-rhythm-change', 'clipboard-content', 'work-phase', 'short-idle', 'periodic',
+      // A1: App context
+      'app-switch'
     ];
 
     for (const signal of signals) {
@@ -230,15 +246,26 @@ export class ProactiveEngine {
 
       // Check condition
       const ctx = this._buildContext(data);
-      if (scene.condition && !(await scene.condition(ctx))) continue;
+      try {
+        if (scene.condition && !(await scene.condition(ctx))) continue;
+      } catch (err) {
+        console.warn(`[ProactiveEngine] Scene ${scene.name} condition error:`, err.message);
+        continue;
+      }
 
       matchingScenes.push(scene);
     }
 
-    // Process first matching scene (highest priority by level)
+    if (signal === 'app-switch' && matchingScenes.length > 0) {
+      console.log(`[ProactiveEngine] app-switch matched: ${matchingScenes.map(s => s.name).join(', ')}`);
+    }
+
+    // Process first matching scene (highest priority by level, then higher ID = more specific)
     const sorted = matchingScenes.sort((a, b) => {
       const levels = { L3: 3, L2: 2, L1: 1, L0: 0 };
-      return (levels[b.level] || 0) - (levels[a.level] || 0);
+      const levelDiff = (levels[b.level] || 0) - (levels[a.level] || 0);
+      if (levelDiff !== 0) return levelDiff;
+      return (b.id || 0) - (a.id || 0); // higher ID = more specific scene wins
     });
 
     if (sorted.length > 0) {
@@ -248,6 +275,15 @@ export class ProactiveEngine {
 
   _triggerScene(scene, signalData) {
     const ctx = this._buildContext(signalData);
+
+    console.log(`[ProactiveEngine] Triggering scene: ${scene.name} (level=${scene.level})`);
+
+    // Phase 3: AI-generated messages for scenes with aiGenerate flag
+    if (scene.aiGenerate && this._triggerBus) {
+      this._triggerAIScene(scene, ctx);
+      return;
+    }
+
     const message = scene.getMessage(ctx, this._personality);
     if (!message) return;
 
@@ -261,13 +297,172 @@ export class ProactiveEngine {
     };
 
     // Try to push through timing judge
-    const result = this.timingJudge.enqueue(notification);
-    if (result.immediate) {
+    // For app-switch and clipboard scenes, bypass timing judge interval since they have their own cooldown
+    const isClipboardScene = scene.signal === 'clipboard-content';
+    const bypassTimingJudge = scene.signal === 'app-switch' || isClipboardScene;
+    if (bypassTimingJudge) {
+      // Directly push, bypassing min interval check (scene cooldown handles rate limiting)
       this.notificationMgr.push(notification);
+      this.timingJudge._lastPushTime = Date.now();
+    } else {
+      const result = this.timingJudge.enqueue(notification);
+      if (result.immediate) {
+        this.notificationMgr.push(notification);
+      }
     }
 
     // Record cooldown
     this._cooldowns[scene.id] = Date.now();
+  }
+
+  /**
+   * Phase 3: Trigger a scene that requires AI generation via TriggerBus.
+   * Submits a proactive trigger with LOW priority and delivers the AI response
+   * through the normal notification pipeline.
+   */
+  async _triggerAIScene(scene, ctx) {
+    try {
+      // Build context summary for AI prompt
+      const contextSummary = {
+        sceneName: scene.name,
+        sceneType: scene.type,
+        personality: this._personality,
+        level: ctx.level,
+        mood: ctx.mood,
+        hour: ctx.hour,
+        continuousWorkMinutes: ctx.continuousWorkMinutes,
+        typingSpeed: ctx.typingSpeed,
+      };
+
+      // Include scene-specific hint if available
+      if (scene.aiHint) {
+        contextSummary.hint = typeof scene.aiHint === 'function'
+          ? scene.aiHint(ctx)
+          : scene.aiHint;
+      }
+
+      const trigger = {
+        type: 'proactive',
+        sceneId: 'proactive.scene-message',
+        payload: {
+          sceneContext: contextSummary,
+          personality: this._personality,
+          // Include system prompt context for the AI
+          systemPrompt: this._buildAIScenePrompt(scene, ctx),
+          history: [{
+            role: 'user',
+            content: this._buildAISceneUserMessage(scene, ctx)
+          }]
+        },
+      };
+
+      // Immediately show streaming bubble
+      const streamCtrl = this.notificationMgr.showStreamBubble();
+
+      // Stream chunks into the bubble
+      let fullText = '';
+      const stream = this._triggerBus.submitAndStream(trigger, { priority: 'LOW' });
+      for await (const chunk of stream) {
+        fullText += chunk;
+        streamCtrl.update(chunk);
+      }
+
+      // Finish the bubble
+      streamCtrl.finish();
+
+      // Save to feed/history only (NOT chat history — these are ambient notifications)
+      const message = fullText.trim();
+      if (message) {
+        const notification = {
+          sceneId: scene.id,
+          sceneName: scene.name,
+          level: scene.level,
+          message,
+          actions: scene.actions || [],
+          timestamp: Date.now()
+        };
+        await this.notificationMgr._addToFeed(notification);
+        await this.notificationMgr._addToHistory(notification);
+        this.timingJudge._lastPushTime = Date.now();
+      }
+    } catch (err) {
+      console.warn(`[ProactiveEngine] AI scene ${scene.name} error:`, err.message);
+      this.notificationMgr._streamLock = false; // Unlock on error
+      // Fallback to template message
+      this._triggerSceneFallback(scene, ctx);
+    }
+
+    // Record cooldown regardless
+    this._cooldowns[scene.id] = Date.now();
+  }
+
+  /**
+   * Fallback: use template message when AI generation fails.
+   */
+  _triggerSceneFallback(scene, ctx) {
+    if (!scene.getMessage) return;
+    const message = scene.getMessage(ctx, this._personality);
+    if (!message) return;
+
+    const notification = {
+      sceneId: scene.id,
+      sceneName: scene.name,
+      level: scene.level,
+      message,
+      actions: scene.actions || [],
+      timestamp: Date.now()
+    };
+
+    // For app-switch scenes, bypass timing judge
+    const bypassTimingJudge = scene.signal === 'app-switch';
+    if (bypassTimingJudge) {
+      this.notificationMgr.push(notification);
+      this.timingJudge._lastPushTime = Date.now();
+    } else {
+      const result = this.timingJudge.enqueue(notification);
+      if (result.immediate) {
+        this.notificationMgr.push(notification);
+      }
+    }
+  }
+
+  /**
+   * Build system prompt for AI-generated proactive scene.
+   */
+  _buildAIScenePrompt(scene, ctx) {
+    const personalityTraits = {
+      lively: '活泼开朗、爱用颜文字和 emoji，语气热情',
+      cool: '高冷傲娇、简短有力，偶尔流露关心',
+      soft: '温柔体贴、说话轻声细语，善解人意',
+      scholar: '博学多才、喜欢引经据典，认真但不古板'
+    };
+
+    return `你是一只桌面宠物猫咪，性格是「${personalityTraits[this._personality] || personalityTraits.lively}」。
+你需要根据场景生成一条简短的主动关怀消息（不超过50字）。
+要求：
+- 符合猫咪的人格特征
+- 简洁自然，不要太长
+- 不要使用引号包裹
+- 可以适当使用 emoji`;
+  }
+
+  /**
+   * Build user message for AI-generated proactive scene.
+   */
+  _buildAISceneUserMessage(scene, ctx) {
+    let msg = `场景：${scene.name}（${scene.type}类型）\n`;
+    msg += `当前时间：${ctx.hour}点\n`;
+    msg += `用户状态：连续工作${ctx.continuousWorkMinutes || 0}分钟`;
+    if (ctx.typingSpeed) msg += `，打字速度${Math.round(ctx.typingSpeed)} CPM`;
+    msg += `\n好感度等级：Lv.${ctx.level}，心情：${ctx.mood}`;
+
+    if (scene.aiHint) {
+      const hint = typeof scene.aiHint === 'function' ? scene.aiHint(ctx) : scene.aiHint;
+      if (hint) msg += `\n场景提示：${hint}`;
+    }
+
+    msg += '\n请生成一条合适的主动消息：';
+    return msg;
   }
 
   _buildContext(signalData) {

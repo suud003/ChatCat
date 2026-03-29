@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Clipboard
   clipboardGetHistory: () => ipcRenderer.invoke('clipboard-get-history'),
   clipboardCopy: (text) => ipcRenderer.invoke('clipboard-copy', text),
+  clipboardGetLatest: () => ipcRenderer.invoke('clipboard-get-latest'),
   clipboardClear: () => ipcRenderer.invoke('clipboard-clear'),
   onClipboardUpdate: (callback) => {
     const listener = (_, data) => callback(data);
@@ -56,7 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Skills
-  skillTrigger: (skillId) => ipcRenderer.invoke('skill-trigger', skillId),
+  // Phase 3: skillTrigger removed — scheduling delegated to ScheduledTriggerRegistry via TriggerBus
   skillGetStatus: () => ipcRenderer.invoke('skill-get-status'),
   skillGetConvertedText: (date) => ipcRenderer.invoke('skill-get-converted-text', date),
   skillGetDailyReport: (date) => ipcRenderer.invoke('skill-get-daily-report', date),
@@ -86,12 +87,81 @@ contextBridge.exposeInMainWorld('electronAPI', {
   qpShow: () => ipcRenderer.invoke('qp-show'),
   qpHide: () => ipcRenderer.invoke('qp-hide'),
   qpIsVisible: () => ipcRenderer.invoke('qp-is-visible'),
+  qpSetVisible: (visible) => ipcRenderer.invoke('qp-set-visible', visible),
+  qpAsk: (question, history) => ipcRenderer.invoke('qp-ask', question, history),
+  qpCopy: (text) => ipcRenderer.send('qp-copy', text),
+  qpGetHistory: () => ipcRenderer.invoke('qp-get-history'),
+  qpRecognizeImage: (base64) => ipcRenderer.invoke('qp-recognize-image', base64),
+  qpStartScreenshot: () => ipcRenderer.send('qp-screenshot'),
+  qpSendFeedback: (data) => ipcRenderer.send('qp-feedback', data),
   qpGetShortcutStatus: () => ipcRenderer.invoke('qp-get-shortcut-status'),
   onQpShortcutStatus: (cb) => ipcRenderer.on('qp-shortcut-status', (_, data) => cb(data)),
+  onQpOpen: (cb) => ipcRenderer.on('qp-open', (_, data) => cb(data)),
+  onQpCloseUI: (cb) => ipcRenderer.on('qp-close-ui', () => cb()),
+  onQpDisplayDirectResult: (cb) => ipcRenderer.on('qp-display-direct-result', (_, data) => cb(data)),
+  onQpStreamChunk: (cb) => ipcRenderer.on('qp-stream-chunk', (_, chunk) => cb(chunk)),
+  onQpStreamEnd: (cb) => ipcRenderer.on('qp-stream-end', (_, result) => cb(result)),
+  onQpStreamError: (cb) => ipcRenderer.on('qp-stream-error', (_, err) => cb(err)),
+  onQpAutoRecognizeImage: (cb) => ipcRenderer.on('qp-auto-recognize-image', (_, data) => cb(data)),
 
   // V2 Pillar C
   consentCheck: () => ipcRenderer.invoke('consent-check'),
   consentRequest: () => ipcRenderer.invoke('consent-request'),
   consentRevoke: () => ipcRenderer.invoke('consent-revoke'),
-  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data))
+  onConsentStatusChanged: (cb) => ipcRenderer.on('consent-status-changed', (_, data) => cb(data)),
+
+  // Phase 3: TriggerBus IPC
+  triggerBusSubmit: (triggerData, options) => ipcRenderer.invoke('trigger-bus-submit', triggerData, options),
+  triggerBusGetResult: (correlationId) => ipcRenderer.invoke('trigger-bus-get-result', correlationId),
+  triggerBusGetStatus: (correlationId) => ipcRenderer.invoke('trigger-bus-get-status', correlationId),
+
+  // Phase 4: AI utilities (replaces Renderer-side AIClientRenderer)
+  isAIConfigured: () => ipcRenderer.invoke('ai-is-configured'),
+  testAIConnection: (apiUrl, apiKey, modelName, options) =>
+    ipcRenderer.invoke('ai-test-connection', apiUrl, apiKey, modelName, options),
+  todoParseText: (userMsg) => ipcRenderer.invoke('todo-parse-text', userMsg),
+
+  // Phase 3: TriggerBus push events (Main → Renderer)
+  onTriggerChunk: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-chunk', listener);
+    return () => ipcRenderer.removeListener('trigger-chunk', listener);
+  },
+  onTriggerCompleted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-completed', listener);
+    return () => ipcRenderer.removeListener('trigger-completed', listener);
+  },
+  onTriggerError: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-error', listener);
+    return () => ipcRenderer.removeListener('trigger-error', listener);
+  },
+  onTriggerStarted: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('trigger-started', listener);
+    return () => ipcRenderer.removeListener('trigger-started', listener);
+  },
+
+  // A1: Active window tracking
+  getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
+
+  // C4: Skill semantic routing
+  skillSemanticMatch: (text, catalog) => ipcRenderer.invoke('skill-semantic-match', text, catalog),
+
+  // C4: Skill import
+  importSkillFile: (filePath) => ipcRenderer.invoke('skill-import-file', filePath),
+  importSkillContent: (name, content) => ipcRenderer.invoke('skill-import-content', name, content),
+  getImportedSkills: () => ipcRenderer.invoke('skill-get-imported'),
+  removeImportedSkill: (name) => ipcRenderer.invoke('skill-remove-imported', name),
+  onSkillsChanged: (cb) => ipcRenderer.on('skills-changed', () => cb()),
+
+  // C4: MCP import
+  importMcpConfig: (configPath) => ipcRenderer.invoke('mcp-import-config', configPath),
+  importMcpJson: (jsonContent) => ipcRenderer.invoke('mcp-import-json', jsonContent),
+  getImportedMcp: () => ipcRenderer.invoke('mcp-get-imported'),
+  removeMcp: (name) => ipcRenderer.invoke('mcp-remove', name),
+
+  // C4: File dialog helper
+  dialogOpenFile: (options) => ipcRenderer.invoke('dialog-open-file', options),
 });

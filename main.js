@@ -1,6 +1,15 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, session, dialog, screen, clipboard, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const Store = require('electron-store');
+
+// === File Logging ===
+const log = require('electron-log/main');
+log.initialize({ preload: true });
+log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB 轮转
+log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}';
+Object.assign(console, log.functions);  // 重定向全局 console
+log.errorHandler.startCatching();       // 捕获未处理异常/rejection
 const { KeyboardRecorder } = require('./src/recorder/keyboard-recorder');
 const { TextConverter } = require('./src/skills/text-converter');
 const { DailyReport } = require('./src/skills/daily-report');
@@ -11,6 +20,15 @@ const { EmbeddedServer } = require('./src/multiplayer/embedded-server');
 
 const { QuickPanelManager } = require('./src/quick-panel/quick-panel-main');
 const { AIClientMain } = require('./src/shared/ai-client-main');
+const { SkillImporter } = require('./src/skills/skill-importer');
+const { McpConfigImporter } = require('./src/skills/mcp-config-importer');
+const { SkillsManager } = require('./src/skills/skills-manager');
+
+// AI Runtime (Phase 1: unified definition layer + Phase 2: execution layer + Phase 3: trigger bus)
+const aiRuntimeDefs = require('./src/ai-runtime');
+const { AIRuntime, AITrigger } = aiRuntimeDefs;
+const { TriggerBus } = require('./src/ai-runtime/trigger-bus');
+const { ScheduledTriggerRegistry } = require('./src/ai-runtime/scheduled-trigger-registry');
 
 // V2 Pillar C Imports
 const { PrivacyConsentManager } = require('./src/consent/privacy-consent');
@@ -82,7 +100,21 @@ const store = new Store({
     mpServerPort: 9527,
     mpExternalUrl: '',
     mpUsername: '',
-    mpToken: ''
+    mpToken: '',
+    // V3: Gacha system
+    gachaOwned: [],
+    gachaPity: 0,
+    gachaSssrPity: 0,
+    gachaTotalPulls: 0,
+    gachaHistory: [],
+    gachaEquipped: [],
+    // A1: Active window tracking
+    activeWindowSnapshot: null,
+    // A4: Offline adventure
+    lastActiveTime: 0,
+    offlineAdventureDate: '',
+    // C4: MCP servers
+    mcpServers: {},
   }
 });
 
@@ -97,6 +129,9 @@ let embeddedServer = null;
 let skillRegistry = null;
 let skillEngine = null;
 let quickPanelManager = null;
+let skillImporter = null;
+let mcpImporter = null;
+let skillsManager = null;
 
 function createWindow() {
   // Use the primary display for initial window placement.
@@ -209,6 +244,19 @@ function createTray() {
       }
     },
     {
+      label: '管理技能/MCP',
+      click: () => {
+        if (skillsManager) skillsManager.show();
+      }
+    },
+    {
+      label: '打开日志文件夹',
+      click: () => {
+        const logPath = log.transports.file.getFile().path;
+        shell.showItemInFolder(logPath);
+      }
+    },
+    {
       label: 'Reset Position',
       click: () => {
         // Move window back to primary display
@@ -293,6 +341,111 @@ function createDefaultIcon() {
 // IPC handlers
 ipcMain.handle('get-store', (_, key) => store.get(key));
 ipcMain.handle('set-store', (_, key, value) => store.set(key, value));
+
+// Phase 3: TriggerBus IPC handlers
+ipcMain.handle('trigger-bus-submit', (_, triggerData, options = {}) => {
+  const trigger = AITrigger.create(
+    triggerData.type,
+    triggerData.sceneId,
+    triggerData.payload || {}
+  );
+  // triggerBus is initialized in app.whenReady — safe since renderer can't call until window is loaded
+  const result = global._triggerBus.submit(trigger, options);
+  return result;
+});
+
+ipcMain.handle('trigger-bus-get-result', async (_, correlationId) => {
+  return global._triggerBus.getResult(correlationId);
+});
+
+ipcMain.handle('trigger-bus-get-status', (_, correlationId) => {
+  return global._triggerBus.getStatus(correlationId);
+});
+
+// Phase 4: AI configuration check (replaces Renderer-side AIClientRenderer.isConfigured)
+ipcMain.handle('ai-is-configured', () => {
+  const baseUrl = store.get('apiBaseUrl');
+  const apiKey = store.get('apiKey');
+  const preset = store.get('apiPreset');
+
+  // Ollama / local models don't need API key
+  if (preset === 'ollama' ||
+      (baseUrl && (baseUrl.includes('://127.0.0.1:11434') || baseUrl.includes('://localhost:11434')))) {
+    return !!baseUrl;
+  }
+  return !!baseUrl && !!apiKey;
+});
+
+// Phase 4: Test API connection (replaces Renderer-side AIClientRenderer.testConnection)
+ipcMain.handle('ai-test-connection', async (_, apiUrl, apiKey, modelName, options) => {
+  const { AIClientMain } = require('./src/shared/ai-client-main');
+  const testClient = new AIClientMain(store);
+  return testClient.testConnection(apiUrl, apiKey, modelName, options);
+});
+
+// Phase 4: Todo parsing via Main-side AI call
+ipcMain.handle('todo-parse-text', async (_, userMsg) => {
+  const now = new Date();
+  const currentTime = now.toISOString();
+
+  const prompt = `You are a todo extraction assistant. Given a user message, determine if it contains a task/reminder/todo item.
+
+Rules:
+- If there IS a todo, respond with JSON: {"hasTodo": true, "text": "task description", "priority": "high|medium|low", "dueAt": "ISO string or null"}
+- If there is NO todo, respond with: {"hasTodo": false}
+- For due times, interpret relative references (e.g., "tomorrow 3pm", "next Monday")
+- Current time reference: ${currentTime}
+- Priority: default to "medium", use "high" for urgent language, "low" for casual mentions
+- Respond with ONLY the JSON object, no other text`;
+
+  try {
+    // aiClient is initialized in app.whenReady — safe since renderer can't call until window is loaded
+    const aiClient = new AIClientMain(store);
+    const content = await aiClient.complete({
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: userMsg },
+      ],
+      temperature: 0.2,
+      maxTokens: 150,
+    });
+
+    if (!content) return { hasTodo: false };
+
+    let jsonStr = content;
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    }
+
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.warn('[Main] Todo parse failed:', e.message);
+    return { hasTodo: false };
+  }
+});
+
+// C4: Skill semantic routing — lightweight AI call to match user intent to a skill
+ipcMain.handle('skill-semantic-match', async (_, userText, skillCatalog) => {
+  try {
+    const aiClient = new AIClientMain(store);
+    const skillList = skillCatalog.map(s => `${s.name}: ${s.description}`).join('\n');
+
+    const content = await aiClient.complete({
+      messages: [
+        { role: 'system', content: `Match user intent to a skill. Skills:\n${skillList}\n\nReply with ONLY the skill name if matched, or "none" if no match.` },
+        { role: 'user', content: userText },
+      ],
+      temperature: 0.1,
+    });
+
+    return (content || 'none').trim().toLowerCase();
+  } catch (e) {
+    console.warn('[Main] Skill semantic match failed:', e.message);
+    return 'none';
+  }
+});
+
 ipcMain.handle('get-system-info', () => {
   const os = require('os');
   return {
@@ -413,26 +566,13 @@ ipcMain.handle('clipboard-clear', () => {
   store.set('clipboardHistory', []);
 });
 
-// Skill IPC handlers
-ipcMain.handle('skill-trigger', async (_, skillId) => {
-  try {
-    switch (skillId) {
-      case 'textConverter':
-        if (textConverter) return await textConverter.execute();
-        return { success: false, reason: 'not-initialized' };
-      case 'dailyReport':
-        if (dailyReport) return await dailyReport.execute();
-        return { success: false, reason: 'not-initialized' };
-      case 'todoExtractor':
-        if (todoExtractor) return await todoExtractor.execute();
-        return { success: false, reason: 'not-initialized' };
-      default:
-        return { success: false, reason: 'unknown-skill' };
-    }
-  } catch (err) {
-    return { success: false, reason: 'error', error: err.message };
-  }
+ipcMain.handle('clipboard-get-latest', () => {
+  try { return clipboard.readText() || ''; }
+  catch { return ''; }
 });
+
+// Skill IPC handlers
+// Phase 3: skill-trigger removed — scheduling delegated to ScheduledTriggerRegistry via TriggerBus
 
 ipcMain.handle('skill-get-status', () => {
   const enabled = store.get('skillsEnabled') || {};
@@ -452,6 +592,7 @@ ipcMain.handle('skill-get-daily-report', (_, date) => {
 });
 
 // Skill Agent IPC handlers (SKILL.md-based system)
+// Phase 3: Prefer TriggerBus for skill execution. This handler kept as fallback.
 ipcMain.handle('skill-execute', async (_, skillId, context) => {
   if (!skillEngine) return { success: false, output: 'Skill engine not initialized', outputType: 'text' };
   const result = await skillEngine.execute(skillId, context);
@@ -663,6 +804,300 @@ async function setupInputHook() {
   await startUioHook();
 }
 
+/**
+ * Phase 3: Register all scheduled skills in ScheduledTriggerRegistry.
+ *
+ * Replaces Renderer-side SkillScheduler timers with Main-side centralized scheduling.
+ * All executions route through TriggerBus.
+ */
+function _registerScheduledSkills(scheduledRegistry, skillRegistry, skillEngine, store) {
+  // Legacy skill: textConverter — every 10 minutes
+  scheduledRegistry.register('legacy-text-converter', () => {
+    return AITrigger.create('skill', 'skill.text-converter', {
+      skillId: 'text-converter',
+      userContext: {},
+    });
+  }, {
+    intervalMinutes: 10,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).textConverter !== false,
+  });
+
+  // Legacy skill: todoExtractor — every 60 minutes
+  scheduledRegistry.register('legacy-todo-extractor', () => {
+    return AITrigger.create('skill', 'skill.todo-management', {
+      skillId: 'todo-management',
+      userContext: { userMessage: '/todo' },
+    });
+  }, {
+    intervalMinutes: 60,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).todoExtractor !== false,
+  });
+
+  // Legacy skill: dailyReport — cron at configured hour
+  const reportHour = store.get('dailyReportHour') || 18;
+  scheduledRegistry.register('legacy-daily-report', () => {
+    return AITrigger.create('skill', 'skill.daily-report', {
+      skillId: 'daily-report',
+      userContext: {},
+    });
+  }, {
+    cronHour: reportHour,
+    priority: 'NORMAL',
+    enabled: (store.get('skillsEnabled') || {}).dailyReport !== false,
+  });
+
+  // SKILL.md-based scheduled skills from registry
+  const allMeta = skillRegistry.getAllMeta();
+  const scheduled = allMeta.filter(m => m.schedule);
+
+  for (const meta of scheduled) {
+    const scheduleConfig = {};
+
+    if (meta.schedule.cronHour !== undefined) {
+      scheduleConfig.cronHour = meta.schedule.cronHour;
+    } else if (meta.schedule.interval) {
+      scheduleConfig.intervalMinutes = meta.schedule.interval;
+    } else {
+      continue; // Skip if no valid schedule
+    }
+
+    scheduleConfig.priority = 'NORMAL';
+    scheduleConfig.enabled = true;
+
+    scheduledRegistry.register(`registry-${meta.name}`, () => {
+      return AITrigger.create('skill', `skill.${meta.name}`, {
+        skillId: meta.name,
+        userContext: {},
+      });
+    }, scheduleConfig);
+  }
+
+  console.log(`[Main] Registered ${3 + scheduled.length} scheduled skills in ScheduledTriggerRegistry`);
+}
+
+// ─── A1: Active Window Tracker ─────────────────────────────────────────
+const activeWindowTracker = {
+  _current: null,
+  _history: [],     // Recent 20 entries: { title, app, timestamp }
+  _appUsage: {},    // { appName: totalSeconds }
+
+  async poll() {
+    try {
+      const info = await this._getPlatformWindow();
+      if (info && info.app) {
+        if (info.app !== this._current?.app || info.title !== this._current?.title) {
+          console.log(`[ActiveWindow] Switch: ${info.app} — ${info.title}`);
+          this._current = { ...info, timestamp: Date.now() };
+          this._history.unshift(this._current);
+          if (this._history.length > 20) this._history.pop();
+        }
+        // Accumulate app usage time
+        this._appUsage[info.app] = (this._appUsage[info.app] || 0) + 10;
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  },
+
+  async _getPlatformWindow() {
+    if (process.platform === 'win32') {
+      return this._getWindowsWindow();
+    }
+    if (process.platform === 'darwin') {
+      const { exec } = require('child_process');
+      return new Promise(resolve => {
+        exec(
+          `osascript -e 'tell application "System Events" to get {name, title of window 1} of first application process whose frontmost is true'`,
+          { timeout: 3000 },
+          (err, stdout) => {
+            if (err) return resolve(null);
+            const parts = stdout.trim().split(', ');
+            resolve({ app: parts[0] || 'unknown', title: parts[1] || '' });
+          }
+        );
+      });
+    }
+    return null; // Linux: future extension
+  },
+
+  // Windows: Use a compiled .NET script via PowerShell, cached as a temp .exe
+  // Falls back to simple Get-Process if compilation fails
+  _compiledExePath: null,
+  _compileAttempted: false,
+
+  async _getWindowsWindow() {
+    const { execFile, exec } = require('child_process');
+    const path = require('path');
+    const fs = require('fs');
+
+    // Strategy 1: Use compiled helper (fast, ~50ms)
+    // Pass --exclude-pid to skip ChatCat's own alwaysOnTop transparent window
+    if (this._compiledExePath && fs.existsSync(this._compiledExePath)) {
+      const myPid = String(process.pid);
+      return new Promise(resolve => {
+        execFile(this._compiledExePath, ['--exclude-pid', myPid], { timeout: 2000, windowsHide: true }, (err, stdout) => {
+          if (err) return resolve(null);
+          try {
+            const data = JSON.parse(stdout.trim());
+            resolve({ app: data.N || '', title: data.T || '' });
+          } catch { resolve(null); }
+        });
+      });
+    }
+
+    // Strategy 2: Compile helper once (first run only)
+    if (!this._compileAttempted) {
+      this._compileAttempted = true;
+      try {
+        await this._compileHelper();
+        if (this._compiledExePath) {
+          return this._getWindowsWindow(); // retry with compiled exe
+        }
+      } catch {}
+    }
+
+    // Strategy 3: Fallback — simple PowerShell (slower, ~500ms, but always works)
+    return new Promise(resolve => {
+      exec(
+        'powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Sort-Object -Property @{Expression={if($_.MainWindowHandle -eq [System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle){0}else{1}}} | Select-Object -First 1 -Property ProcessName,MainWindowTitle | ConvertTo-Json -Compress"',
+        { timeout: 5000, windowsHide: true },
+        (err, stdout) => {
+          if (err) return resolve(null);
+          try {
+            const data = JSON.parse(stdout.trim());
+            resolve({ app: data.ProcessName || '', title: data.MainWindowTitle || '' });
+          } catch { resolve(null); }
+        }
+      );
+    });
+  },
+
+  async _compileHelper() {
+    const path = require('path');
+    const fs = require('fs');
+    const { exec } = require('child_process');
+    const os = require('os');
+
+    const exePath = path.join(os.tmpdir(), 'chatcat-fgwindow.exe');
+    const csPath = path.join(__dirname, 'src', 'helpers', 'fgwindow.cs');
+
+    if (!fs.existsSync(csPath)) {
+      console.warn('[ActiveWindow] C# source not found:', csPath);
+      return;
+    }
+
+    // Compile with csc.exe (available on all Windows with .NET Framework)
+    return new Promise((resolve, reject) => {
+      // Find csc.exe in .NET Framework directory
+      const cscPaths = [
+        'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe',
+        'C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\csc.exe',
+      ];
+      let cscPath = null;
+      for (const p of cscPaths) {
+        if (fs.existsSync(p)) { cscPath = p; break; }
+      }
+      if (!cscPath) return reject(new Error('csc.exe not found'));
+
+      exec(
+        `"${cscPath}" /nologo /out:"${exePath}" "${csPath}"`,
+        { timeout: 10000, windowsHide: true },
+        (err, stdout, stderr) => {
+          if (err) {
+            console.warn('[ActiveWindow] C# compile failed:', stderr?.trim());
+            return reject(err);
+          }
+          if (fs.existsSync(exePath)) {
+            this._compiledExePath = exePath;
+            console.log('[ActiveWindow] Compiled helper:', exePath);
+            resolve();
+          } else {
+            reject(new Error('exe not created'));
+          }
+        }
+      );
+    });
+  },
+
+  _destroyPersistentPS() {
+    // No-op, kept for API compatibility
+  },
+
+  getCurrent() { return this._current; },
+  getHistory() { return this._history; },
+  getUsage() { return this._appUsage; },
+};
+
+// IPC: get active window data
+ipcMain.handle('get-active-window', () => ({
+  current: activeWindowTracker.getCurrent(),
+  recent: activeWindowTracker.getHistory(),
+  appUsage: activeWindowTracker.getUsage(),
+}));
+
+// ─── C4: Skill / MCP Import IPC Handlers ──────────────────────────────
+
+ipcMain.handle('skill-import-file', async (_, filePath) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.importFromFile(filePath);
+});
+
+ipcMain.handle('skill-import-content', async (_, name, content) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.importFromContent(name, content);
+});
+
+ipcMain.handle('skill-get-imported', () => {
+  if (!skillImporter) return [];
+  return skillImporter.getImported();
+});
+
+ipcMain.handle('skill-remove-imported', async (_, name) => {
+  if (!skillImporter) return { success: false, reason: 'Skill importer not initialized' };
+  return skillImporter.remove(name);
+});
+
+ipcMain.handle('mcp-import-config', async (_, configPath) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.importFromClaudeConfig(configPath);
+});
+
+ipcMain.handle('mcp-import-json', async (_, jsonContent) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.importFromJson(jsonContent);
+});
+
+ipcMain.handle('mcp-get-imported', () => {
+  if (!mcpImporter) return [];
+  return mcpImporter.getImported();
+});
+
+ipcMain.handle('mcp-remove', async (_, name) => {
+  if (!mcpImporter) return { success: false, reason: 'MCP importer not initialized' };
+  return mcpImporter.remove(name);
+});
+
+// File dialog for importing skills/MCP configs
+ipcMain.handle('dialog-open-file', async (_, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: options?.filters || [{ name: 'All Files', extensions: ['*'] }],
+    title: options?.title || '选择文件',
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return { filePath: result.filePaths[0] };
+  }
+  return { filePath: null };
+});
+
+// C4: Skills manager window close
+ipcMain.on('skills-manager-close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.hide();
+});
+
 app.whenReady().then(() => {
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -692,9 +1127,24 @@ app.whenReady().then(() => {
   // V2: Unified AI Client (main process)
   const aiClient = new AIClientMain(store);
 
-  // V2: Quick Panel
-  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient);
+  // Phase 2: Unified AI Runtime (main process execution engine)
+  const aiRuntime = new AIRuntime(aiClient, { store });
+
+  // Phase 3: TriggerBus (central AI call coordinator)
+  const triggerBus = new TriggerBus(aiRuntime, { maxConcurrent: 3 });
+  const scheduledRegistry = new ScheduledTriggerRegistry(triggerBus, { store });
+  // Expose to IPC handlers (defined at module scope)
+  global._triggerBus = triggerBus;
+  global._scheduledRegistry = scheduledRegistry;
+
+  // V2: Quick Panel (now with AIRuntime + Phase 3 TriggerBus)
+  quickPanelManager = new QuickPanelManager(mainWindow, store, aiClient, aiRuntime, triggerBus);
   quickPanelManager.init();
+
+  // Phase 3: Wire TriggerBus webContents for IPC push
+  triggerBus.setWebContents(mainWindow.webContents);
+  triggerBus.start();
+  scheduledRegistry.start();
 
   createTray();
   setupShortcuts();
@@ -770,7 +1220,54 @@ app.whenReady().then(() => {
   // Initialize SKILL.md-based skill system
   skillRegistry = new SkillRegistry(path.join(__dirname, 'src', 'skills', 'skills'));
   skillRegistry.init().then(() => {
-    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient);
+    // C4: Initialize skill importer and MCP importer
+    skillImporter = new SkillImporter(path.join(__dirname, 'src', 'skills', 'skills'), skillRegistry);
+    mcpImporter = new McpConfigImporter(store, skillImporter);
+
+    // C4: Initialize skills manager window
+    skillsManager = new SkillsManager(mainWindow);
+
+    // Phase 2: Inject late-initialized services into AIRuntime
+    aiRuntime.setServices({ keyboardRecorder, skillRegistry });
+    skillEngine = new SkillEngine(store, skillRegistry, keyboardRecorder, aiClient, aiRuntime);
+    // Register skill prompts into AI Runtime PromptRegistry
+    aiRuntimeDefs.registerSkillPrompts(skillRegistry);
+
+    // Phase 3: Register scheduled skills in ScheduledTriggerRegistry
+    _registerScheduledSkills(scheduledRegistry, skillRegistry, skillEngine, store);
+
+    // Phase 3: Wire TriggerBus post-processing for skill results
+    triggerBus.on('trigger:completed', (event) => {
+      const trigger = triggerBus._entries.get(event.correlationId)?.trigger;
+      if (!trigger || trigger.type !== 'skill') return;
+
+      const skillId = trigger.payload?.skillId;
+      const result = event.result;
+      if (!skillId || !result) return;
+
+      // Post-processing: text-converter saves result to store
+      if (skillId === 'text-converter') {
+        const today = new Date().toISOString().split('T')[0];
+        store.set(`convertedText_${today}`, result);
+        console.log(`[TriggerBus:PostProcess] text-converter: saved ${result.length} chars`);
+      }
+
+      // Post-processing: todo-management parses todos
+      if (skillId === 'todo-management') {
+        skillEngine._parseTodosFromAI(result);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('todos-updated');
+        }
+      }
+
+      // Post-processing: daily-report saves to store
+      if (skillId === 'daily-report') {
+        const today = new Date().toISOString().split('T')[0];
+        store.set(`dailyReport_${today}`, { content: result, generatedAt: Date.now() });
+        console.log(`[TriggerBus:PostProcess] daily-report: saved for ${today}`);
+      }
+    });
+
     console.log('[Main] Skill system initialized');
   }).catch(err => {
     console.warn('[Main] Skill system init failed:', err.message);
@@ -778,10 +1275,34 @@ app.whenReady().then(() => {
 
   // Start clipboard monitoring
   startClipboardPolling();
+
+  // A1: Start active window polling (every 10 seconds)
+  setInterval(() => activeWindowTracker.poll(), 10000);
+  activeWindowTracker.poll(); // Immediate first poll
+
+  // A1: Persist active window snapshot to store (every 60 seconds)
+  setInterval(() => {
+    store.set('activeWindowSnapshot', {
+      current: activeWindowTracker.getCurrent(),
+      recent: activeWindowTracker.getHistory(),
+      appUsage: activeWindowTracker.getUsage(),
+    });
+  }, 60000);
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // A4: Save last active timestamp for offline adventure
+  store.set('lastActiveTime', Date.now());
+  // A1: Cleanup persistent PowerShell process
+  activeWindowTracker._destroyPersistentPS();
+  // Phase 3: Stop TriggerBus and ScheduledTriggerRegistry
+  if (global._triggerBus) {
+    try { global._triggerBus.stop(); } catch {}
+  }
+  if (global._scheduledRegistry) {
+    try { global._scheduledRegistry.stop(); } catch {}
+  }
   if (clipboardTimer) {
     clearInterval(clipboardTimer);
   }

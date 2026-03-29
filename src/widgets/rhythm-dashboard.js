@@ -110,18 +110,18 @@ export class RhythmDashboard {
     const detailEl = this._container.querySelector('#rhythm-detail');
     
     const stateMap = {
-      'flow': { icon: '🔥', name: '心流状态' },
-      'stuck': { icon: '😣', name: '卡壳状态' },
-      'reading': { icon: '📖', name: '阅读思考' },
-      'chatting': { icon: '💬', name: '沟通模式' },
-      'typing': { icon: '⌨️', name: '打字中' },
-      'away': { icon: '💤', name: '离开' },
-      'idle': { icon: '⏳', name: '空闲' }
+      'flow': { icon: 'icons/rhythm-flow.png', name: '心流状态' },
+      'stuck': { icon: 'icons/rhythm-stuck.png', name: '卡壳状态' },
+      'reading': { icon: 'icons/rhythm-reading.png', name: '阅读思考' },
+      'chatting': { icon: 'icons/rhythm-chatting.png', name: '沟通模式' },
+      'typing': { icon: 'icons/rhythm-typing.png', name: '打字中' },
+      'away': { icon: 'icons/rhythm-away.png', name: '离开' },
+      'idle': { icon: 'icons/rhythm-idle.png', name: '空闲' }
     };
     
     const stateInfo = stateMap[data.state] || stateMap['idle'];
     
-    if (iconEl) iconEl.textContent = stateInfo.icon;
+    if (iconEl) iconEl.innerHTML = `<img src="${stateInfo.icon}" class="cat-icon icon-xl" alt="">`;
     if (nameEl) nameEl.textContent = stateInfo.name;
     if (detailEl) {
       const min = Math.floor(data.duration / 60000);
@@ -224,7 +224,7 @@ export class RhythmDashboard {
     
     container.innerHTML = insights.map(insight => `
       <div class="insight-card">
-        <span class="insight-icon">${insight.icon}</span>
+        <span class="insight-icon"><img src="${insight.icon}" class="cat-icon icon-lg" alt=""></span>
         <span class="insight-text">${insight.text}</span>
       </div>
     `).join('');
@@ -241,7 +241,7 @@ export class RhythmDashboard {
     if (summary.flowSessions && summary.flowSessions.length > 0) {
       const longest = summary.flowSessions.sort((a, b) => b.durationMin - a.durationMin)[0];
       insights.push({
-        icon: '🔥',
+        icon: 'icons/insight-flow.png',
         text: `${longest.start}-${longest.end} 进入心流状态，连续高速输出 ${longest.durationMin} 分钟`
       });
     }
@@ -250,7 +250,7 @@ export class RhythmDashboard {
     if (bestHours.length > 0) {
       const best = bestHours[0];
       insights.push({
-        icon: '💡',
+        icon: 'icons/insight-lightbulb.png',
         text: `你的最佳打字时段是 ${best.hour}:00-${best.hour + 1}:00，建议安排重要创作任务`
       });
     }
@@ -260,7 +260,7 @@ export class RhythmDashboard {
       const comparison = this._engine.getBaselineComparison();
       if (comparison && comparison.speedDelta > 0.15) {
         insights.push({
-          icon: '📈',
+          icon: 'icons/insight-trend.png',
           text: `今天打字速度比平时快 ${Math.round(comparison.speedDelta * 100)}%，状态不错！`
         });
       }

@@ -283,6 +283,15 @@ export class AffectionSystem {
     return true;
   }
 
+  /** Spend heart gems. Returns true if sufficient balance. */
+  spendHeartGems(amount) {
+    if (amount <= 0 || this._heartGems < amount) return false;
+    this._heartGems -= amount;
+    this._throttledSave();
+    this._emit('heartgemschange', { delta: -amount, remaining: this._heartGems });
+    return true;
+  }
+
   /** Add passive income (from pet base). Checks level up. */
   addPassive(amount) {
     if (amount <= 0) return;

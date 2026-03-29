@@ -1,9 +1,56 @@
+/**
+ * Text Processor — Quick Panel text processing (polish/summarize/explain).
+ *
+ * V2: Prompts and model configs are now also registered in AI Runtime
+ *     (PromptRegistry + ModelProfiles), but this module retains its own
+ *     buildPrompt() / getModelConfig() for backward compatibility.
+ *     Callers can use either approach.
+ */
+
+const { PromptRegistry } = require('../ai-runtime/prompt-registry');
+const { ModelProfiles } = require('../ai-runtime/model-profiles');
+
+// Map Quick Panel modes to registry template/profile IDs
+const MODE_TO_TEMPLATE = {
+  polish: 'quick-polish',
+  summarize: 'quick-summarize',
+  explain: 'quick-explain',
+  translate: 'quick-translate',
+};
+
+const MODE_TO_PROFILE = {
+  polish: 'quick-polish',
+  summarize: 'quick-summarize',
+  explain: 'quick-explain',
+  translate: 'quick-polish',
+};
+
 class TextProcessor {
   constructor(store) {
     this._store = store;
   }
 
+  /**
+   * Build prompt for a given mode.
+   * Tries PromptRegistry first; falls back to inline templates.
+   */
   buildPrompt(mode, text) {
+    const templateId = MODE_TO_TEMPLATE[mode];
+
+    // Try PromptRegistry
+    if (templateId) {
+      const bundle = PromptRegistry.getPrompt(templateId);
+      if (bundle && bundle.system) {
+        return {
+          system: bundle.system,
+          user: bundle.userTemplate
+            ? PromptRegistry.renderTemplate(bundle.userTemplate, { text })
+            : text,
+        };
+      }
+    }
+
+    // Fallback: inline templates (original behavior)
     const templates = {
       polish: {
         system: `你是一个专业的文本润色助手。
@@ -42,9 +89,25 @@ class TextProcessor {
     return templates[mode] || templates.polish;
   }
   
-  // AI 调用配置
+  /**
+   * Get model config for a given mode.
+   * Tries ModelProfiles first; falls back to inline values.
+   */
   getModelConfig(mode) {
-    // 润色和总结用快速模型，解释可以用稍好的模型
+    const profileId = MODE_TO_PROFILE[mode];
+
+    // Try ModelProfiles
+    if (profileId) {
+      const profile = ModelProfiles.getProfile(profileId);
+      if (profile) {
+        return {
+          temperature: profile.temperature,
+          maxTokens: profile.maxTokens,
+        };
+      }
+    }
+
+    // Fallback: original inline config
     return {
       temperature: mode === 'polish' ? 0.3 : mode === 'explain' ? 0.5 : 0.4,
       maxTokens: mode === 'summarize' ? 500 : 800,

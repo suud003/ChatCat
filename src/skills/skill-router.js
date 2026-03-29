@@ -4,6 +4,7 @@
  * Intercepts chat input, matches skills by:
  * Tier 1: /command exact match (0 token)
  * Tier 2: keyword regex match (0 token)
+ * Tier 3: AI semantic match — sends skill descriptions to LLM (low token cost)
  *
  * Unmatched input falls through to normal AI chat.
  */
@@ -12,6 +13,15 @@ export class SkillRouter {
   constructor() {
     this._metas = [];
     this._initialized = false;
+    this._triggerBus = null;  // Phase 3: TriggerBusRenderer
+  }
+
+  /**
+   * Phase 3: Set TriggerBusRenderer for skill execution.
+   * @param {import('../ai-runtime/trigger-bus-renderer.js').TriggerBusRenderer} triggerBus
+   */
+  setTriggerBus(triggerBus) {
+    this._triggerBus = triggerBus;
   }
 
   /**
@@ -25,6 +35,24 @@ export class SkillRouter {
     } catch (err) {
       console.warn('[SkillRouter] Failed to load skill metas:', err);
       this._metas = [];
+    }
+
+    // Listen for skill registry changes (e.g. after import)
+    window.electronAPI.onSkillsChanged?.(() => {
+      this.reload();
+    });
+  }
+
+  /**
+   * Reload skill metadata from main process.
+   * Called when skills are imported/removed at runtime.
+   */
+  async reload() {
+    try {
+      this._metas = await window.electronAPI.skillGetAllMeta();
+      console.log(`[SkillRouter] Reloaded ${this._metas.length} skill definitions`);
+    } catch (err) {
+      console.warn('[SkillRouter] Reload failed:', err);
     }
   }
 
@@ -60,17 +88,77 @@ export class SkillRouter {
       if (matched) return meta;
     }
 
+    // Tier 3: AI semantic match
+    if (this._metas.length > 0) {
+      try {
+        const semanticMatch = await this._semanticMatch(trimmed);
+        if (semanticMatch) return semanticMatch;
+      } catch (err) {
+        console.warn('[SkillRouter] Semantic match failed:', err.message);
+      }
+    }
+
     return false;
   }
 
   /**
-   * Execute a skill via IPC.
+   * Tier 3: Use AI to determine if user input matches a skill by description.
+   * Lightweight IPC call to main process AI client.
+   * @returns {object|false} skill meta or false
+   */
+  async _semanticMatch(text) {
+    const catalog = this._metas.map(m => ({
+      name: m.name,
+      description: m.description || '',
+    }));
+
+    const answer = await window.electronAPI.skillSemanticMatch(text, catalog);
+
+    if (!answer || answer === 'none') return false;
+
+    const matched = this._metas.find(m => m.name.toLowerCase() === answer);
+    if (matched) {
+      console.log(`[SkillRouter] Semantic match: "${text}" → ${matched.name}`);
+    }
+    return matched || false;
+  }
+
+  /**
+   * Execute a skill via TriggerBus (Phase 3) or IPC fallback.
    * @returns {{ skillId: string, result: object }}
    */
   async execute(skillId, userMessage) {
     try {
-      const result = await window.electronAPI.skillExecute(skillId, { userMessage });
-      return { skillId, result };
+      if (this._triggerBus) {
+        // Phase 3: Route through TriggerBus
+        const trigger = {
+          type: 'skill',
+          sceneId: `skill.${skillId}`,
+          payload: {
+            skillId,
+            userContext: { userMessage },
+            userMessage,
+          },
+        };
+
+        const busResult = await this._triggerBus.submitAndWait(trigger, { priority: 'NORMAL' });
+
+        if (busResult.status === 'completed') {
+          return {
+            skillId,
+            result: { success: true, output: busResult.result, outputType: 'markdown' }
+          };
+        } else {
+          return {
+            skillId,
+            result: { success: false, output: `执行失败: ${busResult.error || busResult.status}`, outputType: 'text' }
+          };
+        }
+      } else {
+        // Legacy fallback: direct IPC
+        const result = await window.electronAPI.skillExecute(skillId, { userMessage });
+        return { skillId, result };
+      }
     } catch (err) {
       return {
         skillId,

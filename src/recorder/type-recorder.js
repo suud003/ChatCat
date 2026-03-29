@@ -13,6 +13,8 @@ export class TypeRecorder {
     this._dirBtn = document.getElementById('recorder-dir-btn');
     this._dirDisplay = document.getElementById('recorder-dir-display');
     this._statusDot = document.getElementById('recorder-status-dot');
+    this._inactiveHint = document.getElementById('recorder-inactive-hint');
+    this._gotoSettingsBtn = document.getElementById('recorder-goto-settings');
 
     this._recording = false;
 
@@ -29,6 +31,19 @@ export class TypeRecorder {
         this._dirDisplay.title = result.outputDir;
       }
     });
+
+    // "前往设置" button: open settings panel
+    this._gotoSettingsBtn?.addEventListener('click', () => {
+      // Close tools panel
+      const toolsPanel = document.getElementById('tools-container');
+      if (toolsPanel) toolsPanel.classList.add('hidden');
+
+      // Open settings panel
+      const settingsContainer = document.getElementById('settings-container');
+      if (settingsContainer) {
+        settingsContainer.classList.remove('hidden');
+      }
+    });
   }
 
   async _loadStatus() {
@@ -38,7 +53,7 @@ export class TypeRecorder {
       this._dirDisplay.textContent = status.outputDir;
       this._dirDisplay.title = status.outputDir;
     }
-    
+
     // V2 Pillar C: 首次启动时如果已处于录制状态，立刻加载今日已有内容
     if (status.recording) {
       await this.loadTodayContent();
@@ -80,6 +95,22 @@ export class TypeRecorder {
   _updateRecordingState(recording) {
     this._recording = recording;
     this._statusDot.classList.toggle('recording', recording);
+
+    // Show/hide inactive hint based on recording state
+    if (this._inactiveHint) {
+      this._inactiveHint.classList.toggle('hidden', recording);
+    }
+    // Hide preview & controls when not recording, show when recording
+    if (this._preview) {
+      this._preview.style.display = recording ? '' : 'none';
+    }
+    const controls = document.getElementById('recorder-controls');
+    if (controls) {
+      controls.style.display = recording ? '' : 'none';
+    }
+    if (this._dirDisplay) {
+      this._dirDisplay.style.display = recording ? '' : 'none';
+    }
   }
 
   async loadTodayContent() {

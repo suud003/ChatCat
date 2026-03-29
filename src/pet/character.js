@@ -24,6 +24,11 @@ export class Character {
     this.targetRightPawY = 0;
     this.expressionState = 'normal'; // normal, happy, surprised
 
+    // Intent-based animation
+    this._earAngleOffset = 0;    // intent-driven ear angle offset
+    this._intentTimer = null;
+    this._workingInterval = null;
+
     // Start animation loop
     this._rafId = null;
     this.animate = this.animate.bind(this);
@@ -35,6 +40,8 @@ export class Character {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
+    if (this._intentTimer) clearTimeout(this._intentTimer);
+    if (this._workingInterval) clearInterval(this._workingInterval);
   }
 
   start() {
@@ -90,6 +97,50 @@ export class Character {
     setTimeout(() => {
       this.expressionState = 'normal';
     }, 2000);
+  }
+
+  triggerIntent(name) {
+    console.log('[Character] triggerIntent:', name);
+    clearTimeout(this._intentTimer);
+    if (this._workingInterval) { clearInterval(this._workingInterval); this._workingInterval = null; }
+    switch (name) {
+      case 'curious':
+        this.expressionState = 'surprised';
+        this._earAngleOffset = 0.25;
+        this._intentTimer = setTimeout(() => {
+          this.expressionState = 'normal';
+          this._earAngleOffset = 0;
+        }, 1500);
+        break;
+      case 'working':
+        this._workingInterval = setInterval(() => this.triggerTyping(), 200);
+        break;
+      case 'proud':
+        this.expressionState = 'happy';
+        this._intentTimer = setTimeout(() => { this.expressionState = 'normal'; }, 2000);
+        break;
+      case 'sleepy':
+        this.setState('sleep');
+        this._intentTimer = setTimeout(() => { this.setState('idle'); }, 3000);
+        break;
+      case 'alert':
+        this.expressionState = 'surprised';
+        this._earAngleOffset = 0.35;
+        this._intentTimer = setTimeout(() => {
+          this.expressionState = 'normal';
+          this._earAngleOffset = 0;
+        }, 2000);
+        break;
+      case 'encouraging':
+        this.expressionState = 'happy';
+        this._intentTimer = setTimeout(() => { this.expressionState = 'normal'; }, 2000);
+        break;
+      case 'idle':
+      default:
+        this.expressionState = 'normal';
+        this._earAngleOffset = 0;
+        break;
+    }
   }
 
   animate(timestamp) {
@@ -222,8 +273,8 @@ export class Character {
     ctx.stroke();
 
     // Ears
-    this.drawEar(ctx, cx - 30, cy - 28, -0.3);
-    this.drawEar(ctx, cx + 30, cy - 28, 0.3);
+    this.drawEar(ctx, cx - 30, cy - 28, -0.3 - this._earAngleOffset);
+    this.drawEar(ctx, cx + 30, cy - 28, 0.3 + this._earAngleOffset);
 
     // Face
     this.drawFace(ctx, cx, cy);

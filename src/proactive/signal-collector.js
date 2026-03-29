@@ -304,14 +304,22 @@ export class SignalCollector {
     if (!item || !item.text) return;
 
     const text = item.text.trim();
-    if (!text) return;
+    if (!text || text.length < 10) return; // 过滤短复制（密码、单词等）
+
+    // 敏感内容过滤：密码、API key、信用卡号等静默跳过
+    if (this._isSensitiveContent(text)) return;
 
     // Classify content
     let type = 'text';
     if (/https?:\/\//.test(text)) {
       type = 'url';
-    } else if (/\b(function|class|const|let|var|import|export|=>|async|def |fn |pub )\b/.test(text) || /[{}\[\]();]/.test(text)) {
-      type = 'code';
+    } else {
+      let codeScore = 0;
+      if (/\b(function|class|const|let|var|import|export|async|def |fn |pub )\b/.test(text)) codeScore++;
+      if (/=>|[{}\[\]();]/.test(text)) codeScore++;
+      if (/^\s*(\/\/|#|\/\*|\*)/m.test(text)) codeScore++;
+      if (/\b(return|if|else|for|while|switch)\b/.test(text)) codeScore++;
+      if (codeScore >= 2) type = 'code';
     }
 
     // Check for repeat
@@ -340,6 +348,23 @@ export class SignalCollector {
     });
 
     this._lastClipboardContent = text;
+  }
+
+  /**
+   * 轻量级敏感内容检测（渲染进程内联版，不依赖 sensitive-filter.js）
+   * 检测：密码模式、API key、信用卡号、私钥、token 等
+   */
+  _isSensitiveContent(text) {
+    // 密码/token/key 模式：keyword=value 或 keyword: value
+    if (/\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|auth[_-]?token|bearer)\s*[:=]\s*\S+/i.test(text)) return true;
+    // 信用卡号模式：必须有分隔符（空格或横线），且以常见发卡行前缀开头
+    // 4xxx = Visa, 5[1-5]xx = Mastercard, 3[47]xx = Amex, 6xxx = Discover
+    if (/\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6\d{3})[\s-]\d{4}[\s-]\d{4}[\s-]\d{1,7}\b/.test(text)) return true;
+    // SSH/PEM 私钥
+    if (/-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/.test(text)) return true;
+    // 纯长随机字符串（40+ 字符无空格，可能是 hash/token）且文本整体很短
+    if (text.length < 200 && /^[A-Za-z0-9+/=_\-]{40,}$/.test(text.trim())) return true;
+    return false;
   }
 
   _simpleHash(str) {
