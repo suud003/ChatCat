@@ -60,8 +60,12 @@ class PrivacyConsentManager {
           }
           
           // 通知主进程内部：联动 recorder 启停
-          if (typeof this.onConsentChanged === 'function') {
-            this.onConsentChanged(true);
+          try {
+            if (typeof this.onConsentChanged === 'function') {
+              this.onConsentChanged(true);
+            }
+          } catch (err) {
+            console.error('[PrivacyConsent] onConsentChanged callback error:', err);
           }
         }
         resolve(accepted);
@@ -112,26 +116,30 @@ class PrivacyConsentManager {
     
     this._consentWindow.loadFile(path.join(__dirname, 'consent-dialog.html'));
     
-    // 接收用户选择
-    const onAccept = () => {
-      cleanup();
-      settle(true);
-      if (this._consentWindow && !this._consentWindow.isDestroyed()) {
-        this._consentWindow.close();
-      }
-    };
-    
-    const onDecline = () => {
-      cleanup();
-      settle(false);
-      if (this._consentWindow && !this._consentWindow.isDestroyed()) {
-        this._consentWindow.close();
-      }
-    };
-    
     const cleanup = () => {
       ipcMain.removeListener('consent-accept', onAccept);
       ipcMain.removeListener('consent-decline', onDecline);
+    };
+
+    // 先 settle 再 destroy — 因为 destroy() 会同步触发 closed 事件，
+    // 如果先 destroy 再 settle，closed handler 中的 settle(false)
+    // 会抢先执行，导致 accept 永远变成 decline。
+    const closeAndSettle = (accepted) => {
+      cleanup();
+      settle(accepted);
+      if (this._consentWindow && !this._consentWindow.isDestroyed()) {
+        this._consentWindow.destroy();
+      }
+      this._consentWindow = null;
+    };
+
+    // 接收用户选择
+    const onAccept = () => {
+      closeAndSettle(true);
+    };
+    
+    const onDecline = () => {
+      closeAndSettle(false);
     };
     
     ipcMain.once('consent-accept', onAccept);

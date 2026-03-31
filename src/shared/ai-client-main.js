@@ -207,6 +207,51 @@ class AIClientMain {
 
   // ─── Config helpers ────────────────────────────────────────────
 
+  /**
+   * Test API connection with given credentials (not from store).
+   *
+   * @param {string} apiUrl    — API base URL
+   * @param {string} apiKey    — API key
+   * @param {string} modelName — model to test
+   * @param {Object} [options]
+   * @param {string} [options.testMessage] — prompt to send
+   * @param {string} [options.preset]      — preset key (for key-optional detection)
+   * @returns {Promise<{latencyMs: number, output: string}>}
+   */
+  async testConnection(apiUrl, apiKey, modelName, options = {}) {
+    const url = `${apiUrl}/chat/completions`;
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    const body = {
+      model: modelName,
+      messages: [{ role: 'user', content: options.testMessage || '请回复：连接测试通过' }],
+      temperature: 0.3,
+      max_tokens: 100,
+    };
+
+    const start = Date.now();
+    const response = await net.fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    const latencyMs = Date.now() - start;
+
+    if (!response.ok) {
+      const detail = await this._parseErrorBody(response);
+      throw new Error(`API 错误 (${response.status}): ${detail || '未知错误'}`);
+    }
+
+    const json = await response.json();
+    if (json.error) {
+      throw new Error(json.error.message || 'AI API error');
+    }
+
+    const output = json.choices?.[0]?.message?.content || '';
+    return { latencyMs, output };
+  }
+
   /** Read AI config from store */
   _getConfig() {
     return {

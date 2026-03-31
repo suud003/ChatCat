@@ -1409,6 +1409,13 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
       const el = document.getElementById(`scene-${t}`);
       if (el) el.checked = enabledTypes.includes(t);
     }
+
+    // V2 Pillar C: 恢复 consent toggle 状态
+    const consentToggle = document.getElementById('consent-toggle');
+    if (consentToggle) {
+      const isGranted = await window.electronAPI.consentCheck();
+      consentToggle.checked = isGranted;
+    }
   }
 
   // Event listeners
