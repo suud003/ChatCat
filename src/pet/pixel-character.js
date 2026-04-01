@@ -268,42 +268,41 @@ export class SpriteCharacter {
    */
   _drawLayer(cctx, img, srcX, applyColor) {
     const skin = SKINS[this.skinId];
+    // 底色颜色：有 tint 用 tint，无 tint 默认白色（#FFFFFF）
+    const baseColor = (applyColor && skin.tint) ? skin.tint : '#FFFFFF';
+
+    const tc = this._tintCtx;
+    tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+
+    // Step 1: 用底色填充 sprite 的 alpha 区域（给猫猫上底色）
+    tc.globalCompositeOperation = 'source-over';
+    tc.filter = 'none';
+    tc.fillStyle = baseColor;
+    tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
+    // 只保留 sprite 有像素的区域
+    tc.globalCompositeOperation = 'destination-in';
+    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+    // Step 2: 在底色上叠加原始 sprite 线条（source-over 让黑色线条覆盖底色）
+    tc.globalCompositeOperation = 'source-over';
+    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
 
     if (applyColor && skin.tint) {
-      // Tint via multiply blend on a temporary canvas:
-      // 1. Draw original sprite
-      // 2. Multiply with tint color (white → tint, black stays black, grays get tinted)
-      // 3. Restore original alpha mask
-      const tc = this._tintCtx;
-      tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
-
-      tc.globalCompositeOperation = 'source-over';
-      tc.filter = 'none';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
+      // Step 3: 对整体做 multiply blend 着色（白色→tint，黑色→黑色）
       tc.globalCompositeOperation = 'multiply';
       tc.fillStyle = skin.tint;
       tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-
+      // 恢复 alpha 遮罩
       tc.globalCompositeOperation = 'destination-in';
       tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-      // Draw tinted result onto composite, with optional CSS filter
-      if (skin.filter) {
-        cctx.filter = skin.filter;
-      }
-      cctx.drawImage(this._tintCanvas, 0, 0);
-      cctx.filter = 'none';
-    } else {
-      // No tint — apply CSS filter directly if present
-      if (applyColor && skin.filter) {
-        cctx.filter = skin.filter;
-      }
-      cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-      if (applyColor) {
-        cctx.filter = 'none';
-      }
     }
+
+    // Step 4: 绘制到 composite canvas，应用可选的 CSS filter
+    if (applyColor && skin.filter) {
+      cctx.filter = skin.filter;
+    }
+    cctx.drawImage(this._tintCanvas, 0, 0);
+    cctx.filter = 'none';
   }
 
   _draw() {

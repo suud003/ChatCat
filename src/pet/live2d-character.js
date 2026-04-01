@@ -8,7 +8,7 @@ export const CATEGORIES = [
   { id: 'color',      name: '颜色' },
   { id: 'instrument', name: '乐器' },
   { id: 'combo',      name: '组合' },
-  { id: 'animated',   name: '动画' },
+  // { id: 'animated',   name: '动画' },  // TODO: 动画功能暂未完善，临时屏蔽
 ];
 
 // Color palette for avatar initials
@@ -38,7 +38,7 @@ export { INSTRUMENT_NAMES };
 
 export const CHARACTER_PRESETS = [
   // === Color skins ===
-  { id: 'hachiware',     name: '哈奇猫',   colorName: '白蓝色', instrument: 'keyboard', color: { from: '#a1c4fd', to: '#c2e9fb' }, type: 'skin', category: 'color', description: 'AI生成的哈奇猫序列帧' },
+  // { id: 'hachiware', ... } — TODO: 哈奇猫（白蓝色）暂未完善，临时屏蔽
   { id: 'bongo-classic', name: '经典猫',   colorName: '原色',  instrument: 'keyboard', color: avatarColor(6),  type: 'skin', category: 'color', description: '原版邦戈猫' },
   { id: 'bongo-orange',  name: '橘猫',     colorName: '橘色',  instrument: 'keyboard', color: avatarColor(11), type: 'skin', category: 'color', description: '温暖的橘色猫' },
   { id: 'bongo-pink',    name: '粉猫',     colorName: '粉色',  instrument: 'keyboard', color: avatarColor(3),  type: 'skin', category: 'color', description: '可爱的粉色猫' },
@@ -70,8 +70,8 @@ export const CHARACTER_PRESETS = [
   { id: 'bongo-cymbal-gold',   name: '金色镲手',   colorName: '金色', instrument: 'cymbal',  color: { from: '#ffeaa7', to: '#fdcb6e' }, type: 'combo', category: 'combo', description: '金猫敲镲' },
   { id: 'bongo-marimba-green', name: '绿色马林巴', colorName: '绿色', instrument: 'marimba', color: { from: '#55efc4', to: '#00b894' }, type: 'combo', category: 'combo', description: '绿猫敲马林巴' },
 
-  // === Animated sprite sheet skins ===
-  { id: 'animated-default', name: '动画猫',   colorName: '原色', instrument: null, color: { from: '#ff9ff3', to: '#f368e0' }, type: 'animated', category: 'animated', description: '带动画的猫咪' },
-  { id: 'animated-pink',    name: '动画粉猫', colorName: '粉色', instrument: null, color: { from: '#fd79a8', to: '#e84393' }, type: 'animated', category: 'animated', description: '粉色动画猫' },
-  { id: 'animated-blue',    name: '动画蓝猫', colorName: '蓝色', instrument: null, color: { from: '#74b9ff', to: '#0984e3' }, type: 'animated', category: 'animated', description: '蓝色动画猫' },
+  // === Animated sprite sheet skins === TODO: 动画功能暂未完善，临时屏蔽
+  // { id: 'animated-default', name: '动画猫',   colorName: '原色', instrument: null, color: { from: '#ff9ff3', to: '#f368e0' }, type: 'animated', category: 'animated', description: '带动画的猫咪' },
+  // { id: 'animated-pink',    name: '动画粉猫', colorName: '粉色', instrument: null, color: { from: '#fd79a8', to: '#e84393' }, type: 'animated', category: 'animated', description: '粉色动画猫' },
+  // { id: 'animated-blue',    name: '动画蓝猫', colorName: '蓝色', instrument: null, color: { from: '#74b9ff', to: '#0984e3' }, type: 'animated', category: 'animated', description: '蓝色动画猫' },
 ];

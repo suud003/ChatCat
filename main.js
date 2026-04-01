@@ -140,6 +140,9 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
+  // Windows 平台标识
+  const isWin = process.platform === 'win32';
+
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
@@ -151,6 +154,12 @@ function createWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    thickFrame: false,
+    title: '',
+    roundedCorners: false,
+    autoHideMenuBar: true,
+    backgroundMaterial: 'none',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -158,10 +167,104 @@ function createWindow() {
     }
   });
 
+  // 强制完全透明背景 + 移除菜单栏
+  mainWindow.setBackgroundColor('#00000000');
+  mainWindow.setMenuBarVisibility(false);
+  if (isWin) mainWindow.removeMenu();
+
   // Click-through on transparent areas, forward mouse events so hover still works
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // Windows DWM 灰色边框彻底修复
+  if (isWin) {
+    // 方案 1：通过 Win32 API DwmSetWindowAttribute 禁用 DWM 非客户区渲染
+    // 使用异步 exec 避免阻塞主进程（PowerShell 编译 C# 需要 1-3 秒）
+    const applyDwmFix = () => {
+      try {
+        const hwndBuf = mainWindow.getNativeWindowHandle();
+        const hwnd = process.arch === 'x64'
+          ? hwndBuf.readBigUInt64LE(0).toString()
+          : hwndBuf.readUInt32LE(0).toString();
+
+        const { exec } = require('child_process');
+        const psLines = [
+          'Add-Type @"',
+          'using System;',
+          'using System.Runtime.InteropServices;',
+          'public class DwmFix {',
+          '  [DllImport("dwmapi.dll")]',
+          '  public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);',
+          '  [DllImport("user32.dll")]',
+          '  public static extern int SetWindowLong(IntPtr hwnd, int index, int newLong);',
+          '  [DllImport("user32.dll")]',
+          '  public static extern int GetWindowLong(IntPtr hwnd, int index);',
+          '}',
+          '"@',
+          '$h = [IntPtr]' + hwnd,
+          '$p = 1',
+          '[DwmFix]::DwmSetWindowAttribute($h, 2, [ref]$p, 4)',
+          '$s = [DwmFix]::GetWindowLong($h, -20)',
+          '[DwmFix]::SetWindowLong($h, -20, $s -bor 0x80000)'
+        ];
+        const psScript = psLines.join('\n');
+        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+        // 异步执行，不阻塞主进程
+        exec(`powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, {
+          windowsHide: true,
+          timeout: 15000
+        }, (err) => {
+          if (err) {
+            console.warn('[DWM Fix] DwmSetWindowAttribute failed:', err.message);
+          } else {
+            console.log('[DWM Fix] DwmSetWindowAttribute applied successfully');
+          }
+        });
+      } catch (err) {
+        console.warn('[DWM Fix] Failed to get window handle:', err.message);
+      }
+    };
+
+    // 窗口 show 之后立即应用 DWM 修复
+    mainWindow.once('show', () => {
+      setTimeout(applyDwmFix, 50);
+    });
+
+    // Windows 在窗口失焦/获焦时可能重新渲染非客户区导致灰框再现
+    // 监听 blur + focus 事件，重新强制透明背景 + 重新应用 DWM 修复
+    let dwmFixDebounce = null;
+    const reapplyDwmOnEvent = () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // 立即重设透明背景色，防止灰框闪现
+        mainWindow.setBackgroundColor('#00000000');
+        // 防抖：避免频繁触发 PowerShell 进程
+        if (dwmFixDebounce) clearTimeout(dwmFixDebounce);
+        dwmFixDebounce = setTimeout(() => {
+          applyDwmFix();
+          dwmFixDebounce = null;
+        }, 200);
+      }
+    };
+    mainWindow.on('blur', reapplyDwmOnEvent);
+    mainWindow.on('focus', reapplyDwmOnEvent);
+  }
+
+  // 窗口就绪后显示
+  mainWindow.once('ready-to-show', () => {
+    if (isWin) {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
+    mainWindow.show();
+    if (isWin) {
+      // show 之后再次确认置顶（DWM 在 show 时可能重置 Z-order）
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        }
+      }, 100);
+    }
+  });
 
   mainWindow.setOpacity(store.get('opacity'));
 
@@ -340,6 +443,14 @@ function createDefaultIcon() {
 
 // IPC handlers
 ipcMain.handle('get-store', (_, key) => store.get(key));
+  // 批量获取 store 值，减少 IPC 往返次数
+  ipcMain.handle('get-store-batch', (_, keys) => {
+    const result = {};
+    for (const key of keys) {
+      result[key] = store.get(key);
+    }
+    return result;
+  });
 ipcMain.handle('set-store', (_, key, value) => store.set(key, value));
 
 // Phase 3: TriggerBus IPC handlers
@@ -465,6 +576,10 @@ ipcMain.on('window-drag', (_, { dx, dy }) => {
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  // Windows: 恢复穿透后重新确保置顶级别
+  if (ignore && process.platform === 'win32') {
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  }
 });
 
 // Multi-monitor: move window to the display containing the given screen point
@@ -1097,6 +1212,14 @@ ipcMain.on('skills-manager-close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win && !win.isDestroyed()) win.hide();
 });
+
+// Windows: 移除默认应用菜单，防止菜单栏导致的边框
+Menu.setApplicationMenu(null);
+
+// Windows: 禁用窗口遮挡检测，避免 DWM 对透明窗口的干预
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+}
 
 app.whenReady().then(() => {
   // Allow CDN scripts for Live2D

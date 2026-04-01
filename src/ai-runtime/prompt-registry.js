@@ -192,23 +192,47 @@ const PromptRegistry = {
 
 // ─── Built-in Prompt Registrations ───────────────────────────────────────
 
-// Memory extraction prompt (from src/chat/memory-manager.js:11)
+// Memory extraction prompt — V2 (structured memory extraction)
 PromptRegistry.register({
   templateId: 'memory-extract',
-  version: '1.0.0',
+  version: '2.0.0',
   source: 'inline',
-  system: `You are a memory extraction assistant. Given a user message and assistant response from a chat, extract key personal facts about the user.
+  system: `你是一个记忆提取助手。根据用户消息和助手回复，提取值得长期记住的用户信息。
 
-Rules:
-- Only extract concrete, memorable facts (name, preferences, habits, birthday, work info, etc.)
-- Return a JSON array of objects: [{"fact": "...", "category": "..."}]
-- Categories: name, preference, habit, birthday, work, other
-- If no memorable facts, return an empty array: []
-- Keep facts short (under 50 chars each)
-- Max 3 facts per extraction
-- Do NOT extract generic conversational content
-- Respond with ONLY the JSON array, no other text`,
-  userTemplate: 'User message: "{userMessage}"\nAssistant response: "{assistantResponse}"',
+## 提取规则
+1. 积极提取用户的**个人信息、喜好、习惯、观点**等，哪怕只是简短的一句话
+2. 特别注意提取"我喜欢..."、"我不喜欢..."、"我是..."、"我在..."等表达
+3. 每次最多提取 3 条记忆
+4. 如果对话纯粹是闲聊问候（如"你好"、"在吗"），没有个人信息，返回空数组 []
+5. 不要提取敏感信息（密码、Token、银行卡号等）
+6. 如果用户已有类似记忆（见 existingMemories），不要重复提取
+
+## 提取示例
+- 用户说"我喜欢看动漫" → [{"content": "喜欢看动漫", "category": "preference", "importance": "medium"}]
+- 用户说"我是程序员" → [{"content": "职业是程序员", "category": "user_info", "importance": "high"}]
+- 用户说"今天好累" → []（没有长期价值的个人信息）
+- 用户说"我用Python比较多" → [{"content": "常用Python编程", "category": "preference", "importance": "medium"}]
+
+## 分类说明
+- user_info: 姓名、生日、年龄、职业、所在地等基本信息
+- preference: 喜好、习惯、风格偏好（如"喜欢看动漫"、"喜欢用 Python"）
+- instruction: 用户明确的指令或规则（如"回复用中文"、"代码不要加注释"）
+- fact: 项目信息、工作内容、具体事实
+- relationship: 与猫咪的互动记录、情感表达
+
+## 重要性判断
+- high: 用户明确强调的、核心个人信息（姓名、重要偏好）
+- medium: 一般性的喜好或事实
+- low: 次要信息、可能会变化的临时信息
+
+## 输出格式
+返回 JSON 数组，每个元素包含：
+- content: 记忆内容（简洁，50字以内）
+- category: 分类（user_info / preference / instruction / fact / relationship）
+- importance: 重要性（high / medium / low）
+
+只输出 JSON 数组，不要其他文字。`,
+  userTemplate: '用户消息: "{userMessage}"\n助手回复: "{assistantResponse}"\n\n已有记忆: {existingMemories}',
 });
 
 // Quick Panel: Polish (from src/quick-panel/text-processor.js)
@@ -371,14 +395,22 @@ function _buildChatSystemPromptFromContext(ctx) {
   };
   prompt += (moodDescriptions[mood] || moodDescriptions.normal) + '\n';
 
-  // ── Memories ──
+  // ── Memories (V2: 结构化记忆) ──
   const memories = mData.memories || [];
-  if (memories.length > 0) {
+  const structuredSummary = mData.structuredSummary || '';
+  if (structuredSummary) {
+    prompt += '\n--- 关于用户的记忆 ---\n';
+    prompt += structuredSummary;
+    prompt += '\n使用这些记忆时要自然融入对话，不要生硬地列举。\n';
+    prompt += '📌 标记的是用户明确要求你记住的，请特别注意遵守。\n';
+  } else if (memories.length > 0) {
+    // 兼容旧格式
     prompt += '\nThings you remember about the user:\n';
     for (const mem of memories) {
-      prompt += `- ${mem.fact}\n`;
+      const content = mem.content || mem.fact || '';
+      prompt += `- ${content}\n`;
     }
-    prompt += 'Use these memories naturally in conversation when relevant, but don\'t force them.\n';
+    prompt += 'Use these memories naturally in conversation when relevant.\n';
   }
 
   // ── Real-time behavior / rhythm data ──

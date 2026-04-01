@@ -107,12 +107,19 @@ class PrivacyConsentManager {
       frame: false,
       transparent: true,
       resizable: false,
+      hasShadow: false,
+      thickFrame: false,
+      roundedCorners: false,
+      backgroundMaterial: 'none',
       webPreferences: {
         preload: path.join(__dirname, 'consent-preload.js'),
         contextIsolation: true,
         nodeIntegration: false
       }
     });
+    
+    // 强制完全透明背景，防止 Windows DWM 灰框
+    this._consentWindow.setBackgroundColor('#00000000');
     
     this._consentWindow.loadFile(path.join(__dirname, 'consent-dialog.html'));
     

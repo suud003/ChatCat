@@ -602,16 +602,10 @@
   100% { opacity: 0; }
 }
 
-/* ── Scrollbar for gacha panel ── */
+/* ── Scrollbar for gacha panel (hidden) ── */
 .gacha-panel::-webkit-scrollbar {
-  width: 4px;
-}
-.gacha-panel::-webkit-scrollbar-track {
-  background: transparent;
-}
-.gacha-panel::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 2px;
+  width: 0;
+  display: none;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -628,9 +622,7 @@
   overflow-y: auto;
 }
 
-.accessory-panel::-webkit-scrollbar { width: 4px; }
-.accessory-panel::-webkit-scrollbar-track { background: transparent; }
-.accessory-panel::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 2px; }
+.accessory-panel::-webkit-scrollbar { width: 0; display: none; }
 
 .accessory-section {
   display: flex;

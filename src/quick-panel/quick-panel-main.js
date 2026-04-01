@@ -20,7 +20,7 @@ class QuickPanelManager {
     this._triggerBus = triggerBus || null;
     this._isVisible = false;
     this._textProcessor = new TextProcessor(store);
-    this._screenshotOCR = new ScreenshotOCR(store, aiClient, aiRuntime);
+    this._screenshotOCR = new ScreenshotOCR(store, aiClient, aiRuntime, mainWindow);
   }
 
   init() {

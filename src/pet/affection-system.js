@@ -79,13 +79,17 @@ export class AffectionSystem {
   /* ------------------------------------------------------------------ */
 
   async init() {
-    this._affinity = (await this._getStore('affinity')) || 0;
-    this._level = (await this._getStore('level')) || 1;
-    this._streakDays = (await this._getStore('streakDays')) || 0;
-    this._lastLoginDate = (await this._getStore('lastLoginDate')) || null;
-    this._unlockedItems = (await this._getStore('unlockedItems')) || [];
-    this._rebirthCount = (await this._getStore('rebirthCount')) || 0;
-    this._heartGems = (await this._getStore('heartGems')) || 0;
+    // 批量读取所有 store 值，减少 IPC 往返次数（8次→1次）
+    const keys = ['affinity', 'level', 'streakDays', 'lastLoginDate', 'unlockedItems', 'rebirthCount', 'heartGems', 'dailyStats'];
+    const data = await window.electronAPI.getStoreBatch(keys);
+
+    this._affinity = data.affinity || 0;
+    this._level = data.level || 1;
+    this._streakDays = data.streakDays || 0;
+    this._lastLoginDate = data.lastLoginDate || null;
+    this._unlockedItems = data.unlockedItems || [];
+    this._rebirthCount = data.rebirthCount || 0;
+    this._heartGems = data.heartGems || 0;
 
     // Migration: recalculate level from affinity using new formula
     // (handles upgrade from old fixed-threshold system)
@@ -93,7 +97,7 @@ export class AffectionSystem {
 
     // Load daily stats or reset if new day
     const today = this._today();
-    const savedStats = (await this._getStore('dailyStats')) || {};
+    const savedStats = data.dailyStats || {};
     if (savedStats._date === today) {
       this._dailyStats = savedStats;
     } else {
@@ -377,14 +381,17 @@ export class AffectionSystem {
 
   async _doSave() {
     this._savePending = false;
-    await this._setStore('affinity', this._affinity);
-    await this._setStore('level', this._level);
-    await this._setStore('streakDays', this._streakDays);
-    await this._setStore('lastLoginDate', this._lastLoginDate);
-    await this._setStore('unlockedItems', this._unlockedItems);
-    await this._setStore('dailyStats', this._dailyStats);
-    await this._setStore('rebirthCount', this._rebirthCount);
-    await this._setStore('heartGems', this._heartGems);
+    // 并行保存所有值，减少等待时间
+    await Promise.all([
+      this._setStore('affinity', this._affinity),
+      this._setStore('level', this._level),
+      this._setStore('streakDays', this._streakDays),
+      this._setStore('lastLoginDate', this._lastLoginDate),
+      this._setStore('unlockedItems', this._unlockedItems),
+      this._setStore('dailyStats', this._dailyStats),
+      this._setStore('rebirthCount', this._rebirthCount),
+      this._setStore('heartGems', this._heartGems),
+    ]);
   }
 
   async _getStore(key) {

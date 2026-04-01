@@ -8,10 +8,11 @@ class ScreenshotOCR {
    * @param {import('../shared/ai-client-main').AIClientMain} aiClient
    * @param {import('../ai-runtime/runtime').AIRuntime} aiRuntime
    */
-  constructor(store, aiClient, aiRuntime) {
+  constructor(store, aiClient, aiRuntime, mainWindow) {
     this._store = store;
     this._aiClient = aiClient;
     this._aiRuntime = aiRuntime;
+    this._mainWindow = mainWindow || null;
     this._overlayWindow = null;
   }
 
@@ -91,6 +92,7 @@ class ScreenshotOCR {
       transparent: false,
       alwaysOnTop: true,
       skipTaskbar: true,
+      title: '',
       webPreferences: {
         contextIsolation: true,
         preload: path.join(__dirname, 'screenshot-preload.js')
@@ -123,11 +125,17 @@ class ScreenshotOCR {
     // Remove listeners if window is destroyed before they trigger
     ipcMain.removeAllListeners('screenshot-region');
     ipcMain.removeAllListeners('screenshot-cancel');
-    
+
     if (this._overlayWindow && !this._overlayWindow.isDestroyed()) {
       this._overlayWindow.destroy();
     }
     this._overlayWindow = null;
+
+    // 恢复主窗口置顶和焦点
+    if (this._mainWindow && !this._mainWindow.isDestroyed()) {
+      this._mainWindow.setAlwaysOnTop(true);
+      console.log('[ScreenshotOCR] ✅ 主窗口置顶已恢复');
+    }
   }
   
   async processImage(base64, config) {

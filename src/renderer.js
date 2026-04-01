@@ -238,17 +238,22 @@ let typeRecorder = null;
 async function init() {
   const canvas = document.getElementById('pet-canvas');
 
-  // Restore saved skin
-  const savedCharId = await window.electronAPI.getStore('character');
-  const charId = savedCharId || 'hachiware';
+  // ========== Phase 1: 并行初始化互不依赖的模块 ==========
+  const affection = new AffectionSystem();
+  const aiService = new AIService();
 
-  // Create character via factory
+  const [savedCharId, , , savedPersonality] = await Promise.all([
+    window.electronAPI.getStore('character'),           // 角色ID
+    affection.init(),                                    // 好感度系统
+    aiService.loadConfig(),                              // AI配置
+    window.electronAPI.getStore('catPersonality'),        // 性格
+  ]);
+
+  // 创建角色（依赖 savedCharId）
+  const charId = savedCharId || 'bongo-classic';
   activeCharacter = await createCharacter(canvas, charId);
   activeCharacter.start();
 
-  // Affection / nurturing system
-  const affection = new AffectionSystem();
-  await affection.init();
   affectionSystem = affection;
 
   // V2.1: Persist mood changes to store (for Main-side providers)
@@ -278,28 +283,28 @@ async function init() {
   };
   const inputTracker = new InputTracker(characterProxy);
 
-  // AI service
-  // AI service (Phase 4: TriggerBus-only, no direct AI HTTP)
-  const aiService = new AIService();
-  await aiService.loadConfig();
-
   // Phase 3: TriggerBus (Renderer-side, communicates with Main TriggerBus via IPC)
   const triggerBusRenderer = new TriggerBusRenderer();
   triggerBusRenderer.init();
   aiService.setTriggerBus(triggerBusRenderer);
 
-  // V1.1: Memory Manager (Phase 4: uses TriggerBus via Main process)
+  // ========== Phase 2: 并行初始化依赖 Phase 1 的模块 ==========
   const memoryManager = new MemoryManager();
   memoryManager.setTriggerBus(triggerBusRenderer);
-  await memoryManager.init();
+
+  const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
+
+  await Promise.all([
+    memoryManager.init(),                                // 记忆管理器
+    chatUI.loadHistory(),                                // 聊天历史
+  ]);
+
   aiService.setMemoryManager(memoryManager);
 
-  // V1.1: Load personality (saved for Renderer-side usage; chat prompt now built by Main PromptRegistry)
-  const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
-
-  // Chat UI (simplified inline chat)
-  const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
-  await chatUI.loadHistory();
+  // V7: 记忆变化时自动刷新设置面板中的记忆列表
+  aiService.onMemoryChanged = () => {
+    if (typeof _renderMemoryList === 'function') _renderMemoryList();
+  };
 
   // V1.1: Sentiment callback — trigger cat expression
   chatUI.onSentiment = (sentiment) => {
@@ -341,7 +346,26 @@ async function init() {
   // V1.5: Skill Router — intercepts chat commands/keywords before AI
   const skillRouter = new SkillRouter();
   skillRouter.setTriggerBus(triggerBusRenderer);
-  await skillRouter.init();
+
+  // V1.1: Surprise Event System
+  const surpriseEvents = new SurpriseEventSystem(affection, showCatBubble);
+
+  // V1.2: Proactive Engine (replaces ProactiveChat)
+  const proactiveEngine = new ProactiveEngine();
+
+  // ========== Phase 3: 并行初始化 skillRouter / surpriseEvents / proactiveEngine ==========
+  await Promise.all([
+    skillRouter.init(),
+    surpriseEvents.init(),
+    proactiveEngine.init({
+      affectionSystem: affection,
+      showBubbleFn: showCatBubble,
+      pomodoroTimer: pomodoro,
+      todoList: todoList,
+      aiService: aiService
+    }),
+  ]);
+
   chatUI.setSkillRouter(skillRouter);
 
   // Listen for todo updates from main process (e.g. after /todo skill)
@@ -349,20 +373,7 @@ async function init() {
     todoList.reload();
   });
 
-  // V1.1: Surprise Event System
-  const surpriseEvents = new SurpriseEventSystem(affection, showCatBubble);
-  await surpriseEvents.init();
-
-  // V1.2: Proactive Engine (replaces ProactiveChat)
-  const proactiveEngine = new ProactiveEngine();
-  await proactiveEngine.init({
-    affectionSystem: affection,
-    showBubbleFn: showCatBubble,
-    pomodoroTimer: pomodoro,
-    todoList: todoList,
-    aiService: aiService
-  });
-  proactiveEngine.setPersonality(savedPersonality);
+  proactiveEngine.setPersonality(savedPersonality || 'lively');
   proactiveEngine.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setCharacter(activeCharacter);
@@ -643,7 +654,15 @@ async function init() {
   // V1.2: Skill Scheduler (Phase 3: scheduling delegated to Main ScheduledTriggerRegistry)
   const skillScheduler = new SkillScheduler();
   skillScheduler.setTriggerBus(triggerBusRenderer);
-  await skillScheduler.init(proactiveEngine);
+
+  // V1.2: User Profiler + Onboarding
+  const userProfiler = new UserProfiler();
+
+  // 并行初始化 skillScheduler / userProfiler
+  await Promise.all([
+    skillScheduler.init(proactiveEngine),
+    userProfiler.init(proactiveEngine, chatUI),
+  ]);
 
   // Skill status listener — show cat thinking animation
   skillScheduler.onStatusChange = (info) => {
@@ -651,10 +670,6 @@ async function init() {
       activeCharacter.triggerHappy?.(); // visual cue
     }
   };
-
-  // V1.2: User Profiler + Onboarding
-  const userProfiler = new UserProfiler();
-  await userProfiler.init(proactiveEngine, chatUI);
 
   // Wire pomodoro completion to both character and proactive engine
   pomodoro.onComplete = () => {
@@ -691,13 +706,18 @@ async function init() {
 
   // V1.3: Pet Base System (shop & owned in fun panel tabs)
   const petBase = new PetBaseSystem();
-  await petBase.init(affection);
+  // V3: Gacha System (capsule machine in fun panel)
+  const gachaSystem = new GachaSystem();
+
+  // ========== Phase 4: 并行初始化 petBase / gachaSystem ==========
+  await Promise.all([
+    petBase.init(affection),
+    gachaSystem.init(affection),
+  ]);
+
   const petBaseUI = new PetBaseUI(petBase, affection);
   petBaseUI.render();
 
-  // V3: Gacha System (capsule machine in fun panel)
-  const gachaSystem = new GachaSystem();
-  await gachaSystem.init(affection);
   const gachaUI = new GachaUI(gachaSystem, affection);
   gachaUI.render();
 
@@ -819,6 +839,20 @@ async function init() {
       showCatBubble(`🐱 快捷键 ${msgs.join('、')} 注册失败，可能被系统占用。可点击工具栏 ⚡ 按钮使用~`, 8000);
     }
   });
+
+  // 清空 document.title 防止系统标题栏泄露
+  document.title = '';
+
+  // 拦截 Ctrl+A 全选，防止无框架窗口出现虚拟标题栏
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      const tag = e.target.tagName;
+      const editable = e.target.isContentEditable;
+      // 仅在输入框/可编辑区域内允许全选
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
+      e.preventDefault();
+    }
+  }, true);
 
   console.log('ChatCat Desktop Pet V1.4 initialized!');
 }
@@ -1310,6 +1344,15 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     }
   }
 
+  // 记忆分类定义（与 memory-manager.js 保持同步）
+  const MEMORY_CATEGORIES = {
+    user_info: { label: '个人信息', icon: '👤' },
+    preference: { label: '偏好', icon: '⭐' },
+    instruction: { label: '指令', icon: '📌' },
+    fact: { label: '事实', icon: '📝' },
+    relationship: { label: '关系', icon: '💬' },
+  };
+
   function _renderMemoryList() {
     const listEl = document.getElementById('memory-list');
     if (!listEl) return;
@@ -1320,19 +1363,28 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     }
     const memories = mm.getAll();
     if (memories.length === 0) {
-      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆<br><span style="font-size:11px;color:#bbb;">对猫咪说"记住..."来添加记忆</span></div></div>';
       return;
     }
     listEl.innerHTML = '';
     for (const mem of memories) {
       const item = document.createElement('div');
       item.className = 'memory-item';
+      // 来源标记
+      const sourceIcon = document.createElement('span');
+      sourceIcon.className = 'memory-source';
+      sourceIcon.textContent = mem.source === 'user_explicit' ? '📌' : '🤖';
+      sourceIcon.title = mem.source === 'user_explicit' ? '用户主动添加' : 'AI 自动提取';
+      // 分类标签
+      const catInfo = MEMORY_CATEGORIES[mem.category] || { label: mem.category, icon: '📎' };
       const catBadge = document.createElement('span');
       catBadge.className = 'memory-category';
-      catBadge.textContent = mem.category;
+      catBadge.textContent = `${catInfo.icon} ${catInfo.label}`;
+      // 内容（兼容旧格式）
       const factEl = document.createElement('span');
       factEl.className = 'memory-fact';
-      factEl.textContent = mem.fact;
+      factEl.textContent = mem.content || mem.fact || '';
+      // 删除按钮
       const delBtn = document.createElement('button');
       delBtn.className = 'memory-delete';
       delBtn.textContent = '×';
@@ -1340,6 +1392,7 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
         mm.deleteMemory(mem.id);
         _renderMemoryList();
       });
+      item.appendChild(sourceIcon);
       item.appendChild(catBadge);
       item.appendChild(factEl);
       item.appendChild(delBtn);
@@ -1506,6 +1559,38 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     await window.electronAPI.setStore('proactiveConfig', proactiveConfig);
 
     if (chatUI._onSettingsSaved) chatUI._onSettingsSaved();
+
+    // 猫猫对话气泡反馈保存成功
+    const saveMsgs = [
+      '设置已保存喵~ ✅',
+      '保存成功！(=^・ω・^=)',
+      '收到！已经记好啦~ 📝',
+      '喵~设置更新完毕！✨',
+      '好的好的，都保存好了喵！🐾',
+    ];
+    const msg = saveMsgs[Math.floor(Math.random() * saveMsgs.length)];
+    showCatBubble(msg, 3000);
+  });
+
+  // Memory add (手动添加记忆)
+  document.getElementById('memory-add-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('memory-add-input');
+    const categorySelect = document.getElementById('memory-add-category');
+    const content = input?.value?.trim();
+    if (!content || !aiService._memoryManager) return;
+    const category = categorySelect?.value || null;
+    await aiService._memoryManager.addUserMemory(content, category);
+    if (input) input.value = '';
+    if (categorySelect) categorySelect.value = '';
+    _renderMemoryList();
+  });
+
+  // Memory add — 回车键提交
+  document.getElementById('memory-add-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('memory-add-btn')?.click();
+    }
   });
 
   // Memory clear

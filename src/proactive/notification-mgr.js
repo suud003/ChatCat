@@ -114,10 +114,8 @@ export class NotificationMgr {
   // --- Delivery Methods ---
 
   _showDot(visible) {
-    const dot = document.getElementById('proactive-dot');
-    if (dot) {
-      dot.classList.toggle('hidden', !visible);
-    }
+    // 红点系统暂时屏蔽
+    return;
     if (this._onDotChange) this._onDotChange(visible);
   }
 

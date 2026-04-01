@@ -439,36 +439,39 @@ export class MiniCatRenderer {
    * Matches the _drawLayer logic from SpriteCharacter in pixel-character.js.
    */
   _drawLayer(cctx, img, srcX, applyColor, skin) {
+    // 底色颜色：有 tint 用 tint，无 tint 默认白色（#FFFFFF）
+    const baseColor = (applyColor && skin.tint) ? skin.tint : '#FFFFFF';
+
+    const tc = this._tintCtx;
+    tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+
+    // Step 1: 用底色填充 sprite 的 alpha 区域（给猫猫上底色）
+    tc.globalCompositeOperation = 'source-over';
+    tc.filter = 'none';
+    tc.fillStyle = baseColor;
+    tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
+    tc.globalCompositeOperation = 'destination-in';
+    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+    // Step 2: 叠加原始 sprite 线条
+    tc.globalCompositeOperation = 'source-over';
+    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
     if (applyColor && skin.tint) {
-      // Tint via multiply blend on temporary canvas
-      const tc = this._tintCtx;
-      tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
-
-      tc.globalCompositeOperation = 'source-over';
-      tc.filter = 'none';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
+      // Step 3: multiply blend 着色
       tc.globalCompositeOperation = 'multiply';
       tc.fillStyle = skin.tint;
       tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-
       tc.globalCompositeOperation = 'destination-in';
       tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-      if (skin.filter) {
-        cctx.filter = skin.filter;
-      }
-      cctx.drawImage(this._tintCanvas, 0, 0);
-      cctx.filter = 'none';
-    } else {
-      if (applyColor && skin.filter) {
-        cctx.filter = skin.filter;
-      }
-      cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-      if (applyColor) {
-        cctx.filter = 'none';
-      }
     }
+
+    // Step 4: 绘制到 composite canvas
+    if (applyColor && skin.filter) {
+      cctx.filter = skin.filter;
+    }
+    cctx.drawImage(this._tintCanvas, 0, 0);
+    cctx.filter = 'none';
   }
 
   _renderCat(cat) {

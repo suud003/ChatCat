@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChatCat 桌面猫咪</title>
+  <title></title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-pillar-c.css">
   <link rel="stylesheet" href="styles-gacha.css">
@@ -109,6 +109,19 @@
             </select>
           </div>
           <div class="setting-section-title">记忆管理</div>
+          <div class="memory-add-row">
+            <input type="text" id="memory-add-input" class="memory-add-input" placeholder="输入要记住的内容..." maxlength="200">
+            <select id="memory-add-category" class="memory-add-category">
+              <option value="">自动分类</option>
+              <option value="user_info">👤 个人信息</option>
+              <option value="preference">⭐ 偏好习惯</option>
+              <option value="instruction">📌 指令规则</option>
+              <option value="fact">📝 事实知识</option>
+              <option value="relationship">💬 关系互动</option>
+            </select>
+            <button id="memory-add-btn" class="memory-add-btn">+ 添加</button>
+          </div>
+          <div class="memory-hint">💡 也可以在聊天中对猫咪说"记住..."来添加记忆</div>
           <div id="memory-list" class="memory-list">
             <div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>
           </div>

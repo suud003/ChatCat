@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    /* 隐藏所有滚动条 */
+    ::-webkit-scrollbar { display: none; }
+    html, body {
       font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
       background: transparent;
+      overflow: hidden;
     }
     .dialog {
       background: #fff;
