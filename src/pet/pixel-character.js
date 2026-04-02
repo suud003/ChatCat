@@ -6,8 +6,9 @@
  * They are designed to overlay at the same origin in an 800x900 viewport.
  * We crop a viewport region from the composited result to fit our 300x300 canvas.
  *
- * Skins use Canvas multiply blend to tint the entire cat body (including white areas).
- * Instruments replace the keyboard layer at the bottom.
+ * Skins use Canvas color-burn blend to create solid-color cats:
+ * the cat body is filled with a solid tint color, and only the dark outlines
+ * from the original sprite are burned through, giving a clean solid look.
  */
 
 const SPRITE_W = 800;
@@ -77,6 +78,10 @@ export class SpriteCharacter {
     this._rafId = null;
     this.skinId = 'bongo-classic';
 
+    // 解耦的颜色和乐器状态（独立切换）
+    this._colorSkinId = 'bongo-classic';       // 当前颜色皮肤 ID
+    this._instrumentSkinId = 'bongo-classic';   // 当前乐器皮肤 ID
+
     // Offscreen canvas for compositing all layers at full resolution,
     // then we crop the result onto the visible canvas.
     this._composite = document.createElement('canvas');
@@ -142,8 +147,33 @@ export class SpriteCharacter {
   loadSkin(skinId) {
     if (SKINS[skinId]) {
       this.skinId = skinId;
+      // 同步更新解耦状态（兼容旧的整体切换调用）
+      this._colorSkinId = skinId;
+      this._instrumentSkinId = skinId;
     }
   }
+
+  /** 只切换颜色（tint/filter），保持当前乐器不变 */
+  setColor(colorSkinId) {
+    if (SKINS[colorSkinId]) {
+      this._colorSkinId = colorSkinId;
+      // skinId 跟随颜色更新（用于外部读取当前状态）
+      this.skinId = colorSkinId;
+    }
+  }
+
+  /** 只切换乐器，保持当前颜色不变 */
+  setInstrument(instrumentSkinId) {
+    if (SKINS[instrumentSkinId]) {
+      this._instrumentSkinId = instrumentSkinId;
+    }
+  }
+
+  /** 获取当前颜色皮肤 ID */
+  getColorSkinId() { return this._colorSkinId; }
+
+  /** 获取当前乐器皮肤 ID */
+  getInstrumentSkinId() { return this._instrumentSkinId; }
 
   start() {
     if (!this._rafId && this._loaded) {
@@ -267,33 +297,35 @@ export class SpriteCharacter {
    * If applyColor is true and the skin has a tint, use multiply blend to color the sprite.
    */
   _drawLayer(cctx, img, srcX, applyColor) {
-    const skin = SKINS[this.skinId];
-    // 底色颜色：有 tint 用 tint，无 tint 默认白色（#FFFFFF）
-    const baseColor = (applyColor && skin.tint) ? skin.tint : '#FFFFFF';
+    const skin = SKINS[this._colorSkinId] || SKINS[this.skinId];
+    const hasTint = applyColor && skin.tint;
 
     const tc = this._tintCtx;
     tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    // Step 1: 用底色填充 sprite 的 alpha 区域（给猫猫上底色）
-    tc.globalCompositeOperation = 'source-over';
-    tc.filter = 'none';
-    tc.fillStyle = baseColor;
-    tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-    // 只保留 sprite 有像素的区域
-    tc.globalCompositeOperation = 'destination-in';
-    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-    // Step 2: 在底色上叠加原始 sprite 线条（source-over 让黑色线条覆盖底色）
-    tc.globalCompositeOperation = 'source-over';
-    tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-    if (applyColor && skin.tint) {
-      // Step 3: 对整体做 multiply blend 着色（白色→tint，黑色→黑色）
-      tc.globalCompositeOperation = 'multiply';
+    if (hasTint) {
+      // === 实色填充模式 ===
+      // Step 1: 用 tint 实色完全填充精灵图的 alpha 区域
+      tc.globalCompositeOperation = 'source-over';
+      tc.filter = 'none';
       tc.fillStyle = skin.tint;
       tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-      // 恢复 alpha 遮罩
+      // 只保留精灵图有像素的区域（用 alpha 遮罩裁剪）
       tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      // Step 2: 提取原始精灵图的深色线条（轮廓/细节），叠加到实色底上
+      // 使用 color-burn 混合：深色像素（线条）会烧穿底色变暗，白色像素不影响底色
+      tc.globalCompositeOperation = 'color-burn';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      // Step 3: 恢复 alpha 遮罩（确保边缘干净）
+      tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+    } else {
+      // === 无着色模式（原色/经典猫）===
+      tc.globalCompositeOperation = 'source-over';
+      tc.filter = 'none';
       tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
     }
 
@@ -317,9 +349,9 @@ export class SpriteCharacter {
     const cc = this._compCtx;
     cc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    // Instrument layer — drawn at bottom, no tint/filter
-    const skin = SKINS[this.skinId] || SKINS['bongo-classic'];
-    const instrumentName = skin.instrument || 'keyboard';
+    // Instrument layer — drawn at bottom, no tint/filter（使用独立的乐器状态）
+    const instrumentSkin = SKINS[this._instrumentSkinId] || SKINS[this.skinId] || SKINS['bongo-classic'];
+    const instrumentName = instrumentSkin.instrument || 'keyboard';
     const instrImg = this.images[instrumentName];
     if (instrImg) {
       cc.drawImage(instrImg, 0, SPRITE_H - 450);

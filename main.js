@@ -41,6 +41,8 @@ const store = new Store({
     modelName: 'gpt-3.5-turbo',
     opacity: 1.0,
     character: 'hachiware',
+    characterColor: 'bongo-classic',
+    characterInstrument: 'bongo-classic',
     windowPosition: null,
     chatHistory: [],
     recorderOutputDir: '',

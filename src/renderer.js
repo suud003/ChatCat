@@ -242,16 +242,23 @@ async function init() {
   const affection = new AffectionSystem();
   const aiService = new AIService();
 
-  const [savedCharId, , , savedPersonality] = await Promise.all([
-    window.electronAPI.getStore('character'),           // 角色ID
+  const [savedCharId, , , savedPersonality, savedColorId, savedInstrumentId] = await Promise.all([
+    window.electronAPI.getStore('character'),           // 角色ID（兼容）
     affection.init(),                                    // 好感度系统
     aiService.loadConfig(),                              // AI配置
     window.electronAPI.getStore('catPersonality'),        // 性格
+    window.electronAPI.getStore('characterColor'),        // 独立颜色
+    window.electronAPI.getStore('characterInstrument'),   // 独立乐器
   ]);
 
   // 创建角色（依赖 savedCharId）
   const charId = savedCharId || 'bongo-classic';
   activeCharacter = await createCharacter(canvas, charId);
+  // 应用独立的颜色和乐器状态
+  if (activeCharacter.setColor) {
+    activeCharacter.setColor(savedColorId || charId);
+    activeCharacter.setInstrument(savedInstrumentId || charId);
+  }
   activeCharacter.start();
 
   affectionSystem = affection;
@@ -707,24 +714,26 @@ async function init() {
   // V1.3: Pet Base System (shop & owned in fun panel tabs)
   const petBase = new PetBaseSystem();
   // V3: Gacha System (capsule machine in fun panel)
-  const gachaSystem = new GachaSystem();
+  // [暂时屏蔽] 扭蛋和饰品系统
+  // const gachaSystem = new GachaSystem();
 
   // ========== Phase 4: 并行初始化 petBase / gachaSystem ==========
   await Promise.all([
     petBase.init(affection),
-    gachaSystem.init(affection),
+    // gachaSystem.init(affection),
   ]);
 
   const petBaseUI = new PetBaseUI(petBase, affection);
   petBaseUI.render();
 
-  const gachaUI = new GachaUI(gachaSystem, affection);
-  gachaUI.render();
+  // [暂时屏蔽] 扭蛋 UI
+  // const gachaUI = new GachaUI(gachaSystem, affection);
+  // gachaUI.render();
 
-  // V3: Gacha Accessory UI (equip/exchange in fun panel)
-  const gachaAccessoryUI = new GachaAccessoryUI(gachaSystem, affection);
-  gachaAccessoryUI.render();
-  gachaAccessoryUI.renderDecorations();
+  // [暂时屏蔽] 饰品 UI
+  // const gachaAccessoryUI = new GachaAccessoryUI(gachaSystem, affection);
+  // gachaAccessoryUI.render();
+  // gachaAccessoryUI.renderDecorations();
 
   // Pet Status UI — must come after petBase so prestige can use attemptPrestige
   setupPetStatusUI(affection, petBase);
@@ -1940,16 +1949,14 @@ function setupClickThrough() {
 function setupCharacterSelect(canvas) {
   const grid = document.getElementById('character-grid');
   const tabsContainer = document.getElementById('character-tabs');
-  const searchInput = document.getElementById('character-search');
   const errorToast = document.getElementById('character-error-toast');
 
-  let currentCategory = 'all';
-  let searchQuery = '';
+  let currentCategory = 'color'; // 默认显示颜色页签
 
-  // Build category tabs
-  CATEGORIES.forEach(cat => {
+  // Build category tabs (只有颜色和乐器两个)
+  CATEGORIES.forEach((cat, idx) => {
     const tab = document.createElement('button');
-    tab.className = 'character-tab' + (cat.id === 'all' ? ' active' : '');
+    tab.className = 'character-tab' + (idx === 0 ? ' active' : '');
     tab.textContent = cat.name;
     tab.dataset.category = cat.id;
     tab.addEventListener('click', () => {
@@ -1961,35 +1968,32 @@ function setupCharacterSelect(canvas) {
     tabsContainer.appendChild(tab);
   });
 
-  searchInput.addEventListener('input', () => {
-    searchQuery = searchInput.value.trim().toLowerCase();
-    renderGrid();
-  });
-
   async function renderGrid() {
     grid.innerHTML = '';
 
     const filtered = CHARACTER_PRESETS.filter(p => {
-      const matchCategory = currentCategory === 'all' || p.category === currentCategory;
-      const matchSearch = !searchQuery ||
-        p.name.toLowerCase().includes(searchQuery) ||
-        p.id.toLowerCase().includes(searchQuery) ||
-        (p.colorName && p.colorName.includes(searchQuery)) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery));
-      return matchCategory && matchSearch;
+      return p.category === currentCategory;
     });
 
-    const currentCharId = await window.electronAPI.getStore('character') || 'bongo-classic';
+    // 分别读取当前选中的颜色和乐器
+    const currentColorId = await window.electronAPI.getStore('characterColor') || 'bongo-classic';
+    const currentInstrumentId = await window.electronAPI.getStore('characterInstrument') || 'bongo-classic';
+    const activeId = currentCategory === 'color' ? currentColorId : currentInstrumentId;
 
     for (const preset of filtered) {
       const card = document.createElement('div');
-      card.className = 'character-card' + (preset.id === currentCharId ? ' active' : '');
+      card.className = 'character-card' + (preset.id === activeId ? ' active' : '');
       card.dataset.id = preset.id;
 
       const c = preset.color || { from: '#74b9ff', to: '#0984e3' };
       const instrumentLabel = preset.instrument
         ? (INSTRUMENT_NAMES[preset.instrument] || preset.instrument)
-        : '动画';
+        : '';
+
+      // 根据分类只显示对应信息：颜色页签只显示颜色名，乐器页签只显示乐器名
+      const displayLabel = currentCategory === 'color'
+        ? (preset.colorName || '')
+        : instrumentLabel;
 
       card.innerHTML = `
         <div class="card-thumbnail cat-${preset.category}">
@@ -1997,8 +2001,7 @@ function setupCharacterSelect(canvas) {
           <span class="avatar-color-swatch" style="display:none;background:linear-gradient(135deg,${c.from},${c.to})"></span>
         </div>
         <div class="card-info">
-          <div class="card-color-name">${preset.colorName || ''}</div>
-          <div class="card-instrument-name">${instrumentLabel}</div>
+          <div class="card-color-name">${displayLabel}</div>
         </div>
         <div class="card-tooltip">${preset.description}</div>
       `;
@@ -2017,35 +2020,34 @@ function setupCharacterSelect(canvas) {
   renderGrid();
 
   async function switchCharacter(preset) {
-    const skin = SKINS[preset.id];
-    if (skin && skin.spriteSheet) {
+    // 确保 activeCharacter 是 SpriteCharacter（非 SpriteSheetCharacter）
+    if (activeCharacter instanceof SpriteSheetCharacter) {
       activeCharacter.destroy();
-      try {
-        activeCharacter = await createCharacter(canvas, preset.id);
-        activeCharacter.start();
-      } catch (e) {
-        console.warn('switchCharacter failed, falling back:', e);
-        activeCharacter = new SpriteCharacter(canvas);
-        await activeCharacter.load();
-        activeCharacter.loadSkin(preset.id);
-        activeCharacter.start();
-      }
-    } else {
-      if (activeCharacter instanceof SpriteSheetCharacter) {
-        activeCharacter.destroy();
-        activeCharacter = new SpriteCharacter(canvas);
-        await activeCharacter.load();
-        activeCharacter.loadSkin(preset.id);
-        activeCharacter.start();
-      } else {
-        activeCharacter.loadSkin(preset.id);
-      }
+      activeCharacter = new SpriteCharacter(canvas);
+      await activeCharacter.load();
+      // 恢复之前的颜色和乐器状态
+      const prevColor = await window.electronAPI.getStore('characterColor') || 'bongo-classic';
+      const prevInstr = await window.electronAPI.getStore('characterInstrument') || 'bongo-classic';
+      activeCharacter.setColor(prevColor);
+      activeCharacter.setInstrument(prevInstr);
+      activeCharacter.start();
     }
-    await window.electronAPI.setStore('character', preset.id);
+
+    // 根据分类只切换颜色或乐器
+    if (preset.category === 'color') {
+      activeCharacter.setColor(preset.id);
+      await window.electronAPI.setStore('characterColor', preset.id);
+    } else if (preset.category === 'instrument') {
+      activeCharacter.setInstrument(preset.id);
+      await window.electronAPI.setStore('characterInstrument', preset.id);
+    }
+
+    // 同步 character 字段（兼容其他模块读取）
+    await window.electronAPI.setStore('character', activeCharacter.skinId);
     // Update character reference in notification manager
     if (_notificationMgr) _notificationMgr.setCharacter(activeCharacter);
     // Push skin change to multiplayer immediately (if connected)
-    try { _mpClient?.sendStateUpdate({ skinId: preset.id }, true); } catch(e) {}
+    try { _mpClient?.sendStateUpdate({ skinId: activeCharacter.skinId }, true); } catch(e) {}
     renderGrid();
   }
 }

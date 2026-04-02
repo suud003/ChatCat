@@ -4,11 +4,8 @@
  */
 
 export const CATEGORIES = [
-  { id: 'all',        name: '全部' },
-  { id: 'color',      name: '颜色' },
-  { id: 'instrument', name: '乐器' },
-  { id: 'combo',      name: '组合' },
-  // { id: 'animated',   name: '动画' },  // TODO: 动画功能暂未完善，临时屏蔽
+  { id: 'color',      name: '🎨 颜色' },
+  { id: 'instrument', name: '🎵 乐器' },
 ];
 
 // Color palette for avatar initials
