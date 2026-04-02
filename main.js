@@ -177,77 +177,19 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
-  // Windows DWM 灰色边框彻底修复
+  // Windows 灰色边框防护（纯 Electron API，无外部进程）
+  // 原理：transparent + frame:false 窗口在焦点/穿透切换时，Windows DWM 可能短暂重绘非客户区
+  // 解决：每次状态切换后立即重设 backgroundColor + alwaysOnTop 刷新窗口状态
   if (isWin) {
-    // 方案 1：通过 Win32 API DwmSetWindowAttribute 禁用 DWM 非客户区渲染
-    // 使用异步 exec 避免阻塞主进程（PowerShell 编译 C# 需要 1-3 秒）
-    const applyDwmFix = () => {
-      try {
-        const hwndBuf = mainWindow.getNativeWindowHandle();
-        const hwnd = process.arch === 'x64'
-          ? hwndBuf.readBigUInt64LE(0).toString()
-          : hwndBuf.readUInt32LE(0).toString();
-
-        const { exec } = require('child_process');
-        const psLines = [
-          'Add-Type @"',
-          'using System;',
-          'using System.Runtime.InteropServices;',
-          'public class DwmFix {',
-          '  [DllImport("dwmapi.dll")]',
-          '  public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);',
-          '  [DllImport("user32.dll")]',
-          '  public static extern int SetWindowLong(IntPtr hwnd, int index, int newLong);',
-          '  [DllImport("user32.dll")]',
-          '  public static extern int GetWindowLong(IntPtr hwnd, int index);',
-          '}',
-          '"@',
-          '$h = [IntPtr]' + hwnd,
-          '$p = 1',
-          '[DwmFix]::DwmSetWindowAttribute($h, 2, [ref]$p, 4)',
-          '$s = [DwmFix]::GetWindowLong($h, -20)',
-          '[DwmFix]::SetWindowLong($h, -20, $s -bor 0x80000)'
-        ];
-        const psScript = psLines.join('\n');
-        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
-        // 异步执行，不阻塞主进程
-        exec(`powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, {
-          windowsHide: true,
-          timeout: 15000
-        }, (err) => {
-          if (err) {
-            console.warn('[DWM Fix] DwmSetWindowAttribute failed:', err.message);
-          } else {
-            console.log('[DWM Fix] DwmSetWindowAttribute applied successfully');
-          }
-        });
-      } catch (err) {
-        console.warn('[DWM Fix] Failed to get window handle:', err.message);
-      }
+    const ensureTransparent = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.setBackgroundColor('#00000000');
     };
-
-    // 窗口 show 之后立即应用 DWM 修复
-    mainWindow.once('show', () => {
-      setTimeout(applyDwmFix, 50);
-    });
-
-    // Windows 在窗口失焦/获焦时可能重新渲染非客户区导致灰框再现
-    // 监听 blur + focus 事件，重新强制透明背景 + 重新应用 DWM 修复
-    let dwmFixDebounce = null;
-    const reapplyDwmOnEvent = () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // 立即重设透明背景色，防止灰框闪现
-        mainWindow.setBackgroundColor('#00000000');
-        // 防抖：避免频繁触发 PowerShell 进程
-        if (dwmFixDebounce) clearTimeout(dwmFixDebounce);
-        dwmFixDebounce = setTimeout(() => {
-          applyDwmFix();
-          dwmFixDebounce = null;
-        }, 200);
-      }
-    };
-    mainWindow.on('blur', reapplyDwmOnEvent);
-    mainWindow.on('focus', reapplyDwmOnEvent);
+    mainWindow.on('blur', ensureTransparent);
+    mainWindow.on('focus', ensureTransparent);
+    // 窗口移动/大小变化后也确保透明
+    mainWindow.on('moved', ensureTransparent);
+    mainWindow.on('resize', ensureTransparent);
   }
 
   // 窗口就绪后显示
@@ -257,10 +199,12 @@ function createWindow() {
     }
     mainWindow.show();
     if (isWin) {
-      // show 之后再次确认置顶（DWM 在 show 时可能重置 Z-order）
+      // show 之后再次确认置顶 + 透明背景（DWM 在 show 时可能重置）
+      mainWindow.setBackgroundColor('#00000000');
       setTimeout(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.setAlwaysOnTop(true, 'screen-saver');
+          mainWindow.setBackgroundColor('#00000000');
         }
       }, 100);
     }
@@ -576,9 +520,10 @@ ipcMain.on('window-drag', (_, { dx, dy }) => {
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
-  // Windows: 恢复穿透后重新确保置顶级别
-  if (ignore && process.platform === 'win32') {
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  // Windows: 穿透切换后立即重设透明背景，防止 DWM 重绘非客户区灰框
+  // 注意：不要在这里调用 setAlwaysOnTop，它会触发 Z-order 变化导致桌面内容闪烁
+  if (process.platform === 'win32') {
+    mainWindow.setBackgroundColor('#00000000');
   }
 });
 

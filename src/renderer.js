@@ -1901,9 +1901,13 @@ function setupDrag() {
 function setupClickThrough() {
   const selectors = '#pet-container, #settings-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
+  let restoreTimer = null; // 防抖定时器：延迟恢复穿透
+  const toolbarState = (window.__catToolbarState ||= {});
 
   document.addEventListener('mouseenter', (e) => {
     if (e.target.closest && e.target.closest(selectors)) {
+      // 鼠标进入交互区域：立即取消穿透（无延迟，确保交互响应）
+      if (restoreTimer) { clearTimeout(restoreTimer); restoreTimer = null; }
       if (lastIgnoreState !== false) {
         lastIgnoreState = false;
         window.electronAPI.setIgnoreMouse(false);
@@ -1915,10 +1919,19 @@ function setupClickThrough() {
     if (e.target.closest && e.target.closest(selectors)) {
       const to = e.relatedTarget;
       if (!to || !to.closest || !to.closest(selectors)) {
-        if (lastIgnoreState !== true) {
-          lastIgnoreState = true;
-          window.electronAPI.setIgnoreMouse(true);
-        }
+        // 拖拽过程中不恢复穿透，避免快速拖拽时鼠标短暂离开猫猫区域导致闪烁
+        if (toolbarState.isDraggingPet) return;
+        // 鼠标离开交互区域：延迟恢复穿透（防抖 150ms）
+        if (restoreTimer) clearTimeout(restoreTimer);
+        restoreTimer = setTimeout(() => {
+          restoreTimer = null;
+          // 再次检查拖拽状态（防抖期间可能开始了新的拖拽）
+          if (toolbarState.isDraggingPet) return;
+          if (lastIgnoreState !== true) {
+            lastIgnoreState = true;
+            window.electronAPI.setIgnoreMouse(true);
+          }
+        }, 150);
       }
     }
   }, true);
