@@ -142,8 +142,9 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
-  // Windows 平台标识
+  // 平台标识
   const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
 
   mainWindow = new BrowserWindow({
     width: width,
@@ -179,10 +180,11 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
-  // Windows 灰色边框防护（纯 Electron API，无外部进程）
-  // 原理：transparent + frame:false 窗口在焦点/穿透切换时，Windows DWM 可能短暂重绘非客户区
-  // 解决：每次状态切换后立即重设 backgroundColor + alwaysOnTop 刷新窗口状态
-  if (isWin) {
+  // 透明背景防护（跨平台）
+  // 原理：transparent + frame:false 窗口在焦点/穿透切换时，系统可能短暂重绘非客户区
+  //   Windows: DWM 重绘灰色边框；macOS: 渲染顶部标题栏残影
+  // 解决：每次状态切换后立即重设 backgroundColor 刷新窗口透明状态
+  {
     const ensureTransparent = () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.setBackgroundColor('#00000000');
@@ -199,10 +201,14 @@ function createWindow() {
     if (isWin) {
       mainWindow.setAlwaysOnTop(true, 'screen-saver');
     }
-    mainWindow.show();
+    if (isMac) {
+      mainWindow.showInactive();
+    } else {
+      mainWindow.show();
+    }
+    // show 之后确认透明背景（系统在 show 时可能重置窗口装饰）
+    mainWindow.setBackgroundColor('#00000000');
     if (isWin) {
-      // show 之后再次确认置顶 + 透明背景（DWM 在 show 时可能重置）
-      mainWindow.setBackgroundColor('#00000000');
       setTimeout(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -522,11 +528,10 @@ ipcMain.on('window-drag', (_, { dx, dy }) => {
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
-  // Windows: 穿透切换后立即重设透明背景，防止 DWM 重绘非客户区灰框
+  // 穿透切换后立即重设透明背景，防止系统重绘非客户区装饰
+  // （Windows: DWM 灰框；macOS: 顶部标题栏残影）
   // 注意：不要在这里调用 setAlwaysOnTop，它会触发 Z-order 变化导致桌面内容闪烁
-  if (process.platform === 'win32') {
-    mainWindow.setBackgroundColor('#00000000');
-  }
+  mainWindow.setBackgroundColor('#00000000');
 });
 
 // Multi-monitor: move window to the display containing the given screen point
@@ -1169,6 +1174,12 @@ if (process.platform === 'win32') {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    // 作为桌宠运行：不占用 Dock 和系统顶部菜单栏，但保留托盘与悬浮窗
+    app.setActivationPolicy('accessory');
+    app.dock?.hide();
+  }
+
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
