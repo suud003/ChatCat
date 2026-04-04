@@ -98,6 +98,8 @@ body {
   position: absolute;
   bottom: 100px;
   left: calc(50% - 150px);
+  width: 300px;
+  height: 300px;
   cursor: grab;
   will-change: left, top;
 }
@@ -107,9 +109,52 @@ body {
 }
 
 #pet-canvas {
+  display: block;
   pointer-events: auto;
   width: 220px;
   height: 220px;
+  transition: opacity 0.2s ease;
+}
+
+#pet-decoration-layer {
+  transition: opacity 0.2s ease;
+}
+
+.pet-pomodoro-animation {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--pomodoro-overlay-width, 320px);
+  height: var(--pomodoro-overlay-height, 320px);
+  transform: translate(calc(-50% + var(--pomodoro-overlay-offset-x, 0px)), var(--pomodoro-overlay-offset-y, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.pet-pomodoro-animation.is-visible {
+  opacity: var(--pomodoro-overlay-opacity, 1);
+}
+
+.pet-pomodoro-animation-frame {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#pet-container.pomodoro-animation-mode #pet-canvas,
+#pet-container.pomodoro-animation-mode #pet-decoration-layer,
+#pet-container.pomodoro-animation-mode #pet-overlay-bar {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Widget Container - Manga Bubble Style */
@@ -1996,6 +2041,125 @@ body {
 
 #settings-container.maximized #settings-bubble-tail {
   display: none;
+}
+
+#animation-manager-container {
+  position: absolute;
+  width: 620px;
+  z-index: 85;
+  -webkit-app-region: no-drag;
+  will-change: left, top;
+  animation: bubblePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#animation-manager-bubble {
+  position: relative;
+  background: #fff;
+  border: 3px solid #222;
+  border-radius: 22px;
+  box-shadow: 3px 3px 0 #222;
+  overflow: visible;
+}
+
+#animation-manager-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 2px;
+  cursor: grab;
+}
+
+#animation-manager-header:active {
+  cursor: grabbing;
+}
+
+#animation-manager-body {
+  padding: 8px 14px 12px;
+  max-height: 520px;
+  opacity: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+#animation-manager-tail {
+  position: absolute;
+  bottom: -18px;
+  right: 24px;
+  width: 28px;
+  height: 22px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#animation-manager-tail::before {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 22px;
+  background: #fff;
+  border-right: 3px solid #222;
+  border-bottom: 3px solid #222;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+#animation-manager-close:hover {
+  background: #f5576c;
+  color: #fff;
+  border-color: #f5576c;
+}
+
+#animation-manager-container.maximized {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  bottom: auto;
+  right: auto;
+  animation: none;
+  z-index: 105;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#animation-manager-container.maximized #animation-manager-bubble {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+#animation-manager-container.maximized #animation-manager-header {
+  padding: 10px 14px 6px;
+  border-bottom: 2px solid #eee;
+}
+
+#animation-manager-container.maximized #animation-manager-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  padding: 8px 16px 12px;
+  overflow-y: auto;
+}
+
+#animation-manager-container.maximized .tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+#animation-manager-container.maximized #animation-manager-tail {
+  display: none;
+}
+
+#open-animation-manager-btn:hover {
+  transform: scale(1.05);
 }
 
 /* ============================================================ */
