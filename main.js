@@ -540,6 +540,23 @@ ipcMain.on('move-to-display', (_, { screenX, screenY }) => {
   quickPanelManager?.syncToPetPosition();
 });
 
+ipcMain.handle('open-devtools', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
+  mainWindow.show();
+  if (mainWindow.webContents.isDevToolsOpened()) {
+    mainWindow.webContents.focus();
+    return { success: true, alreadyOpen: true };
+  }
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  return { success: true, alreadyOpen: false };
+});
+
+ipcMain.handle('get-runtime-info', () => ({
+  isPackaged: app.isPackaged,
+  isDev: process.argv.includes('--dev'),
+  version: app.getVersion(),
+}));
+
 // Recorder IPC handlers
 // V2: recorder-toggle 已废弃，录制启停完全由隐私授权 (consent) 控制
 // 保留 handler 但仅返回状态，不再允许手动 toggle

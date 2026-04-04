@@ -1,0 +1,9 @@
+{
+  "frameWidth": 300,
+  "frameHeight": 300,
+  "columns": 4,
+  "tintable": true,
+  "states": {
+    "drowsy": { "row": 0, "frames": 4, "frameDuration": 280, "loop": false }
+  }
+}
