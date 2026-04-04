@@ -6,9 +6,8 @@
  * They are designed to overlay at the same origin in an 800x900 viewport.
  * We crop a viewport region from the composited result to fit our 300x300 canvas.
  *
- * Skins use Canvas color-burn blend to create solid-color cats:
- * the cat body is filled with a solid tint color, and only the dark outlines
- * from the original sprite are burned through, giving a clean solid look.
+ * Skins use Canvas multiply blend to tint the entire cat body (including white areas).
+ * Instruments replace the keyboard layer at the bottom.
  */
 
 const SPRITE_W = 800;
@@ -35,7 +34,6 @@ const SPRITE_NAMES = [
 const SKINS = {
   // === Color skins (keyboard) ===
   'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: null },
-  'hachiware':     { name: 'Hachiware',     tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: 'default' },
   'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
@@ -81,16 +79,19 @@ export class SpriteCharacter {
     this._rafId = null;
     this.skinId = 'bongo-classic';
 
-    // 解耦的颜色和乐器状态（独立切换）
-    this._colorSkinId = 'bongo-classic';       // 当前颜色皮肤 ID
-    this._instrumentSkinId = 'bongo-classic';   // 当前乐器皮肤 ID
-
-    // Offscreen canvas for compositing all layers at full resolution,
+    // Offscreen canvas for compositing base layers at full resolution,
     // then we crop the result onto the visible canvas.
     this._composite = document.createElement('canvas');
     this._composite.width = SPRITE_W;
     this._composite.height = SPRITE_H;
     this._compCtx = this._composite.getContext('2d');
+
+    // Dedicated cat layer so static cat and drowsy animation share
+    // the same render slot above the instrument layer.
+    this._catComposite = document.createElement('canvas');
+    this._catComposite.width = SPRITE_W;
+    this._catComposite.height = SPRITE_H;
+    this._catCompCtx = this._catComposite.getContext('2d');
 
     // Offscreen canvas for tinting individual sprite layers
     this._tintCanvas = document.createElement('canvas');
@@ -167,33 +168,8 @@ export class SpriteCharacter {
   loadSkin(skinId) {
     if (SKINS[skinId]) {
       this.skinId = skinId;
-      // 同步更新解耦状态（兼容旧的整体切换调用）
-      this._colorSkinId = skinId;
-      this._instrumentSkinId = skinId;
     }
   }
-
-  /** 只切换颜色（tint/filter），保持当前乐器不变 */
-  setColor(colorSkinId) {
-    if (SKINS[colorSkinId]) {
-      this._colorSkinId = colorSkinId;
-      // skinId 跟随颜色更新（用于外部读取当前状态）
-      this.skinId = colorSkinId;
-    }
-  }
-
-  /** 只切换乐器，保持当前颜色不变 */
-  setInstrument(instrumentSkinId) {
-    if (SKINS[instrumentSkinId]) {
-      this._instrumentSkinId = instrumentSkinId;
-    }
-  }
-
-  /** 获取当前颜色皮肤 ID */
-  getColorSkinId() { return this._colorSkinId; }
-
-  /** 获取当前乐器皮肤 ID */
-  getInstrumentSkinId() { return this._instrumentSkinId; }
 
   start() {
     if (!this._rafId && this._loaded) {
@@ -357,6 +333,16 @@ export class SpriteCharacter {
           revealPath: new URL('./cat-overlays/default/sheet.png', import.meta.url).href,
           sheetUrl: new URL('./cat-overlays/default/sheet.png', import.meta.url).href,
           configUrl: new URL('./cat-overlays/default/sheet.json', import.meta.url).href,
+          workflow: {
+            id: 'classic-cat-overlay',
+            sourceDir: new URL('./animation-sources/classic-cat-overlay/drowsy/', import.meta.url).href,
+            referenceDir: new URL('./animation-sources/classic-cat-overlay/drowsy/reference/', import.meta.url).href,
+            referencePath: new URL('./animation-sources/classic-cat-overlay/drowsy/reference/base.png', import.meta.url).href,
+            framesDir: new URL('./animation-sources/classic-cat-overlay/drowsy/frames/', import.meta.url).href,
+            buildDir: new URL('./cat-overlays/default/', import.meta.url).href,
+            framePattern: 'frame_001.png ~ frame_999.png',
+            stateName: 'drowsy',
+          },
           meta: this._overlayMeta,
           states: this._overlayMeta?.states || {},
         },
@@ -472,44 +458,43 @@ export class SpriteCharacter {
    * If applyColor is true and the skin has a tint, use multiply blend to color the sprite.
    */
   _drawLayer(cctx, img, srcX, applyColor) {
-    const skin = SKINS[this._colorSkinId] || SKINS[this.skinId];
-    const hasTint = applyColor && skin.tint;
+    const skin = SKINS[this.skinId];
 
-    const tc = this._tintCtx;
-    tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+    if (applyColor && skin.tint) {
+      // Tint via multiply blend on a temporary canvas:
+      // 1. Draw original sprite
+      // 2. Multiply with tint color (white → tint, black stays black, grays get tinted)
+      // 3. Restore original alpha mask
+      const tc = this._tintCtx;
+      tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    if (hasTint) {
-      // === 实色填充模式 ===
-      // Step 1: 用 tint 实色完全填充精灵图的 alpha 区域
       tc.globalCompositeOperation = 'source-over';
       tc.filter = 'none';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      tc.globalCompositeOperation = 'multiply';
       tc.fillStyle = skin.tint;
       tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-      // 只保留精灵图有像素的区域（用 alpha 遮罩裁剪）
+
       tc.globalCompositeOperation = 'destination-in';
       tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
 
-      // Step 2: 提取原始精灵图的深色线条（轮廓/细节），叠加到实色底上
-      // 使用 color-burn 混合：深色像素（线条）会烧穿底色变暗，白色像素不影响底色
-      tc.globalCompositeOperation = 'color-burn';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-      // Step 3: 恢复 alpha 遮罩（确保边缘干净）
-      tc.globalCompositeOperation = 'destination-in';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      // Draw tinted result onto composite, with optional CSS filter
+      if (skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(this._tintCanvas, 0, 0);
+      cctx.filter = 'none';
     } else {
-      // === 无着色模式（原色/经典猫）===
-      tc.globalCompositeOperation = 'source-over';
-      tc.filter = 'none';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      // No tint — apply CSS filter directly if present
+      if (applyColor && skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      if (applyColor) {
+        cctx.filter = 'none';
+      }
     }
-
-    // Step 4: 绘制到 composite canvas，应用可选的 CSS filter
-    if (applyColor && skin.filter) {
-      cctx.filter = skin.filter;
-    }
-    cctx.drawImage(this._tintCanvas, 0, 0);
-    cctx.filter = 'none';
   }
 
   _draw() {
@@ -520,13 +505,15 @@ export class SpriteCharacter {
     ctx.clearRect(0, 0, cw, ch);
     if (!this._loaded) return;
 
-    // Step 1: Composite all layers onto offscreen canvas at 800x900
+    // Step 1: Build base layer and cat layer separately.
     const cc = this._compCtx;
+    const catCc = this._catCompCtx;
     cc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+    catCc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    // Instrument layer — drawn at bottom, no tint/filter（使用独立的乐器状态）
-    const instrumentSkin = SKINS[this._instrumentSkinId] || SKINS[this.skinId] || SKINS['bongo-classic'];
-    const instrumentName = instrumentSkin.instrument || 'keyboard';
+    // Instrument layer — drawn at bottom, no tint/filter
+    const skin = SKINS[this.skinId] || SKINS['bongo-classic'];
+    const instrumentName = skin.instrument || 'keyboard';
     const instrImg = this.images[instrumentName];
     if (instrImg) {
       cc.drawImage(instrImg, 0, SPRITE_H - 450);
@@ -537,29 +524,29 @@ export class SpriteCharacter {
       // Cat body (apply tint/filter)
       const catImg = this.images['cat'];
       if (catImg) {
-        this._drawLayer(cc, catImg, 0, true);
+        this._drawLayer(catCc, catImg, 0, true);
       }
 
       // Mouth (2-frame, apply tint/filter)
       const mouthImg = this.images['mouth'];
       if (mouthImg) {
-        this._drawLayer(cc, mouthImg, this.mouthOpen ? SPRITE_W : 0, true);
+        this._drawLayer(catCc, mouthImg, this.mouthOpen ? SPRITE_W : 0, true);
       }
 
       // Left paw (2-frame, apply tint/filter)
       const leftImg = this.images['paw-left'];
       if (leftImg) {
-        this._drawLayer(cc, leftImg, this.leftPawDown ? SPRITE_W : 0, true);
+        this._drawLayer(catCc, leftImg, this.leftPawDown ? SPRITE_W : 0, true);
       }
 
       // Right paw (2-frame, apply tint/filter)
       const rightImg = this.images['paw-right'];
       if (rightImg) {
-        this._drawLayer(cc, rightImg, this.rightPawDown ? SPRITE_W : 0, true);
+        this._drawLayer(catCc, rightImg, this.rightPawDown ? SPRITE_W : 0, true);
       }
     }
 
-    // Step 2: Crop the interesting region from the composite and draw to canvas
+    // Step 2: Draw base layer first.
     const scale = cw / SPRITE_W;
     const drawH = CROP_H * scale;
     const offsetY = (ch - drawH) / 2;
@@ -570,11 +557,18 @@ export class SpriteCharacter {
       0, offsetY, cw, drawH           // destination
     );
 
+    // Step 3: Draw the cat layer in the same render slot whether static or animated.
     if (showOverlayCat) {
-      this._drawOverlayFrame(ctx, cw, ch, skin);
+      this._drawOverlayFrame(ctx, cw, ch, skin, offsetY, drawH);
+    } else {
+      ctx.drawImage(
+        this._catComposite,
+        0, CROP_Y, SPRITE_W, CROP_H,
+        0, offsetY, cw, drawH
+      );
     }
 
-    // Step 3: Click expression overlay — drawn on final canvas so it won't be clipped
+    // Step 4: Click expression overlay — drawn on final canvas so it won't be clipped
     if (this._clickExpr) {
       const elapsed = performance.now() - this._clickExpr.startTime;
       const progress = Math.min(elapsed / this._clickExpr.duration, 1);
@@ -597,16 +591,25 @@ export class SpriteCharacter {
     }
   }
 
-  _drawOverlayFrame(ctx, cw, ch, skin) {
+  _drawOverlayFrame(ctx, cw, ch, skin, slotY = 0, slotH = ch) {
     const state = this._overlayMeta?.states?.[this._overlayState];
     if (!state || !this._overlaySheet) return;
     const fw = Number(this._overlayMeta.frameWidth || cw);
     const fh = Number(this._overlayMeta.frameHeight || ch);
-    const cols = Number(this._overlayMeta.columns || 1);
+    const cols = Math.max(1, Number(state.columns || this._overlayMeta.columns || 1));
     const col = this._overlayFrame % cols;
-    const row = Number(state.row || 0);
+    const row = Number(state.row || 0) + Math.floor(this._overlayFrame / cols);
     const sx = col * fw;
     const sy = row * fh;
+    const scale = Number(this._overlayMeta?.displayScale || 1);
+    const baseH = Math.min(slotH, ch);
+    const baseW = baseH * (fw / Math.max(1, fh));
+    const drawW = baseW * scale;
+    const drawH = baseH * scale;
+    const offsetX = Number(this._overlayMeta?.offsetX || 0);
+    const offsetY = Number(this._overlayMeta?.offsetY || 0);
+    const dx = ((cw - drawW) / 2) + offsetX;
+    const dy = slotY + ((slotH - drawH) / 2) + offsetY;
 
     if (this._overlayMeta.tintable && (skin?.tint || skin?.filter)) {
       this._overlayTintCanvas.width = fw;
@@ -626,14 +629,14 @@ export class SpriteCharacter {
       tc.globalCompositeOperation = 'source-over';
       ctx.save();
       if (skin?.filter) ctx.filter = skin.filter;
-      ctx.drawImage(this._overlayTintCanvas, 0, 0, cw, ch);
+      ctx.drawImage(this._overlayTintCanvas, dx, dy, drawW, drawH);
       ctx.restore();
       return;
     }
 
     ctx.save();
     if (skin?.filter) ctx.filter = skin.filter;
-    ctx.drawImage(this._overlaySheet, sx, sy, fw, fh, 0, 0, cw, ch);
+    ctx.drawImage(this._overlaySheet, sx, sy, fw, fh, dx, dy, drawW, drawH);
     ctx.restore();
   }
 }

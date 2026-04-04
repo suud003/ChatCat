@@ -2,13 +2,8 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  scrollbar-width: none;  /* Firefox: 完全隐藏滚动条 */
-}
-
-html {
-  background: transparent;
-  outline: none;
-  border: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.2) transparent;
 }
 
 /* ── Kawaii Cat Icons (替换 emoji) ── */
@@ -61,19 +56,29 @@ html {
   margin-right: 2px;
 }
 
-/* Global: 隐藏所有滚动条（保留滚动功能） */
+/* Global custom scrollbar (Webkit/Electron) */
 ::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 ::-webkit-scrollbar-corner {
@@ -111,8 +116,6 @@ body {
 #pet-canvas {
   display: block;
   pointer-events: auto;
-  width: 220px;
-  height: 220px;
   transition: opacity 0.2s ease;
 }
 
@@ -2162,6 +2165,78 @@ body {
   transform: scale(1.05);
 }
 
+.animation-manager-card {
+  background: #faf9f7;
+  border: 2px solid #222;
+  border-radius: 14px;
+  box-shadow: 2px 2px 0 #222;
+  padding: 10px 12px;
+}
+
+.animation-manager-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 4px;
+}
+
+.animation-manager-card-help,
+.animation-manager-subhelp {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #777;
+}
+
+.animation-manager-subtitle {
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+}
+
+.animation-manager-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.animation-manager-btn {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid #222;
+  border-radius: 10px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  text-align: center;
+}
+
+.animation-manager-btn-info {
+  background: rgba(79, 172, 254, 0.15);
+}
+
+.animation-manager-btn-warn {
+  background: rgba(245, 166, 35, 0.15);
+}
+
+.animation-manager-btn-accent {
+  background: rgba(255, 126, 103, 0.2);
+}
+
+.animation-manager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .animation-manager-btn-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================================================ */
 /*  Inline Chat (left side of pet, always)                       */
 /* ============================================================ */
@@ -3341,10 +3416,20 @@ body {
   background: #444;
 }
 
-/* Proactive micro-badge (small red dot on cat) — 暂时屏蔽 */
+/* Proactive micro-badge (small red dot on cat) */
 .proactive-dot {
-  display: none !important;
-  pointer-events: none !important;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  background: #ff4757;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  z-index: 56;
+  animation: dotPulse 2s ease-in-out infinite;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 @keyframes dotPulse {
@@ -3400,71 +3485,8 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* ============================================================ */
-/*  Memory Management (V2 重构)                                  */
-/* ============================================================ */
-
-.memory-add-row {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
-  align-items: center;
-}
-
-.memory-add-input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 12px;
-  outline: none;
-  box-shadow: 1px 1px 0 #222;
-  transition: border-color 0.15s;
-}
-
-.memory-add-input:focus {
-  border-color: #1a73e8;
-}
-
-.memory-add-category {
-  padding: 4px 4px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 11px;
-  background: #fff;
-  cursor: pointer;
-  box-shadow: 1px 1px 0 #222;
-  outline: none;
-}
-
-.memory-add-btn {
-  padding: 4px 10px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #e8f0fe;
-  color: #1a73e8;
-  cursor: pointer;
-  box-shadow: 1px 1px 0 #222;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.memory-add-btn:hover {
-  background: #1a73e8;
-  color: #fff;
-}
-
-.memory-hint {
-  font-size: 11px;
-  color: #999;
-  margin-bottom: 4px;
-  padding-left: 2px;
-}
-
 .memory-list {
-  max-height: 150px;
+  max-height: 120px;
   overflow-y: auto;
 }
 
@@ -3479,7 +3501,7 @@ body {
 .memory-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 3px 0;
   border-bottom: 1px solid #f0f0f0;
   font-size: 12px;
@@ -3489,21 +3511,14 @@ body {
   border-bottom: none;
 }
 
-.memory-source {
-  font-size: 11px;
-  flex-shrink: 0;
-  cursor: help;
-}
-
 .memory-category {
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: 11px;
+  padding: 1px 5px;
   border-radius: 6px;
   background: #e8f0fe;
   color: #1a73e8;
   font-weight: 600;
   flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .memory-fact {
