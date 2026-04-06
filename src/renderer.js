@@ -786,6 +786,24 @@ async function init() {
     miniCatRenderer.triggerAction(data.userId, data.actionType);
   };
 
+  // Wire room events for mini-cat rendering
+  // (set before ConnectionUI so it can chain them)
+  mpClient.onRoomMemberJoined = (data) => {
+    miniCatRenderer.addUser(data.userId, data.username, data.state);
+  };
+  mpClient.onRoomMemberLeft = (data) => {
+    miniCatRenderer.removeUser(data.userId);
+  };
+  mpClient.onRoomJoined = (data) => {
+    miniCatRenderer.setSnapshot(data.members);
+  };
+  mpClient.onRoomLeft = () => {
+    miniCatRenderer.clear();
+  };
+  mpClient.onRoomDestroyed = () => {
+    miniCatRenderer.clear();
+  };
+
   // ConnectionUI and LeaderboardUI chain onto existing callbacks internally
   const connectionUI = new ConnectionUI(mpClient);
   const leaderboardUI = new LeaderboardUI(mpClient);

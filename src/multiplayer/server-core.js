@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { C2S, S2C, encode, decode, STATE_FIELDS } = require('./protocol');
+const { RoomManager } = require('./room-manager');
 
 let bcrypt;
 try {
@@ -32,6 +33,7 @@ class MultiplayerServerCore {
     // userId → account data (in-memory cache)
     this._accounts = {};
     this._loadAccounts();
+    this.roomManager = new RoomManager();
   }
 
   /* -------------------------------------------------------------- */
@@ -88,16 +90,54 @@ class MultiplayerServerCore {
       case C2S.ACTION:
         this._handleAction(ws, msg);
         break;
+      case C2S.ROOM_CREATE:
+        this._handleRoomCreate(ws, msg);
+        break;
+      case C2S.ROOM_JOIN:
+        this._handleRoomJoin(ws, msg);
+        break;
+      case C2S.ROOM_LEAVE:
+        this._handleRoomLeave(ws, msg);
+        break;
     }
   }
 
   handleDisconnect(ws) {
     const client = this.clients.get(ws);
-    if (client) {
-      this.clients.delete(ws);
+    if (!client) return;
+
+    // 0. Save original room members BEFORE leaving (to notify correctly after room is destroyed)
+    const room = this.roomManager.getRoomByUser(client.userId);
+    const originalRoomMembers = room ? new Set(room.members) : null;
+
+    // 1. Process room leave BEFORE deleting from clients (to get remaining members)
+    const roomResult = this.roomManager.leaveRoom(client.userId);
+
+    // 2. Remove from clients map
+    this.clients.delete(ws);
+
+    // 3. Notify based on room status
+    if (roomResult.leftRoomId) {
+      if (roomResult.destroyed) {
+        // Room destroyed (last member left) — notify original room members only
+        if (originalRoomMembers) {
+          this._broadcastToMemberIds(originalRoomMembers, encode(S2C.ROOM_DESTROYED, { roomId: roomResult.leftRoomId, reason: 'ALL_LEFT' }));
+        }
+        // USER_LEFT is sent globally since user was the last one (no remaining members)
+        this._broadcast(encode(S2C.USER_LEFT, { userId: client.userId }));
+      } else {
+        // Room still exists — notify remaining room members
+        const userLeft = encode(S2C.USER_LEFT, { userId: client.userId });
+        const memberLeft = encode(S2C.ROOM_MEMBER_LEFT, { userId: client.userId, roomId: roomResult.leftRoomId });
+        this._broadcastToMemberIds(roomResult.remainingMembers, userLeft);
+        this._broadcastToMemberIds(roomResult.remainingMembers, memberLeft);
+      }
+    } else {
+      // Not in any room — global broadcast
       this._broadcast(encode(S2C.USER_LEFT, { userId: client.userId }));
-      console.log(`[ServerCore] User left: ${client.username} (${client.userId})`);
     }
+
+    console.log(`[ServerCore] User left: ${client.username} (${client.userId}), online: ${this.clients.size}`);
   }
 
   /* -------------------------------------------------------------- */
@@ -204,17 +244,17 @@ class MultiplayerServerCore {
     // Send auth success
     ws.send(encode(S2C.AUTH_OK, { userId, username, token }));
 
-    // Send snapshot of all currently connected users (excluding self)
-    const snapshot = [];
-    for (const [otherWs, client] of this.clients) {
-      if (otherWs !== ws) {
-        snapshot.push({ userId: client.userId, username: client.username, state: client.state });
-      }
+    // Reconnect: check if user was in a room (room members still contains userId from before disconnect)
+    const existingRoom = this.roomManager.getRoomByUser(userId);
+    if (existingRoom) {
+      // User was in a room — send room-scoped snapshot and notify room members
+      ws.send(encode(S2C.USERS_SNAPSHOT, { users: this._buildMemberList(existingRoom.id) }));
+      this._broadcastToRoom(existingRoom.id, ws, encode(S2C.USER_JOINED, { userId, username, state }));
+    } else {
+      // Not in a room — global snapshot (existing behavior)
+      this._sendSnapshot(ws);
+      this._broadcastExcept(ws, encode(S2C.USER_JOINED, { userId, username, state }));
     }
-    ws.send(encode(S2C.USERS_SNAPSHOT, { users: snapshot }));
-
-    // Broadcast join to others
-    this._broadcastExcept(ws, encode(S2C.USER_JOINED, { userId, username, state }));
 
     console.log(`[ServerCore] User joined: ${username} (${userId}), online: ${this.clients.size}`);
   }
@@ -249,7 +289,7 @@ class MultiplayerServerCore {
     for (const key of STATE_FIELDS) {
       if (msg[key] !== undefined) stateMsg[key] = msg[key];
     }
-    this._broadcastExcept(ws, encode(S2C.USER_STATE, stateMsg));
+    this._broadcastForUser(ws, encode(S2C.USER_STATE, stateMsg));
   }
 
   /* -------------------------------------------------------------- */
@@ -261,7 +301,7 @@ class MultiplayerServerCore {
     if (!client) return;
     const { actionType } = msg;
     if (actionType !== 'typing' && actionType !== 'click') return;
-    this._broadcastExcept(ws, encode(S2C.USER_ACTION, { userId: client.userId, actionType }));
+    this._broadcastForUser(ws, encode(S2C.USER_ACTION, { userId: client.userId, actionType }));
   }
 
   /* -------------------------------------------------------------- */
@@ -316,6 +356,143 @@ class MultiplayerServerCore {
         try { ws.send(data); } catch {}
       }
     }
+  }
+
+  /* -------------------------------------------------------------- */
+  /*  Room-aware broadcasting                                        */
+  /* -------------------------------------------------------------- */
+
+  /** Broadcast to all members in a room, optionally excluding one ws */
+  _broadcastToRoom(roomId, exceptWs, data) {
+    const memberIds = this.roomManager.getRoomMembers(roomId);
+    if (!memberIds) return;
+    for (const [ws, client] of this.clients) {
+      if (ws !== exceptWs && memberIds.has(client.userId)) {
+        try { ws.send(data); } catch {}
+      }
+    }
+  }
+
+  /** Broadcast to a set of userIds */
+  _broadcastToMemberIds(memberIds, data) {
+    if (!memberIds) return;
+    for (const [ws, client] of this.clients) {
+      if (memberIds.has(client.userId)) {
+        try { ws.send(data); } catch {}
+      }
+    }
+  }
+
+  /** Auto-select broadcast scope based on source user's room */
+  _broadcastForUser(sourceWs, data, exceptSelf = true) {
+    const client = this.clients.get(sourceWs);
+    if (!client) {
+      this._broadcast(data);
+      return;
+    }
+    const room = this.roomManager.getRoomByUser(client.userId);
+    if (room) {
+      this._broadcastToRoom(room.id, exceptSelf ? sourceWs : null, data);
+    } else {
+      if (exceptSelf) {
+        this._broadcastExcept(sourceWs, data);
+      } else {
+        this._broadcast(data);
+      }
+    }
+  }
+
+  /** Build members array for a room from this.clients */
+  _buildMemberList(roomId) {
+    const memberIds = this.roomManager.getRoomMembers(roomId);
+    if (!memberIds) return [];
+    const members = [];
+    for (const [ws, client] of this.clients) {
+      if (memberIds.has(client.userId)) {
+        members.push({ userId: client.userId, username: client.username, state: client.state });
+      }
+    }
+    return members;
+  }
+
+  /** Send user snapshot scoped to the user's current visibility */
+  _sendSnapshot(ws) {
+    const client = this.clients.get(ws);
+    if (!client) return;
+    const room = this.roomManager.getRoomByUser(client.userId);
+    const snapshot = [];
+    for (const [otherWs, other] of this.clients) {
+      if (otherWs === ws) continue;
+      if (room) {
+        if (!room.members.has(other.userId)) continue;
+      }
+      snapshot.push({ userId: other.userId, username: other.username, state: other.state });
+    }
+    ws.send(encode(S2C.USERS_SNAPSHOT, { users: snapshot }));
+  }
+
+  /* -------------------------------------------------------------- */
+  /*  Room handlers                                                  */
+  /* -------------------------------------------------------------- */
+
+  _handleRoomCreate(ws) {
+    const client = this.clients.get(ws);
+    if (!client) return;
+    const result = this.roomManager.createRoom(client.userId);
+    if (result.error) {
+      ws.send(encode(S2C.ROOM_ERROR, { reason: result.error }));
+      return;
+    }
+    const members = this._buildMemberList(result.roomId);
+    ws.send(encode(S2C.ROOM_CREATED, { roomId: result.roomId, code: result.code, members }));
+    console.log(`[ServerCore] Room created: ${result.code} by ${client.username}`);
+  }
+
+  _handleRoomJoin(ws, msg) {
+    const client = this.clients.get(ws);
+    if (!client) return;
+    const result = this.roomManager.joinRoom(msg.code, client.userId);
+    if (result.error) {
+      ws.send(encode(S2C.ROOM_ERROR, { reason: result.error }));
+      return;
+    }
+    const room = this.roomManager.getRoomByUser(client.userId);
+    // Notify joiner with room-scoped snapshot
+    const members = this._buildMemberList(result.roomId);
+    ws.send(encode(S2C.ROOM_JOINED, { roomId: result.roomId, code: room.code, members }));
+    // Notify existing room members
+    const memberMsg = encode(S2C.ROOM_MEMBER_JOINED, { userId: client.userId, username: client.username, state: client.state, roomId: result.roomId });
+    this._broadcastToRoom(result.roomId, ws, memberMsg);
+    console.log(`[ServerCore] User ${client.username} joined room ${room.code}`);
+  }
+
+  _handleRoomLeave(ws) {
+    const client = this.clients.get(ws);
+    if (!client) return;
+
+    // Save original room members BEFORE leaving
+    const room = this.roomManager.getRoomByUser(client.userId);
+    const originalRoomMembers = room ? new Set(room.members) : null;
+
+    const roomResult = this.roomManager.leaveRoom(client.userId);
+    if (!roomResult.leftRoomId) {
+      ws.send(encode(S2C.ROOM_ERROR, { reason: 'NOT_IN_ROOM' }));
+      return;
+    }
+    if (roomResult.destroyed) {
+      // Room destroyed — notify original room members only
+      if (originalRoomMembers) {
+        this._broadcastToMemberIds(originalRoomMembers, encode(S2C.ROOM_DESTROYED, { roomId: roomResult.leftRoomId, reason: 'ALL_LEFT' }));
+      }
+    } else {
+      // Notify remaining room members
+      const memberMsg = encode(S2C.ROOM_MEMBER_LEFT, { userId: client.userId, roomId: roomResult.leftRoomId });
+      this._broadcastToMemberIds(roomResult.remainingMembers, memberMsg);
+    }
+    // Send room:left + global snapshot to the leaver
+    ws.send(encode(S2C.ROOM_LEFT, { userId: client.userId, roomId: roomResult.leftRoomId }));
+    this._sendSnapshot(ws);
+    console.log(`[ServerCore] User ${client.username} left room ${roomResult.leftRoomId}`);
   }
 
   /* -------------------------------------------------------------- */

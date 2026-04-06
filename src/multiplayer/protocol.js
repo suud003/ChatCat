@@ -10,6 +10,9 @@ const C2S = {
   STATE_UPDATE: 'state:update',     // { level, affinity, rebirthCount, mood, isInFlow, skinId, totalCPS }
   LEADERBOARD_REQ: 'leaderboard:request', // { sortBy }
   ACTION: 'action',                 // { actionType: 'typing'|'click' }
+  ROOM_CREATE: 'room:create',     // {} — create a new room
+  ROOM_JOIN: 'room:join',         // { code } — join room by code
+  ROOM_LEAVE: 'room:leave',       // {} — leave current room
 };
 
 // Server → Client message types
@@ -22,6 +25,13 @@ const S2C = {
   USERS_SNAPSHOT: 'users:snapshot',  // [{ userId, username, state }]
   LEADERBOARD_DATA: 'leaderboard:data', // [{ username, level, affinity, rebirthCount, rank }]
   USER_ACTION: 'user:action',       // { userId, actionType }
+  ROOM_CREATED: 'room:created',           // { roomId, code, members: [{ userId, username, state }] }
+  ROOM_JOINED: 'room:joined',             // { roomId, code, members: [{ userId, username, state }] }
+  ROOM_LEFT: 'room:left',                 // { userId, roomId }
+  ROOM_ERROR: 'room:error',               // { reason: 'INVALID_CODE'|'ROOM_FULL'|... }
+  ROOM_MEMBER_JOINED: 'room:member-joined', // { userId, username, state, roomId }
+  ROOM_MEMBER_LEFT: 'room:member-left',   // { userId, roomId }
+  ROOM_DESTROYED: 'room:destroyed',       // { roomId, reason }
 };
 
 /** Encode a protocol message to JSON string */

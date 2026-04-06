@@ -84,6 +84,31 @@ export class ConnectionUI {
           </div>
         </div>
 
+        <!-- Room controls (shown when authenticated) -->
+        <div id="mp-room-section" class="mp-section hidden">
+          <div class="mp-section-label">房间</div>
+          <div id="mp-room-no-room">
+            <div class="mp-row">
+              <button id="mp-room-create-btn" class="mp-btn mp-btn-primary mp-btn-full">创建房间</button>
+            </div>
+            <div class="mp-row mp-room-join-row">
+              <input type="text" id="mp-room-code-input" class="mp-input" placeholder="输入房间码" maxlength="6">
+              <button id="mp-room-join-btn" class="mp-btn mp-btn-primary">加入</button>
+            </div>
+          </div>
+          <div id="mp-room-in-room" class="hidden">
+            <div class="mp-room-code-display">
+              <span class="mp-room-code-label">房间码:</span>
+              <span id="mp-room-code-value" class="mp-room-code">------</span>
+              <button id="mp-room-copy-btn" class="mp-btn-small" title="复制房间码">📋</button>
+            </div>
+            <div id="mp-room-members" class="mp-room-members"></div>
+            <div class="mp-row" style="margin-top: 6px;">
+              <button id="mp-room-leave-btn" class="mp-btn mp-btn-danger mp-btn-full">离开房间</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Logout button (always visible when logged in) -->
         <div id="mp-logout-section" class="mp-section hidden">
           <button id="mp-logout-btn" class="mp-btn mp-btn-small mp-btn-muted">登出账号</button>
@@ -207,6 +232,21 @@ export class ConnectionUI {
       });
     });
 
+    // Room: create
+    this._container.querySelector('#mp-room-create-btn')?.addEventListener('click', () => this._createRoom());
+    // Room: join
+    this._container.querySelector('#mp-room-join-btn')?.addEventListener('click', () => this._joinRoom());
+    this._container.querySelector('#mp-room-code-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this._joinRoom();
+    });
+    // Room: copy code
+    this._container.querySelector('#mp-room-copy-btn')?.addEventListener('click', () => {
+      const code = this._container.querySelector('#mp-room-code-value')?.textContent;
+      if (code && code !== '------') navigator.clipboard.writeText(code);
+    });
+    // Room: leave
+    this._container.querySelector('#mp-room-leave-btn')?.addEventListener('click', () => this._leaveRoom());
+
     // ─── Login screen events ────────────────────────────
     if (this._loginScreen) {
       // "进入" — offline or online depending on server field
@@ -293,6 +333,52 @@ export class ConnectionUI {
           errEl.classList.remove('hidden');
         }
       }
+    };
+
+    // Room callbacks
+    const prevRoomCreated = this._client.onRoomCreated;
+    this._client.onRoomCreated = (data) => {
+      prevRoomCreated?.(data);
+      this._showInRoom(data.code, data.members);
+    };
+    const prevRoomJoined = this._client.onRoomJoined;
+    this._client.onRoomJoined = (data) => {
+      prevRoomJoined?.(data);
+      this._showInRoom(data.code, data.members);
+    };
+    const prevRoomLeft = this._client.onRoomLeft;
+    this._client.onRoomLeft = (data) => {
+      prevRoomLeft?.(data);
+      this._showNoRoom();
+    };
+    const prevRoomDestroyed = this._client.onRoomDestroyed;
+    this._client.onRoomDestroyed = (data) => {
+      prevRoomDestroyed?.(data);
+      this._showNoRoom();
+      this._showRoomError('房间已解散');
+    };
+    const prevRoomError = this._client.onRoomError;
+    this._client.onRoomError = (data) => {
+      prevRoomError?.(data);
+      const reasonMap = {
+        INVALID_CODE: '房间码不存在',
+        ROOM_FULL: '房间已满',
+        ALREADY_IN_ROOM: '你已在房间中',
+        MAX_ROOMS_REACHED: '服务器房间已满',
+        NOT_IN_ROOM: '你不在任何房间中',
+        NOT_AUTHENTICATED: '未登录',
+      };
+      this._showRoomError(reasonMap[data.reason] || data.reason);
+    };
+    const prevRoomMemberJoined = this._client.onRoomMemberJoined;
+    this._client.onRoomMemberJoined = (data) => {
+      prevRoomMemberJoined?.(data);
+      this._updateMemberList();
+    };
+    const prevRoomMemberLeft = this._client.onRoomMemberLeft;
+    this._client.onRoomMemberLeft = (data) => {
+      prevRoomMemberLeft?.(data);
+      this._updateMemberList();
     };
   }
 
@@ -624,6 +710,14 @@ export class ConnectionUI {
     } else if (catSizeSection) {
       catSizeSection.classList.add('hidden');
     }
+
+    // Room section — show when authenticated
+    const roomSection = this._container.querySelector('#mp-room-section');
+    if (state === 'authenticated' && roomSection) {
+      roomSection.classList.remove('hidden');
+    } else if (roomSection) {
+      roomSection.classList.add('hidden');
+    }
   }
 
   /** Initialize from saved settings */
@@ -801,5 +895,79 @@ export class ConnectionUI {
 
   _clearConnectionError() {
     this._container.querySelectorAll('.mp-connection-error').forEach(el => el.remove());
+  }
+
+  // ─── Room UI ────────────────────────────────────────
+
+  _showNoRoom() {
+    this._container.querySelector('#mp-room-section')?.classList.remove('hidden');
+    this._container.querySelector('#mp-room-no-room')?.classList.remove('hidden');
+    this._container.querySelector('#mp-room-in-room')?.classList.add('hidden');
+  }
+
+  _showInRoom(code, members) {
+    this._container.querySelector('#mp-room-section')?.classList.remove('hidden');
+    this._container.querySelector('#mp-room-no-room')?.classList.add('hidden');
+    this._container.querySelector('#mp-room-in-room')?.classList.remove('hidden');
+    const codeEl = this._container.querySelector('#mp-room-code-value');
+    if (codeEl) codeEl.textContent = code;
+    this._renderMemberList(members);
+  }
+
+  _showRoomError(reason) {
+    let errEl = this._container.querySelector('#mp-room-error');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.id = 'mp-room-error';
+      errEl.className = 'mp-error';
+      const roomSection = this._container.querySelector('#mp-room-section');
+      roomSection?.prepend(errEl);
+    }
+    errEl.textContent = reason;
+    errEl.classList.remove('hidden');
+    clearTimeout(this._roomErrorTimer);
+    this._roomErrorTimer = setTimeout(() => errEl.classList.add('hidden'), 3000);
+  }
+
+  _renderMemberList(members) {
+    const container = this._container.querySelector('#mp-room-members');
+    if (!container) return;
+    container.innerHTML = members.map(m =>
+      `<div class="mp-room-member">${m.username}</div>`
+    ).join('');
+  }
+
+  _updateMemberList() {
+    // The member list is updated via onRoomJoined/onRoomMemberJoined/onRoomMemberLeft
+    // For dynamic updates, we rely on the server sending updated member lists
+    // when members join/leave. The actual data comes through the callback chain.
+  }
+
+  async _createRoom() {
+    try {
+      await this._client.createRoom();
+    } catch (err) {
+      this._showRoomError(err.message);
+    }
+  }
+
+  async _joinRoom() {
+    const codeInput = this._container.querySelector('#mp-room-code-input');
+    const code = codeInput?.value?.trim();
+    if (!code) { this._showRoomError('请输入房间码'); return; }
+    try {
+      await this._client.joinRoom(code);
+      if (codeInput) codeInput.value = '';
+    } catch (err) {
+      this._showRoomError(err.message);
+    }
+  }
+
+  async _leaveRoom() {
+    try {
+      await this._client.leaveRoom();
+    } catch (err) {
+      this._showRoomError(err.message);
+    }
   }
 }

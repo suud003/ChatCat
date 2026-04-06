@@ -10,6 +10,9 @@ const C2S = {
   STATE_UPDATE: 'state:update',
   LEADERBOARD_REQ: 'leaderboard:request',
   ACTION: 'action',
+  ROOM_CREATE: 'room:create',
+  ROOM_JOIN: 'room:join',
+  ROOM_LEAVE: 'room:leave',
 };
 
 const S2C = {
@@ -21,6 +24,13 @@ const S2C = {
   USERS_SNAPSHOT: 'users:snapshot',
   LEADERBOARD_DATA: 'leaderboard:data',
   USER_ACTION: 'user:action',
+  ROOM_CREATED: 'room:created',
+  ROOM_JOINED: 'room:joined',
+  ROOM_LEFT: 'room:left',
+  ROOM_ERROR: 'room:error',
+  ROOM_MEMBER_JOINED: 'room:member-joined',
+  ROOM_MEMBER_LEFT: 'room:member-left',
+  ROOM_DESTROYED: 'room:destroyed',
 };
 
 const STATE_FIELDS = ['level', 'affinity', 'rebirthCount', 'mood', 'isInFlow', 'skinId', 'totalCPS'];
@@ -78,6 +88,16 @@ export class MultiplayerClient {
     this.onUsersSnapshot = null;   // ([{ userId, username, state }])
     this.onLeaderboard = null;     // ([{ username, level, affinity, rebirthCount, rank }])
     this.onUserAction = null;      // ({ userId, actionType })
+    this.onRoomCreated = null;       // ({ roomId, code, members })
+    this.onRoomJoined = null;        // ({ roomId, code, members })
+    this.onRoomLeft = null;          // ({ userId, roomId })
+    this.onRoomError = null;         // ({ reason })
+    this.onRoomMemberJoined = null;  // ({ userId, username, state, roomId })
+    this.onRoomMemberLeft = null;    // ({ userId, roomId })
+    this.onRoomDestroyed = null;     // ({ roomId, reason })
+
+    // Room state
+    this.currentRoom = null; // { roomId, code } or null
   }
 
   /** Current connection state: 'disconnected' | 'connecting' | 'connected' | 'authenticated' */
@@ -124,6 +144,7 @@ export class MultiplayerClient {
     this._connected = false;
     this._authenticated = false;
     this._userId = null;
+    this.currentRoom = null;
     // Only fire onDisconnected if not switching servers
     if (!this._switching) {
       this.onDisconnected?.();
@@ -390,6 +411,38 @@ export class MultiplayerClient {
       case S2C.USER_ACTION:
         this.onUserAction?.({ userId: msg.userId, actionType: msg.actionType });
         break;
+
+      case S2C.ROOM_CREATED:
+        this.currentRoom = { roomId: msg.roomId, code: msg.code };
+        this.onRoomCreated?.({ roomId: msg.roomId, code: msg.code, members: msg.members || [] });
+        break;
+
+      case S2C.ROOM_JOINED:
+        this.currentRoom = { roomId: msg.roomId, code: msg.code };
+        this.onRoomJoined?.({ roomId: msg.roomId, code: msg.code, members: msg.members || [] });
+        break;
+
+      case S2C.ROOM_LEFT:
+        this.currentRoom = null;
+        this.onRoomLeft?.({ userId: msg.userId, roomId: msg.roomId });
+        break;
+
+      case S2C.ROOM_ERROR:
+        this.onRoomError?.({ reason: msg.reason });
+        break;
+
+      case S2C.ROOM_MEMBER_JOINED:
+        this.onRoomMemberJoined?.({ userId: msg.userId, username: msg.username, state: msg.state, roomId: msg.roomId });
+        break;
+
+      case S2C.ROOM_MEMBER_LEFT:
+        this.onRoomMemberLeft?.({ userId: msg.userId, roomId: msg.roomId });
+        break;
+
+      case S2C.ROOM_DESTROYED:
+        this.currentRoom = null;
+        this.onRoomDestroyed?.({ roomId: msg.roomId, reason: msg.reason });
+        break;
     }
   }
 
@@ -412,6 +465,47 @@ export class MultiplayerClient {
       clearInterval(this._heartbeatTimer);
       this._heartbeatTimer = null;
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Room operations                                                     */
+  /* ------------------------------------------------------------------ */
+
+  createRoom() {
+    return new Promise((resolve, reject) => {
+      if (!this._authenticated) { reject(new Error('NOT_AUTHENTICATED')); return; }
+      const prevError = this.onRoomError;
+      const prevCreated = this.onRoomCreated;
+      this.onRoomError = (err) => { this.onRoomError = prevError; this.onRoomCreated = prevCreated; reject(new Error(err.reason)); };
+      this.onRoomCreated = (data) => { this.onRoomCreated = prevCreated; this.onRoomError = prevError; resolve(data); };
+      this._send({ type: C2S.ROOM_CREATE });
+    });
+  }
+
+  joinRoom(code) {
+    return new Promise((resolve, reject) => {
+      if (!this._authenticated) { reject(new Error('NOT_AUTHENTICATED')); return; }
+      const prevError = this.onRoomError;
+      const prevJoined = this.onRoomJoined;
+      this.onRoomError = (err) => { this.onRoomError = prevError; this.onRoomJoined = prevJoined; reject(new Error(err.reason)); };
+      this.onRoomJoined = (data) => { this.onRoomJoined = prevJoined; this.onRoomError = prevError; resolve(data); };
+      this._send({ type: C2S.ROOM_JOIN, code });
+    });
+  }
+
+  leaveRoom() {
+    return new Promise((resolve, reject) => {
+      if (!this._authenticated) { reject(new Error('NOT_AUTHENTICATED')); return; }
+      if (!this.currentRoom) { reject(new Error('NOT_IN_ROOM')); return; }
+      const prevLeft = this.onRoomLeft;
+      const prevDestroyed = this.onRoomDestroyed;
+      const prevError = this.onRoomError;
+      const cleanup = () => { this.onRoomLeft = prevLeft; this.onRoomDestroyed = prevDestroyed; this.onRoomError = prevError; };
+      this.onRoomError = (err) => { cleanup(); reject(new Error(err.reason)); };
+      this.onRoomLeft = () => { cleanup(); resolve(); };
+      this.onRoomDestroyed = () => { cleanup(); resolve(); };
+      this._send({ type: C2S.ROOM_LEAVE });
+    });
   }
 
   /* ------------------------------------------------------------------ */

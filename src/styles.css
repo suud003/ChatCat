@@ -4734,6 +4734,59 @@ body {
 }
 
 /* --- Inline Confirm Banner --- */
+
+/* --- Room --- */
+.mp-room-code-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+.mp-room-code-label {
+  font-size: 11px;
+  color: #666;
+}
+.mp-room-code {
+  font-family: 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  color: #222;
+}
+.mp-room-join-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.mp-room-join-row .mp-input {
+  width: 120px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.mp-room-members {
+  max-height: 100px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 4px;
+}
+.mp-room-member {
+  padding: 3px 6px;
+  font-size: 12px;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+}
+.mp-room-member:last-child {
+  border-bottom: none;
+}
+.mp-btn-full {
+  width: 100%;
+}
+
+/* --- Inline Confirm Banner --- */
 .mp-inline-confirm {
   background: #fff3cd;
   border: 2px solid #f0c36d;
