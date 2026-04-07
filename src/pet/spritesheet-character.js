@@ -12,8 +12,6 @@ const CANVAS_SIZE = 300;
 
 // Timing constants
 const SLEEP_TIMEOUT = 2_000;       // 2 s idle → sleep (缩短用于快速测试休息动画)
-const DROWSY_MIN_TIMEOUT = 12_000;  // 12-18 s idle → drowsy once
-const DROWSY_MAX_TIMEOUT = 18_000;
 const BLINK_MIN     = 3_000;        // random blink interval 3-5 s
 const BLINK_MAX     = 5_000;
 const HAPPY_DURATION = 2_000;       // happy state lasts 2 s
@@ -45,12 +43,9 @@ export class SpriteSheetCharacter {
     this._idleTime = 0;          // ms since last input
     this._nextBlink = this._randomBlink();
     this._blinkTimer = 0;
-    this._nextDrowsyAt = this._randomDrowsyTime();
-    this._playedDrowsyThisIdle = false;
     this._happyTimer = null;
     this._intentTimer = null;
     this._workingInterval = null;
-    this._pendingWakeState = null;
 
     // Typing alternation
     this._lastTypingPaw = 'right';
@@ -88,8 +83,6 @@ export class SpriteSheetCharacter {
   }
 
   loadSkin(skinId) {
-    this.skinId = skinId;
-    this.currentSkin = skinId;
     // SpriteSheetCharacter uses tint from the skin definition.
     // We import SKINS lazily to avoid circular deps.
     import('./pixel-character.js').then(({ SKINS }) => {
@@ -141,11 +134,13 @@ export class SpriteSheetCharacter {
   }
 
   triggerClick() {
-    this._activateState('click-react');
+    this._setState('click-react');
+    this._resetIdle();
   }
 
   triggerHappy() {
-    this._activateState('happy');
+    this._setState('happy');
+    this._resetIdle();
     clearTimeout(this._happyTimer);
     this._happyTimer = setTimeout(() => {
       if (this._state === 'happy') this._setState('idle');
@@ -194,13 +189,8 @@ export class SpriteSheetCharacter {
         break;
 
       case 'sleepy':
-        this._playedDrowsyThisIdle = true;
-        if (this._hasState('drowsy')) {
-          this._setState('drowsy');
-        } else {
-          this._setState('sleep');
-          this._intentTimer = setTimeout(() => { this._setState('idle'); }, 3000);
-        }
+        this._setState('sleep');
+        this._intentTimer = setTimeout(() => { this._setState('idle'); }, 3000);
         break;
 
       case 'alert':
@@ -299,61 +289,6 @@ export class SpriteSheetCharacter {
     }
   }
 
-  playState(name) {
-    if (!this._hasState(name)) return false;
-    this._setState(name);
-    return true;
-  }
-
-  getStateTotalDuration(name) {
-    const state = this._meta?.states?.[name];
-    if (!state) return 0;
-    return Number(state.frames || 0) * Number(state.frameDuration || 0);
-  }
-
-  async reloadAssets() {
-    const wasRunning = !!this._rafId;
-    if (wasRunning) this.stop();
-    await this.load(this._sheetId || 'default');
-    if (this.currentSkin) this.loadSkin(this.currentSkin);
-    if (wasRunning) this.start();
-  }
-
-  getDebugAnimationState() {
-    return {
-      renderer: 'SpriteSheetCharacter',
-      sheetId: this._sheetId,
-      skinId: this.skinId || null,
-      currentSkin: this.currentSkin || null,
-      state: this._state,
-      frame: this._frame,
-      loaded: this._loaded,
-      idleTimeMs: Math.round(this._idleTime || 0),
-      nextDrowsyAtMs: Math.round(this._nextDrowsyAt || 0),
-    };
-  }
-
-  getDebugAssetManifest() {
-    const sheetId = this._sheetId || 'default';
-    const basePath = new URL(`./spritesheets/${sheetId}/`, import.meta.url).href;
-    return {
-      renderer: 'SpriteSheetCharacter',
-      assets: [
-        {
-          id: `spritesheet-${sheetId}`,
-          label: `主动画 Sheet (${sheetId})`,
-          kind: 'sheet',
-          description: '完整角色 spritesheet',
-          revealPath: `${basePath}sheet.png`,
-          sheetUrl: `${basePath}sheet.png`,
-          configUrl: `${basePath}sheet.json`,
-          meta: this._meta,
-          states: this._meta?.states || {},
-        },
-      ],
-    };
-  }
-
   destroy() {
     this.stop();
     clearTimeout(this._happyTimer);
@@ -373,39 +308,14 @@ export class SpriteSheetCharacter {
     this._dirty = true;
   }
 
-  _activateState(name) {
-    this._resetIdle();
-    if (this._state === 'sleep' && this._hasState('wake-up')) {
-      this._pendingWakeState = this._hasState(name) ? name : 'idle';
-      this._setState('wake-up');
-      return;
-    }
-    if (this._state === 'wake-up') {
-      this._pendingWakeState = this._hasState(name) ? name : 'idle';
-      return;
-    }
-    this._pendingWakeState = null;
-    this._setState(name);
-  }
-
-  _hasState(name) {
-    return !!this._meta?.states?.[name];
-  }
-
   _resetIdle() {
     this._idleTime = 0;
     this._blinkTimer = 0;
     this._nextBlink = this._randomBlink();
-    this._nextDrowsyAt = this._randomDrowsyTime();
-    this._playedDrowsyThisIdle = false;
   }
 
   _randomBlink() {
     return BLINK_MIN + Math.random() * (BLINK_MAX - BLINK_MIN);
-  }
-
-  _randomDrowsyTime() {
-    return DROWSY_MIN_TIMEOUT + Math.random() * (DROWSY_MAX_TIMEOUT - DROWSY_MIN_TIMEOUT);
   }
 
   /* ------------------------------------------------------------------ */
@@ -454,11 +364,7 @@ export class SpriteSheetCharacter {
           }
 
           // Non-loop animation ended → transition
-          let next = stateMeta.next || 'idle';
-          if (this._state === 'wake-up' && this._pendingWakeState) {
-            next = this._pendingWakeState;
-            this._pendingWakeState = null;
-          }
+          const next = stateMeta.next || 'idle';
           this._setState(next);
           return;
         }
@@ -479,13 +385,6 @@ export class SpriteSheetCharacter {
           this._setState('idle-blink');
           return;
         }
-      }
-
-      // Drowsy trigger — once per idle cycle before full sleep
-      if (!this._playedDrowsyThisIdle && this._hasState('drowsy') && this._idleTime >= this._nextDrowsyAt) {
-        this._playedDrowsyThisIdle = true;
-        this._setState('drowsy');
-        return;
       }
 
       // Sleep trigger

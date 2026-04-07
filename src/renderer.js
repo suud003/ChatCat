@@ -6,7 +6,6 @@
 
 import { SpriteCharacter, SKINS } from './pet/pixel-character.js';
 import { SpriteSheetCharacter } from './pet/spritesheet-character.js';
-import { PomodoroOverlayAnimation } from './pet/pomodoro-overlay-animation.js';
 import { CHARACTER_PRESETS, CATEGORIES, INSTRUMENT_NAMES } from './pet/live2d-character.js';
 import { AffectionSystem, getLevelThreshold } from './pet/affection-system.js';
 import { InputTracker } from './input/tracker.js';
@@ -261,28 +260,6 @@ async function init() {
     activeCharacter.setInstrument(savedInstrumentId || charId);
   }
   activeCharacter.start();
-  window.__debugForceCatDrowsy = () => {
-    console.log('[Renderer] __debugForceCatDrowsy');
-    activeCharacter?.triggerIntent?.('sleepy');
-  };
-  window.__debugCatCharacterType = () => {
-    const type = activeCharacter?.constructor?.name || 'UnknownCharacter';
-    console.log('[Renderer] activeCharacter =', type);
-    return type;
-  };
-  window.__debugCatCharacterInfo = () => {
-    const info = {
-      type: activeCharacter?.constructor?.name || 'UnknownCharacter',
-      skinId: activeCharacter?.skinId || null,
-      currentSkin: activeCharacter?.currentSkin || null,
-      overlayState: activeCharacter?._overlayState || null,
-      overlaySuppressMs: activeCharacter?._overlaySuppressActivityUntil
-        ? Math.max(0, Math.round(activeCharacter._overlaySuppressActivityUntil - performance.now()))
-        : 0,
-    };
-    console.log('[Renderer] activeCharacter info =', info);
-    return info;
-  };
 
   affectionSystem = affection;
 
@@ -357,11 +334,6 @@ async function init() {
 
   // Type recorder (no longer standalone, lives in Tools panel tab)
   typeRecorder = new TypeRecorder();
-
-  const pomodoroOverlayAnimation = new PomodoroOverlayAnimation();
-  pomodoroOverlayAnimation.preload().catch((err) => {
-    console.warn('[PomodoroOverlayAnimation] preload failed:', err.message);
-  });
 
   // Pomodoro timer (lives in Tools panel tab)
   const pomodoro = new PomodoroTimer(affection);
@@ -708,8 +680,6 @@ async function init() {
 
   // Wire pomodoro completion to both character and proactive engine
   pomodoro.onComplete = () => {
-    console.warn('[Renderer] pomodoro.onComplete');
-    pomodoroOverlayAnimation.hide();
     activeCharacter.triggerHappy?.();
     proactiveEngine.onPomodoroComplete();
   };
@@ -1309,7 +1279,6 @@ function setupToolbar(chatUI, quickPanel) {
  * Moved from ChatUI to be a standalone panel.
  */
 function setupSettingsPanel(aiService, apiPresets, chatUI) {
-  const ENABLE_DEV_DEBUG_TOOLS = false;
   const presetSelect = document.getElementById('setting-preset');
   const modelSelect = document.getElementById('setting-model');
   const modelCustomInput = document.getElementById('setting-model-custom');
@@ -1321,201 +1290,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   const opacityValue = document.getElementById('opacity-value');
   const visionModelInput = document.getElementById('setting-vision-model');
   const personalitySelect = document.getElementById('setting-personality');
-  const debugOpenDevtoolsBtn = document.getElementById('debug-open-devtools-btn');
-  const debugCharacterTypeBtn = document.getElementById('debug-character-type-btn');
-  const debugForceDrowsyBtn = document.getElementById('debug-force-drowsy-btn');
-  const debugCharacterStatus = document.getElementById('debug-character-status');
-  const debugToolsSection = document.getElementById('debug-tools-section');
-  const animationEditorRuntime = document.getElementById('animation-editor-runtime');
-  const animationEditorCurrentState = document.getElementById('animation-editor-current-state');
-  const animationEditorAssetSelect = document.getElementById('animation-editor-asset-select');
-  const animationEditorOpenSheetBtn = document.getElementById('animation-editor-open-sheet-btn');
-  const animationEditorOpenConfigBtn = document.getElementById('animation-editor-open-config-btn');
-  const animationEditorReloadBtn = document.getElementById('animation-editor-reload-btn');
-  const animationEditorPreview = document.getElementById('animation-editor-preview');
-  const animationEditorStateSelect = document.getElementById('animation-editor-state-select');
-  const animationEditorStateList = document.getElementById('animation-editor-state-list');
-  const animationEditorConfig = document.getElementById('animation-editor-config');
-  const animationEditorSaveConfigBtn = document.getElementById('animation-editor-save-config-btn');
-  const animationEditorStatus = document.getElementById('animation-editor-status');
-  const animationEditorCtx = animationEditorPreview?.getContext('2d');
-  const animationEditor = {
-    runtimeInfo: null,
-    manifest: null,
-    selectedAssetId: '',
-    selectedStateName: '',
-    selectedSheetUrl: '',
-    previewImage: null,
-    previewFrame: 0,
-    previewFrameTime: 0,
-    previewLastTs: 0,
-    previewRafId: 0,
-    lastConfigAssetId: '',
-  };
-
-  const fileUrlToPath = (value) => {
-    if (!value) return '';
-    if (!/^file:/i.test(value)) return value;
-    const url = new URL(value);
-    let pathname = decodeURIComponent(url.pathname);
-    if (/^\/[A-Za-z]:/.test(pathname)) pathname = pathname.slice(1);
-    return pathname;
-  };
-
-  const renderAnimationStateSummary = () => {
-    if (!animationEditorCurrentState) return;
-    const info = activeCharacter?.getDebugAnimationState?.() || window.__debugCatCharacterInfo?.() || {};
-    animationEditorCurrentState.textContent = [
-      `renderer: ${info.renderer || info.type || 'unknown'}`,
-      `skinId: ${info.skinId || '-'}`,
-      `currentSkin: ${info.currentSkin || '-'}`,
-      `overlayState: ${info.overlayState || '-'}`,
-      `state: ${info.state || '-'}`,
-      `frame: ${info.frame ?? info.overlayFrame ?? '-'}`,
-      `idleTimeMs: ${info.idleTimeMs ?? '-'}`,
-      `nextDrowsyAtMs: ${info.nextDrowsyAtMs ?? '-'}`,
-      `leftPawDown: ${info.leftPawDown ?? '-'}`,
-      `rightPawDown: ${info.rightPawDown ?? '-'}`,
-      `mouthOpen: ${info.mouthOpen ?? '-'}`,
-      `clickExpr: ${info.clickExpr || '-'}`,
-    ].join('\n');
-  };
-
-  const getSelectedAnimationAsset = () => {
-    return animationEditor.manifest?.assets?.find((asset) => asset.id === animationEditor.selectedAssetId) || null;
-  };
-
-  const updateAnimationStateList = (asset) => {
-    if (!animationEditorStateList) return;
-    if (!asset) {
-      animationEditorStateList.textContent = '暂无动画资源';
-      return;
-    }
-    if (asset.kind !== 'sheet') {
-      const lines = [
-        asset.label,
-        asset.description || '',
-        '',
-        ...((asset.files || []).map((file) => `- ${file.name}`)),
-      ];
-      animationEditorStateList.textContent = lines.filter(Boolean).join('\n');
-      return;
-    }
-    const stateLines = Object.entries(asset.states || {}).map(([name, state]) =>
-      `${name}: row=${state.row}, frames=${state.frames}, duration=${state.frameDuration}ms, loop=${state.loop ? 'yes' : 'no'}${state.next ? `, next=${state.next}` : ''}`
-    );
-    animationEditorStateList.textContent = [asset.label, asset.description || '', '', ...stateLines].filter(Boolean).join('\n');
-  };
-
-  const updateAnimationConfigEditor = (asset, force = false) => {
-    if (!animationEditorConfig || !asset || asset.kind !== 'sheet') return;
-    if (!force && animationEditor.lastConfigAssetId === asset.id) return;
-    animationEditorConfig.value = JSON.stringify(asset.meta || { states: asset.states || {} }, null, 2);
-    animationEditor.lastConfigAssetId = asset.id;
-  };
-
-  const updateAnimationStateSelect = (asset) => {
-    if (!animationEditorStateSelect) return;
-    animationEditorStateSelect.innerHTML = '';
-    const stateNames = asset?.kind === 'sheet' ? Object.keys(asset.states || {}) : [];
-    if (stateNames.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = '无可预览状态';
-      animationEditorStateSelect.appendChild(opt);
-      animationEditor.selectedStateName = '';
-      return;
-    }
-    for (const stateName of stateNames) {
-      const opt = document.createElement('option');
-      opt.value = stateName;
-      opt.textContent = stateName;
-      animationEditorStateSelect.appendChild(opt);
-    }
-    if (!stateNames.includes(animationEditor.selectedStateName)) {
-      animationEditor.selectedStateName = stateNames[0];
-    }
-    animationEditorStateSelect.value = animationEditor.selectedStateName;
-  };
-
-  const loadAnimationPreviewImage = async (asset) => {
-    if (!asset || asset.kind !== 'sheet' || !asset.sheetUrl) {
-      animationEditor.previewImage = null;
-      animationEditor.selectedSheetUrl = '';
-      return;
-    }
-    if (animationEditor.selectedSheetUrl === asset.sheetUrl && animationEditor.previewImage) return;
-    animationEditor.previewImage = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('preview image load failed'));
-      img.src = asset.sheetUrl;
-    }).catch(() => null);
-    animationEditor.selectedSheetUrl = asset.sheetUrl;
-    animationEditor.previewFrame = 0;
-    animationEditor.previewFrameTime = 0;
-    animationEditor.previewLastTs = 0;
-  };
-
-  const drawAnimationPreview = (ts = 0) => {
-    if (animationEditor.previewRafId) cancelAnimationFrame(animationEditor.previewRafId);
-    animationEditor.previewRafId = requestAnimationFrame(drawAnimationPreview);
-    if (!animationEditorCtx || !animationEditorPreview) return;
-    const asset = getSelectedAnimationAsset();
-    animationEditorCtx.clearRect(0, 0, animationEditorPreview.width, animationEditorPreview.height);
-    if (!asset || asset.kind !== 'sheet' || !animationEditor.previewImage || !animationEditor.selectedStateName) return;
-    const state = asset.states?.[animationEditor.selectedStateName];
-    const meta = asset.meta;
-    if (!state || !meta) return;
-    const dt = animationEditor.previewLastTs ? (ts - animationEditor.previewLastTs) : 16;
-    animationEditor.previewLastTs = ts;
-    animationEditor.previewFrameTime += dt;
-    if (animationEditor.previewFrameTime >= state.frameDuration) {
-      animationEditor.previewFrameTime -= state.frameDuration;
-      animationEditor.previewFrame += 1;
-      if (animationEditor.previewFrame >= state.frames) animationEditor.previewFrame = 0;
-    }
-    const fw = Number(meta.frameWidth || animationEditorPreview.width);
-    const fh = Number(meta.frameHeight || animationEditorPreview.height);
-    const cols = Number(meta.columns || 1);
-    const col = animationEditor.previewFrame % cols;
-    const sx = col * fw;
-    const sy = Number(state.row || 0) * fh;
-    animationEditorCtx.drawImage(animationEditor.previewImage, sx, sy, fw, fh, 0, 0, animationEditorPreview.width, animationEditorPreview.height);
-  };
-
-  const refreshAnimationEditor = async (forceConfig = false) => {
-    if (!debugToolsSection || debugToolsSection.style.display === 'none') return;
-    renderAnimationStateSummary();
-    const manifest = activeCharacter?.getDebugAssetManifest?.() || { assets: [] };
-    animationEditor.manifest = manifest;
-    if (animationEditorAssetSelect) {
-      animationEditorAssetSelect.innerHTML = '';
-      for (const asset of manifest.assets || []) {
-        const opt = document.createElement('option');
-        opt.value = asset.id;
-        opt.textContent = `${asset.label}${asset.kind === 'sheet' ? ' · sheet' : ' · layers'}`;
-        animationEditorAssetSelect.appendChild(opt);
-      }
-    }
-    const assetIds = (manifest.assets || []).map((asset) => asset.id);
-    if (!assetIds.includes(animationEditor.selectedAssetId)) {
-      animationEditor.selectedAssetId = assetIds[0] || '';
-    }
-    if (animationEditorAssetSelect && animationEditor.selectedAssetId) {
-      animationEditorAssetSelect.value = animationEditor.selectedAssetId;
-    }
-    const asset = getSelectedAnimationAsset();
-    updateAnimationStateList(asset);
-    updateAnimationStateSelect(asset);
-    updateAnimationConfigEditor(asset, forceConfig);
-    await loadAnimationPreviewImage(asset);
-    if (animationEditorStatus) {
-      animationEditorStatus.textContent = asset
-        ? `已加载: ${asset.label}`
-        : '未找到动画资源';
-    }
-  };
 
   async function populateModels(presetKey, savedModel, savedUrl) {
     const preset = apiPresets[presetKey];
@@ -1931,130 +1705,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     });
   }
 
-  const initDebugTools = async () => {
-    if (!debugToolsSection) return;
-    if (!ENABLE_DEV_DEBUG_TOOLS) {
-      debugToolsSection.style.display = 'none';
-      return;
-    }
-    const runtimeInfo = await window.electronAPI.getRuntimeInfo?.().catch(() => ({
-      isPackaged: false,
-      isDev: false,
-      version: 'unknown',
-    }));
-    animationEditor.runtimeInfo = runtimeInfo || { isPackaged: false, isDev: false, version: 'unknown' };
-    if (animationEditorRuntime) {
-      animationEditorRuntime.textContent = `运行时: version=${animationEditor.runtimeInfo.version} | isDev=${animationEditor.runtimeInfo.isDev} | isPackaged=${animationEditor.runtimeInfo.isPackaged}`;
-    }
-    if (animationEditor.runtimeInfo.isPackaged) {
-      debugToolsSection.style.display = 'none';
-      return;
-    }
-    debugToolsSection.style.display = '';
-    await refreshAnimationEditor(true);
-    if (!animationEditor.previewRafId) {
-      animationEditor.previewRafId = requestAnimationFrame(drawAnimationPreview);
-    }
-  };
-
-  debugOpenDevtoolsBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      await window.electronAPI.openDevTools?.();
-      if (debugCharacterStatus) debugCharacterStatus.textContent = '已请求打开调试控制台';
-    } catch (err) {
-      if (debugCharacterStatus) debugCharacterStatus.textContent = `打开调试控制台失败: ${err.message}`;
-    }
-  });
-
-  debugCharacterTypeBtn?.addEventListener('click', () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const info = window.__debugCatCharacterInfo?.() || {
-        type: window.__debugCatCharacterType?.() || 'UnknownCharacter',
-        skinId: null,
-        currentSkin: null,
-        overlayState: null,
-        overlaySuppressMs: 0,
-      };
-      if (debugCharacterStatus) {
-        debugCharacterStatus.textContent = `当前角色实例: ${info.type} | skinId: ${info.skinId || '-'} | currentSkin: ${info.currentSkin || '-'} | overlay: ${info.overlayState || '-'} | suppress: ${info.overlaySuppressMs}ms`;
-      }
-      refreshAnimationEditor();
-    } catch (err) {
-      if (debugCharacterStatus) debugCharacterStatus.textContent = `检查角色实例失败: ${err.message}`;
-    }
-  });
-
-  debugForceDrowsyBtn?.addEventListener('click', () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      window.__debugForceCatDrowsy?.();
-      if (debugCharacterStatus) debugCharacterStatus.textContent = '已触发犯困测试，请观察猫咪和控制台日志';
-      setTimeout(() => { refreshAnimationEditor(); }, 80);
-    } catch (err) {
-      if (debugCharacterStatus) debugCharacterStatus.textContent = `触发犯困失败: ${err.message}`;
-    }
-  });
-
-  animationEditorAssetSelect?.addEventListener('change', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    animationEditor.selectedAssetId = animationEditorAssetSelect.value;
-    animationEditor.lastConfigAssetId = '';
-    await refreshAnimationEditor(true);
-  });
-
-  animationEditorStateSelect?.addEventListener('change', () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    animationEditor.selectedStateName = animationEditorStateSelect.value;
-    animationEditor.previewFrame = 0;
-    animationEditor.previewFrameTime = 0;
-    animationEditor.previewLastTs = 0;
-  });
-
-  animationEditorOpenSheetBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    const asset = getSelectedAnimationAsset();
-    const target = fileUrlToPath(asset?.sheetUrl || asset?.revealPath || '');
-    if (!target) return;
-    await window.electronAPI.openFilePath?.(target);
-  });
-
-  animationEditorOpenConfigBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    const asset = getSelectedAnimationAsset();
-    const target = fileUrlToPath(asset?.configUrl || asset?.revealPath || '');
-    if (!target) return;
-    await window.electronAPI.openFilePath?.(target);
-  });
-
-  animationEditorReloadBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      await activeCharacter?.reloadAssets?.();
-      await refreshAnimationEditor(true);
-      if (animationEditorStatus) animationEditorStatus.textContent = '动画资源已重载';
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `重载失败: ${err.message}`;
-    }
-  });
-
-  animationEditorSaveConfigBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    const asset = getSelectedAnimationAsset();
-    if (!asset?.configUrl || !animationEditorConfig) return;
-    try {
-      const parsed = JSON.parse(animationEditorConfig.value);
-      await window.electronAPI.saveFile?.(fileUrlToPath(asset.configUrl), JSON.stringify(parsed, null, 2));
-      await activeCharacter?.reloadAssets?.();
-      animationEditor.lastConfigAssetId = '';
-      await refreshAnimationEditor(true);
-      if (animationEditorStatus) animationEditorStatus.textContent = '配置已保存并重载';
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `保存失败: ${err.message}`;
-    }
-  });
-
   // Load settings on panel open
   // Use MutationObserver to detect when settings panel becomes visible
   const settingsContainer = document.getElementById('settings-container');
@@ -2063,20 +1713,12 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
       for (const m of mutations) {
         if (m.attributeName === 'class' && !settingsContainer.classList.contains('hidden')) {
           loadSettings();
-          if (ENABLE_DEV_DEBUG_TOOLS) initDebugTools();
           break;
         }
       }
     });
     observer.observe(settingsContainer, { attributes: true, attributeFilter: ['class'] });
   }
-
-  setInterval(() => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    if (!settingsContainer || settingsContainer.classList.contains('hidden')) return;
-    if (debugToolsSection?.style.display === 'none') return;
-    refreshAnimationEditor();
-  }, 500);
 
 }
 
@@ -2396,15 +2038,16 @@ function setupCharacterSelect(canvas) {
   renderGrid();
 
   async function switchCharacter(preset) {
-    activeCharacter.destroy();
-    try {
-      activeCharacter = await createCharacter(canvas, preset.id);
-      activeCharacter.start();
-    } catch (e) {
-      console.warn('switchCharacter failed, falling back:', e);
+    // 确保 activeCharacter 是 SpriteCharacter（非 SpriteSheetCharacter）
+    if (activeCharacter instanceof SpriteSheetCharacter) {
+      activeCharacter.destroy();
       activeCharacter = new SpriteCharacter(canvas);
       await activeCharacter.load();
-      activeCharacter.loadSkin(preset.id);
+      // 恢复之前的颜色和乐器状态
+      const prevColor = await window.electronAPI.getStore('characterColor') || 'bongo-classic';
+      const prevInstr = await window.electronAPI.getStore('characterInstrument') || 'bongo-classic';
+      activeCharacter.setColor(prevColor);
+      activeCharacter.setInstrument(prevInstr);
       activeCharacter.start();
     }
 

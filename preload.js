@@ -13,8 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dragWindow: (dx, dy) => ipcRenderer.send('window-drag', { dx, dy }),
   setIgnoreMouse: (ignore) => ipcRenderer.send('set-ignore-mouse', ignore),
   moveToDisplay: (screenX, screenY) => ipcRenderer.send('move-to-display', { screenX, screenY }),
-  openDevTools: () => ipcRenderer.invoke('open-devtools'),
-  getRuntimeInfo: () => ipcRenderer.invoke('get-runtime-info'),
 
   // Events from main process
   onGlobalKeydown: (callback) => {
