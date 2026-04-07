@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChatCat 桌面猫咪</title>
+  <title></title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-pillar-c.css">
   <link rel="stylesheet" href="styles-gacha.css">
@@ -112,6 +112,19 @@
             </select>
           </div>
           <div class="setting-section-title">记忆管理</div>
+          <div class="memory-add-row">
+            <input type="text" id="memory-add-input" class="memory-add-input" placeholder="输入要记住的内容..." maxlength="200">
+            <select id="memory-add-category" class="memory-add-category">
+              <option value="">自动分类</option>
+              <option value="user_info">👤 个人信息</option>
+              <option value="preference">⭐ 偏好习惯</option>
+              <option value="instruction">📌 指令规则</option>
+              <option value="fact">📝 事实知识</option>
+              <option value="relationship">💬 关系互动</option>
+            </select>
+            <button id="memory-add-btn" class="memory-add-btn">+ 添加</button>
+          </div>
+          <div class="memory-hint">💡 也可以在聊天中对猫咪说"记住..."来添加记忆</div>
           <div id="memory-list" class="memory-list">
             <div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>
           </div>
@@ -186,13 +199,11 @@
         <div id="tab-animation-manager-main" class="tab-content active">
           <div id="debug-tools-section">
             <div class="setting-section-title">开发调试</div>
-            <div class="animation-manager-card setting-group">
-              <div class="animation-manager-card-title">运行调试</div>
-              <div class="animation-manager-card-help">用于检查当前角色实例、直接打开控制台，或手动触发一次犯困动画。</div>
-              <div class="animation-manager-btn-grid">
-                <button id="debug-open-devtools-btn" class="chat-tool-btn animation-manager-btn animation-manager-btn-info">打开调试控制台</button>
-                <button id="debug-character-type-btn" class="chat-tool-btn animation-manager-btn animation-manager-btn-warn">检查角色实例</button>
-                <button id="debug-force-drowsy-btn" class="chat-tool-btn animation-manager-btn animation-manager-btn-accent">强制犯困测试</button>
+            <div class="setting-group">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <button id="debug-open-devtools-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(79,172,254,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">打开调试控制台</button>
+                <button id="debug-character-type-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(245,166,35,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">检查角色实例</button>
+                <button id="debug-force-drowsy-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(255,126,103,0.2);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">强制犯困测试</button>
               </div>
               <div id="debug-character-status" style="margin-top:8px;font-size:11px;color:#888;">未检查</div>
             </div>
@@ -200,45 +211,24 @@
               <div id="animation-editor-runtime" style="font-size:11px;color:#888;margin-bottom:8px;">运行时: 读取中...</div>
               <div id="animation-editor-current-state" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;white-space:pre-wrap;">当前状态机: 读取中...</div>
             </div>
-            <div class="animation-manager-card setting-group">
-              <label>动画包</label>
+            <div class="setting-group">
+              <label>动画资源</label>
               <select id="animation-editor-asset-select"></select>
-              <div class="animation-manager-subtitle">查看运行产物</div>
-              <div class="animation-manager-subhelp">这里只负责查看当前运行时真正使用的 `sheet.png` / `sheet.json`，以及重载资源。</div>
-              <div class="animation-manager-btn-grid">
-                <button id="animation-editor-open-sheet-btn" class="chat-tool-btn animation-manager-btn">打开图片位置</button>
-                <button id="animation-editor-open-config-btn" class="chat-tool-btn animation-manager-btn">打开配置位置</button>
-                <button id="animation-editor-reload-btn" class="chat-tool-btn animation-manager-btn">重载动画资源</button>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <button id="animation-editor-open-sheet-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开图片位置</button>
+                <button id="animation-editor-open-config-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开配置位置</button>
+                <button id="animation-editor-reload-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">重载动画资源</button>
               </div>
-              <div id="animation-editor-workflow-hint" style="margin-top:8px;font-size:11px;color:#888;">当前动画包未接入按状态工作流。</div>
             </div>
             <div class="setting-group">
-              <label>当前动画</label>
+              <label>动画预览</label>
               <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                 <div style="display:flex;flex-direction:column;gap:8px;">
-                  <canvas id="animation-editor-preview" width="180" height="180" style="width:180px;height:180px;border:2px solid #222;border-radius:12px;background:#111;"></canvas>
+                  <canvas id="animation-editor-preview" width="180" height="180" style="width:180px;height:180px;border:2px solid #222;border-radius:12px;background:#faf9f7;"></canvas>
                   <select id="animation-editor-state-select"></select>
-                  <div id="animation-editor-state-meta" style="font-size:11px;color:#ddd;padding:8px;border:1px solid rgba(255,255,255,0.18);border-radius:8px;background:rgba(255,255,255,0.06);white-space:pre-wrap;">当前动画信息</div>
                 </div>
                 <div style="flex:1;min-width:180px;">
-                  <div class="animation-manager-subtitle">当前动画工作流</div>
-                  <div class="animation-manager-subhelp">你当前选中的就是一个独立动画单元。参考图、逐帧图、导入、导出、烘焙都只作用于它。</div>
-                  <div class="animation-manager-btn-grid">
-                    <button id="animation-editor-open-source-btn" class="chat-tool-btn animation-manager-btn">打开动画目录</button>
-                    <button id="animation-editor-open-frames-btn" class="chat-tool-btn animation-manager-btn">打开逐帧目录</button>
-                    <button id="animation-editor-open-reference-btn" class="chat-tool-btn animation-manager-btn">打开参考底图</button>
-                  </div>
-                  <div class="animation-manager-btn-grid" style="margin-top:8px;">
-                    <button id="animation-editor-export-reference-btn" class="chat-tool-btn animation-manager-btn animation-manager-btn-warn">导出参考底图</button>
-                    <button id="animation-editor-export-frames-btn" class="chat-tool-btn animation-manager-btn">导出当前动画帧</button>
-                    <button id="animation-editor-import-frames-btn" class="chat-tool-btn animation-manager-btn">导入当前动画帧</button>
-                    <button id="animation-editor-bake-btn" class="chat-tool-btn animation-manager-btn animation-manager-btn-info">烘焙当前动画</button>
-                  </div>
-                  <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:#666;">
-                    <input id="animation-editor-export-black-bg" type="checkbox">
-                    导出黑底预览帧（输出到 `frames-black/`，不影响源图）
-                  </label>
-                  <div id="animation-editor-state-list" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;min-height:120px;white-space:pre-wrap;margin-top:8px;">状态列表</div>
+                  <div id="animation-editor-state-list" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;min-height:120px;white-space:pre-wrap;">状态列表</div>
                 </div>
               </div>
             </div>
@@ -373,8 +363,10 @@
           <button class="panel-tab" data-tab="fun-status"><img src="icons/tab-status.png" class="cat-icon" alt=""> 状态</button>
           <button class="panel-tab" data-tab="fun-shop"><img src="icons/tab-shop.png" class="cat-icon" alt=""> 商店</button>
           <button class="panel-tab" data-tab="fun-owned"><img src="icons/tab-items.png" class="cat-icon" alt=""> 物品</button>
+          <!-- [暂时屏蔽] 扭蛋和饰品页面
           <button class="panel-tab" data-tab="fun-gacha"><img src="icons/tab-gacha.png" class="cat-icon" alt=""> 扭蛋</button>
           <button class="panel-tab" data-tab="fun-accessories"><img src="icons/tab-accessory.png" class="cat-icon" alt=""> 饰品</button>
+          -->
           <button class="panel-tab" data-tab="fun-connection"><img src="icons/tab-connection.png" class="cat-icon" alt=""> 联机</button>
           <button class="panel-tab" data-tab="fun-leaderboard"><img src="icons/tab-leaderboard.png" class="cat-icon" alt=""> 排行</button>
         </div>
@@ -414,7 +406,6 @@
         </div>
         <!-- Character Tab -->
         <div id="tab-fun-character" class="tab-content">
-          <input type="text" id="character-search" class="character-search" placeholder="搜索角色...">
           <div id="character-tabs" class="character-tabs"></div>
           <div class="character-grid-container">
             <div id="character-grid" class="character-grid"></div>
@@ -520,14 +511,14 @@
           </div>
           <div id="base-owned-list" class="base-owned-list"></div>
         </div>
-        <!-- Gacha Tab -->
+        <!-- [暂时屏蔽] 扭蛋和饰品页面
         <div id="tab-fun-gacha" class="tab-content">
           <div id="gacha-panel"></div>
         </div>
-        <!-- Accessories Tab -->
         <div id="tab-fun-accessories" class="tab-content">
           <div id="accessory-panel"></div>
         </div>
+        -->
         <!-- Connection Tab -->
         <div id="tab-fun-connection" class="tab-content"></div>
         <!-- Leaderboard Tab -->

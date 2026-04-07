@@ -3,63 +3,57 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
-CROP_Y = 320
-CROP_H = 530
-SPRITE_W = 800
-SPRITE_H = 900
-FRAME_OFFSETS = [
-    (0, 0),
-    (0, 6),
-    (-2, 12),
-    (0, 7),
-]
+def draw_cat(draw: ImageDraw.ImageDraw, x0: int, y0: int, size: int, frame_idx: int) -> None:
+    cx = x0 + size // 2
+    cy = y0 + size // 2 + 12
+    nod_offsets = [0, 10, 20, 8]
+    eye_levels = [0, 1, 2, 1]
+    nod = nod_offsets[min(frame_idx, len(nod_offsets) - 1)]
+    eye = eye_levels[min(frame_idx, len(eye_levels) - 1)]
 
+    head_y = cy - 30 + nod
+    body_y = cy + 34 + nod // 2
 
-def build_frame(base_crop: Image.Image, frame_idx: int) -> Image.Image:
-    frame = Image.new("RGBA", base_crop.size, (0, 0, 0, 0))
-    offset_x, offset_y = FRAME_OFFSETS[min(frame_idx, len(FRAME_OFFSETS) - 1)]
-    frame.alpha_composite(base_crop, (offset_x, offset_y))
-    return frame
+    draw.ellipse((cx - 62, body_y - 48, cx + 62, body_y + 40), fill=(244, 200, 154, 255), outline=(34, 34, 34, 255), width=4)
+    draw.ellipse((cx - 78, head_y - 64, cx + 78, head_y + 48), fill=(244, 200, 154, 255), outline=(34, 34, 34, 255), width=4)
+    draw.polygon([(cx - 54, head_y - 24), (cx - 26, head_y - 88), (cx - 4, head_y - 28)], fill=(244, 200, 154, 255), outline=(34, 34, 34, 255))
+    draw.polygon([(cx + 54, head_y - 24), (cx + 26, head_y - 88), (cx + 4, head_y - 28)], fill=(244, 200, 154, 255), outline=(34, 34, 34, 255))
 
+    if eye == 0:
+        draw.ellipse((cx - 26, head_y - 10, cx - 14, head_y + 2), fill=(34, 34, 34, 255))
+        draw.ellipse((cx + 14, head_y - 10, cx + 26, head_y + 2), fill=(34, 34, 34, 255))
+    elif eye == 1:
+        draw.line((cx - 28, head_y - 4, cx - 14, head_y - 2), fill=(34, 34, 34, 255), width=4)
+        draw.line((cx + 14, head_y - 2, cx + 28, head_y - 4), fill=(34, 34, 34, 255), width=4)
+    else:
+        draw.line((cx - 28, head_y - 1, cx - 12, head_y - 1), fill=(34, 34, 34, 255), width=4)
+        draw.line((cx + 12, head_y - 1, cx + 28, head_y - 1), fill=(34, 34, 34, 255), width=4)
 
-def build_classic_cat_base(sprite_dir: Path) -> Image.Image:
-    full = Image.new("RGBA", (SPRITE_W, SPRITE_H), (0, 0, 0, 0))
-    for name in ("cat", "mouth", "paw-left", "paw-right"):
-        sprite = Image.open(sprite_dir / f"{name}.png").convert("RGBA")
-        frame = sprite.crop((0, 0, SPRITE_W, SPRITE_H))
-        full.alpha_composite(frame, (0, 0))
-    return full.crop((0, CROP_Y, SPRITE_W, CROP_Y + CROP_H))
+    draw.polygon([(cx, head_y + 10), (cx - 5, head_y + 16), (cx + 5, head_y + 16)], fill=(232, 153, 141, 255))
+    draw.arc((cx - 12, head_y + 12, cx + 12, head_y + 28), start=0, end=180, fill=(34, 34, 34, 255), width=3)
 
 
 def main() -> None:
     sheet_dir = Path("src/pet/cat-overlays/default")
-    sprite_path = Path("src/pet/sprites/cat.png")
-    sprite_dir = Path("src/pet/sprites")
     meta = json.loads((sheet_dir / "sheet.json").read_text(encoding="utf-8"))
     frame_width = int(meta["frameWidth"])
     frame_height = int(meta["frameHeight"])
     columns = int(meta["columns"])
     rows = max(state["row"] for state in meta["states"].values()) + 1
 
-    if frame_width != SPRITE_W or frame_height != CROP_H:
-        raise ValueError(f"Expected overlay frame to use {SPRITE_W}x{CROP_H}, got {frame_width}x{frame_height}")
-
-    if not sprite_path.exists():
-        raise FileNotFoundError(sprite_path)
-
-    base_crop = build_classic_cat_base(sprite_dir)
     img = Image.new("RGBA", (frame_width * columns, frame_height * rows), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
 
     for state_name, state in meta["states"].items():
-        row = int(state["row"])
-        for frame_idx in range(int(state["frames"])):
-            x0 = frame_idx * frame_width
-            y0 = row * frame_height
-            frame = build_frame(base_crop, frame_idx)
-            img.alpha_composite(frame, (x0, y0))
+      row = int(state["row"])
+      for frame_idx in range(int(state["frames"])):
+          x0 = frame_idx * frame_width
+          y0 = row * frame_height
+          draw_cat(draw, x0, y0, frame_width, frame_idx)
+          draw.text((x0 + 10, y0 + 10), f"{state_name} {frame_idx}", fill=(80, 80, 80, 180))
 
     output = sheet_dir / "sheet.png"
     img.save(output)

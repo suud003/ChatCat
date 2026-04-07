@@ -40,7 +40,9 @@ const store = new Store({
     apiKey: '',
     modelName: 'gpt-3.5-turbo',
     opacity: 1.0,
-    character: 'bongo-classic',
+    character: 'hachiware',
+    characterColor: 'bongo-classic',
+    characterInstrument: 'bongo-classic',
     windowPosition: null,
     chatHistory: [],
     recorderOutputDir: '',
@@ -140,6 +142,10 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
+  // 平台标识
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
@@ -151,6 +157,12 @@ function createWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    thickFrame: false,
+    title: '',
+    roundedCorners: false,
+    autoHideMenuBar: true,
+    backgroundMaterial: 'none',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -158,10 +170,53 @@ function createWindow() {
     }
   });
 
+  // 强制完全透明背景 + 移除菜单栏
+  mainWindow.setBackgroundColor('#00000000');
+  mainWindow.setMenuBarVisibility(false);
+  if (isWin) mainWindow.removeMenu();
+
   // Click-through on transparent areas, forward mouse events so hover still works
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // 透明背景防护（跨平台）
+  // 原理：transparent + frame:false 窗口在焦点/穿透切换时，系统可能短暂重绘非客户区
+  //   Windows: DWM 重绘灰色边框；macOS: 渲染顶部标题栏残影
+  // 解决：每次状态切换后立即重设 backgroundColor 刷新窗口透明状态
+  {
+    const ensureTransparent = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.setBackgroundColor('#00000000');
+    };
+    mainWindow.on('blur', ensureTransparent);
+    mainWindow.on('focus', ensureTransparent);
+    // 窗口移动/大小变化后也确保透明
+    mainWindow.on('moved', ensureTransparent);
+    mainWindow.on('resize', ensureTransparent);
+  }
+
+  // 窗口就绪后显示
+  mainWindow.once('ready-to-show', () => {
+    if (isWin) {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
+    if (isMac) {
+      mainWindow.showInactive();
+    } else {
+      mainWindow.show();
+    }
+    // show 之后确认透明背景（系统在 show 时可能重置窗口装饰）
+    mainWindow.setBackgroundColor('#00000000');
+    if (isWin) {
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver');
+          mainWindow.setBackgroundColor('#00000000');
+        }
+      }, 100);
+    }
+  });
 
   mainWindow.setOpacity(store.get('opacity'));
 
@@ -340,6 +395,14 @@ function createDefaultIcon() {
 
 // IPC handlers
 ipcMain.handle('get-store', (_, key) => store.get(key));
+  // 批量获取 store 值，减少 IPC 往返次数
+  ipcMain.handle('get-store-batch', (_, keys) => {
+    const result = {};
+    for (const key of keys) {
+      result[key] = store.get(key);
+    }
+    return result;
+  });
 ipcMain.handle('set-store', (_, key, value) => store.set(key, value));
 
 // Phase 3: TriggerBus IPC handlers
@@ -465,6 +528,10 @@ ipcMain.on('window-drag', (_, { dx, dy }) => {
 // Handle mouse events passthrough toggle
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
   mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  // 穿透切换后立即重设透明背景，防止系统重绘非客户区装饰
+  // （Windows: DWM 灰框；macOS: 顶部标题栏残影）
+  // 注意：不要在这里调用 setAlwaysOnTop，它会触发 Z-order 变化导致桌面内容闪烁
+  mainWindow.setBackgroundColor('#00000000');
 });
 
 // Multi-monitor: move window to the display containing the given screen point
@@ -643,86 +710,11 @@ ipcMain.handle('open-file-path', (_, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
-ipcMain.handle('open-path', async (_, targetPath) => {
-  try {
-    if (!targetPath) throw new Error('缺少路径');
-    if (!fs.existsSync(targetPath)) throw new Error(`路径不存在: ${targetPath}`);
-    const stat = fs.statSync(targetPath);
-    if (stat.isDirectory()) {
-      const errorMessage = await shell.openPath(targetPath);
-      if (errorMessage) throw new Error(errorMessage);
-      return { success: true };
-    }
-    shell.showItemInFolder(targetPath);
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
 ipcMain.handle('save-file', async (_, filePath, content) => {
   const fs = require('fs');
   try {
     fs.writeFileSync(filePath, content, 'utf-8');
     return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('animation-prepare-workflow', async (_, assetId, stateName) => {
-  try {
-    const { ensureWorkflowDirs, resolveAnimationWorkflow } = require('./src/pet/animation-workflow');
-    const workflow = ensureWorkflowDirs(resolveAnimationWorkflow(assetId, stateName));
-    return { success: true, workflow };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('animation-export-reference', async (_, assetId, stateName) => {
-  try {
-    const { exportClassicCatReference, resolveAnimationWorkflow } = require('./src/pet/animation-workflow');
-    const result = await exportClassicCatReference(resolveAnimationWorkflow(assetId, stateName));
-    return { success: true, ...result };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('animation-bake-sheet', async (_, assetId, stateName) => {
-  try {
-    const { bakeWorkflowSheet, resolveAnimationWorkflow } = require('./src/pet/animation-workflow');
-    const result = await bakeWorkflowSheet(resolveAnimationWorkflow(assetId, stateName));
-    return { success: true, ...result };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('animation-export-state-frames', async (_, assetId, stateName, options) => {
-  try {
-    const { exportStateFrames, resolveAnimationWorkflow } = require('./src/pet/animation-workflow');
-    const result = await exportStateFrames(resolveAnimationWorkflow(assetId, stateName), options || {});
-    return { success: true, ...result };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('animation-import-state-frames', async (_, assetId, stateName) => {
-  try {
-    const { importStateFrames, resolveAnimationWorkflow } = require('./src/pet/animation-workflow');
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Image Frames', extensions: ['png', 'webp'] }],
-      title: `选择 ${stateName || '动画'} 的逐帧图片`,
-    });
-    if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, cancelled: true, error: '已取消导入' };
-    }
-    const imported = await importStateFrames(resolveAnimationWorkflow(assetId, stateName), result.filePaths);
-    return { success: true, ...imported };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -1190,7 +1182,21 @@ ipcMain.on('skills-manager-close', (event) => {
   if (win && !win.isDestroyed()) win.hide();
 });
 
+// Windows: 移除默认应用菜单，防止菜单栏导致的边框
+Menu.setApplicationMenu(null);
+
+// Windows: 禁用窗口遮挡检测，避免 DWM 对透明窗口的干预
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+}
+
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    // 作为桌宠运行：不占用 Dock 和系统顶部菜单栏，但保留托盘与悬浮窗
+    app.setActivationPolicy('accessory');
+    app.dock?.hide();
+  }
+
   // Allow CDN scripts for Live2D
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({

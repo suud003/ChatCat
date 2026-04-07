@@ -239,12 +239,27 @@ let typeRecorder = null;
 async function init() {
   const canvas = document.getElementById('pet-canvas');
 
-  // Restore saved skin
-  const savedCharId = await window.electronAPI.getStore('character');
-  const charId = savedCharId || 'bongo-classic';
+  // ========== Phase 1: 并行初始化互不依赖的模块 ==========
+  const affection = new AffectionSystem();
+  const aiService = new AIService();
 
-  // Create character via factory
+  const [savedCharId, , , savedPersonality, savedColorId, savedInstrumentId] = await Promise.all([
+    window.electronAPI.getStore('character'),           // 角色ID（兼容）
+    affection.init(),                                    // 好感度系统
+    aiService.loadConfig(),                              // AI配置
+    window.electronAPI.getStore('catPersonality'),        // 性格
+    window.electronAPI.getStore('characterColor'),        // 独立颜色
+    window.electronAPI.getStore('characterInstrument'),   // 独立乐器
+  ]);
+
+  // 创建角色（依赖 savedCharId）
+  const charId = savedCharId || 'bongo-classic';
   activeCharacter = await createCharacter(canvas, charId);
+  // 应用独立的颜色和乐器状态
+  if (activeCharacter.setColor) {
+    activeCharacter.setColor(savedColorId || charId);
+    activeCharacter.setInstrument(savedInstrumentId || charId);
+  }
   activeCharacter.start();
   window.__debugForceCatDrowsy = () => {
     console.log('[Renderer] __debugForceCatDrowsy');
@@ -269,9 +284,6 @@ async function init() {
     return info;
   };
 
-  // Affection / nurturing system
-  const affection = new AffectionSystem();
-  await affection.init();
   affectionSystem = affection;
 
   // V2.1: Persist mood changes to store (for Main-side providers)
@@ -301,28 +313,28 @@ async function init() {
   };
   const inputTracker = new InputTracker(characterProxy);
 
-  // AI service
-  // AI service (Phase 4: TriggerBus-only, no direct AI HTTP)
-  const aiService = new AIService();
-  await aiService.loadConfig();
-
   // Phase 3: TriggerBus (Renderer-side, communicates with Main TriggerBus via IPC)
   const triggerBusRenderer = new TriggerBusRenderer();
   triggerBusRenderer.init();
   aiService.setTriggerBus(triggerBusRenderer);
 
-  // V1.1: Memory Manager (Phase 4: uses TriggerBus via Main process)
+  // ========== Phase 2: 并行初始化依赖 Phase 1 的模块 ==========
   const memoryManager = new MemoryManager();
   memoryManager.setTriggerBus(triggerBusRenderer);
-  await memoryManager.init();
+
+  const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
+
+  await Promise.all([
+    memoryManager.init(),                                // 记忆管理器
+    chatUI.loadHistory(),                                // 聊天历史
+  ]);
+
   aiService.setMemoryManager(memoryManager);
 
-  // V1.1: Load personality (saved for Renderer-side usage; chat prompt now built by Main PromptRegistry)
-  const savedPersonality = await window.electronAPI.getStore('catPersonality') || 'lively';
-
-  // Chat UI (simplified inline chat)
-  const chatUI = new ChatUI(aiService, characterProxy, API_PRESETS);
-  await chatUI.loadHistory();
+  // V7: 记忆变化时自动刷新设置面板中的记忆列表
+  aiService.onMemoryChanged = () => {
+    if (typeof _renderMemoryList === 'function') _renderMemoryList();
+  };
 
   // V1.1: Sentiment callback — trigger cat expression
   chatUI.onSentiment = (sentiment) => {
@@ -369,7 +381,26 @@ async function init() {
   // V1.5: Skill Router — intercepts chat commands/keywords before AI
   const skillRouter = new SkillRouter();
   skillRouter.setTriggerBus(triggerBusRenderer);
-  await skillRouter.init();
+
+  // V1.1: Surprise Event System
+  const surpriseEvents = new SurpriseEventSystem(affection, showCatBubble);
+
+  // V1.2: Proactive Engine (replaces ProactiveChat)
+  const proactiveEngine = new ProactiveEngine();
+
+  // ========== Phase 3: 并行初始化 skillRouter / surpriseEvents / proactiveEngine ==========
+  await Promise.all([
+    skillRouter.init(),
+    surpriseEvents.init(),
+    proactiveEngine.init({
+      affectionSystem: affection,
+      showBubbleFn: showCatBubble,
+      pomodoroTimer: pomodoro,
+      todoList: todoList,
+      aiService: aiService
+    }),
+  ]);
+
   chatUI.setSkillRouter(skillRouter);
 
   // Listen for todo updates from main process (e.g. after /todo skill)
@@ -377,20 +408,7 @@ async function init() {
     todoList.reload();
   });
 
-  // V1.1: Surprise Event System
-  const surpriseEvents = new SurpriseEventSystem(affection, showCatBubble);
-  await surpriseEvents.init();
-
-  // V1.2: Proactive Engine (replaces ProactiveChat)
-  const proactiveEngine = new ProactiveEngine();
-  await proactiveEngine.init({
-    affectionSystem: affection,
-    showBubbleFn: showCatBubble,
-    pomodoroTimer: pomodoro,
-    todoList: todoList,
-    aiService: aiService
-  });
-  proactiveEngine.setPersonality(savedPersonality);
+  proactiveEngine.setPersonality(savedPersonality || 'lively');
   proactiveEngine.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setTriggerBus(triggerBusRenderer);
   proactiveEngine.notificationMgr.setCharacter(activeCharacter);
@@ -671,35 +689,21 @@ async function init() {
   // V1.2: Skill Scheduler (Phase 3: scheduling delegated to Main ScheduledTriggerRegistry)
   const skillScheduler = new SkillScheduler();
   skillScheduler.setTriggerBus(triggerBusRenderer);
-  await skillScheduler.init(proactiveEngine);
+
+  // V1.2: User Profiler + Onboarding
+  const userProfiler = new UserProfiler();
+
+  // 并行初始化 skillScheduler / userProfiler
+  await Promise.all([
+    skillScheduler.init(proactiveEngine),
+    userProfiler.init(proactiveEngine, chatUI),
+  ]);
 
   // Skill status listener — show cat thinking animation
   skillScheduler.onStatusChange = (info) => {
     if (info.status === 'running') {
       activeCharacter.triggerHappy?.(); // visual cue
     }
-  };
-
-  // V1.2: User Profiler + Onboarding
-  const userProfiler = new UserProfiler();
-  await userProfiler.init(proactiveEngine, chatUI);
-
-  pomodoro.onStart = ({ phase }) => {
-    console.warn('[Renderer] pomodoro.onStart', { phase });
-    if (phase === 'work') {
-      pomodoroOverlayAnimation.show({ restart: true }).catch((err) => {
-        console.warn('[PomodoroOverlayAnimation] show failed:', err.message);
-      });
-      proactiveEngine.onPomodoroStart();
-      return;
-    }
-    pomodoroOverlayAnimation.hide();
-  };
-
-  pomodoro.onStop = () => {
-    console.warn('[Renderer] pomodoro.onStop');
-    pomodoroOverlayAnimation.hide();
-    proactiveEngine.onPomodoroStop();
   };
 
   // Wire pomodoro completion to both character and proactive engine
@@ -740,20 +744,27 @@ async function init() {
 
   // V1.3: Pet Base System (shop & owned in fun panel tabs)
   const petBase = new PetBaseSystem();
-  await petBase.init(affection);
+  // V3: Gacha System (capsule machine in fun panel)
+  // [暂时屏蔽] 扭蛋和饰品系统
+  // const gachaSystem = new GachaSystem();
+
+  // ========== Phase 4: 并行初始化 petBase / gachaSystem ==========
+  await Promise.all([
+    petBase.init(affection),
+    // gachaSystem.init(affection),
+  ]);
+
   const petBaseUI = new PetBaseUI(petBase, affection);
   petBaseUI.render();
 
-  // V3: Gacha System (capsule machine in fun panel)
-  const gachaSystem = new GachaSystem();
-  await gachaSystem.init(affection);
-  const gachaUI = new GachaUI(gachaSystem, affection);
-  gachaUI.render();
+  // [暂时屏蔽] 扭蛋 UI
+  // const gachaUI = new GachaUI(gachaSystem, affection);
+  // gachaUI.render();
 
-  // V3: Gacha Accessory UI (equip/exchange in fun panel)
-  const gachaAccessoryUI = new GachaAccessoryUI(gachaSystem, affection);
-  gachaAccessoryUI.render();
-  gachaAccessoryUI.renderDecorations();
+  // [暂时屏蔽] 饰品 UI
+  // const gachaAccessoryUI = new GachaAccessoryUI(gachaSystem, affection);
+  // gachaAccessoryUI.render();
+  // gachaAccessoryUI.renderDecorations();
 
   // Pet Status UI — must come after petBase so prestige can use attemptPrestige
   setupPetStatusUI(affection, petBase);
@@ -886,6 +897,20 @@ async function init() {
       showCatBubble(`🐱 快捷键 ${msgs.join('、')} 注册失败，可能被系统占用。可点击工具栏 ⚡ 按钮使用~`, 8000);
     }
   });
+
+  // 清空 document.title 防止系统标题栏泄露
+  document.title = '';
+
+  // 拦截 Ctrl+A 全选，防止无框架窗口出现虚拟标题栏
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      const tag = e.target.tagName;
+      const editable = e.target.isContentEditable;
+      // 仅在输入框/可编辑区域内允许全选
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
+      e.preventDefault();
+    }
+  }, true);
 
   console.log('ChatCat Desktop Pet V1.4 initialized!');
 }
@@ -1311,18 +1336,8 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   const animationEditorOpenSheetBtn = document.getElementById('animation-editor-open-sheet-btn');
   const animationEditorOpenConfigBtn = document.getElementById('animation-editor-open-config-btn');
   const animationEditorReloadBtn = document.getElementById('animation-editor-reload-btn');
-  const animationEditorOpenSourceBtn = document.getElementById('animation-editor-open-source-btn');
-  const animationEditorOpenFramesBtn = document.getElementById('animation-editor-open-frames-btn');
-  const animationEditorOpenReferenceBtn = document.getElementById('animation-editor-open-reference-btn');
-  const animationEditorExportReferenceBtn = document.getElementById('animation-editor-export-reference-btn');
-  const animationEditorExportFramesBtn = document.getElementById('animation-editor-export-frames-btn');
-  const animationEditorImportFramesBtn = document.getElementById('animation-editor-import-frames-btn');
-  const animationEditorExportBlackBg = document.getElementById('animation-editor-export-black-bg');
-  const animationEditorBakeBtn = document.getElementById('animation-editor-bake-btn');
-  const animationEditorWorkflowHint = document.getElementById('animation-editor-workflow-hint');
   const animationEditorPreview = document.getElementById('animation-editor-preview');
   const animationEditorStateSelect = document.getElementById('animation-editor-state-select');
-  const animationEditorStateMeta = document.getElementById('animation-editor-state-meta');
   const animationEditorStateList = document.getElementById('animation-editor-state-list');
   const animationEditorConfig = document.getElementById('animation-editor-config');
   const animationEditorSaveConfigBtn = document.getElementById('animation-editor-save-config-btn');
@@ -1393,66 +1408,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     return animationEditor.manifest?.assets?.find((asset) => asset.id === animationEditor.selectedAssetId) || null;
   };
 
-  const getSelectedAnimationState = () => {
-    const asset = getSelectedAnimationAsset();
-    if (!asset || asset.kind !== 'sheet' || !animationEditor.selectedStateName) return null;
-    const state = asset.states?.[animationEditor.selectedStateName];
-    if (!state) return null;
-    return {
-      asset,
-      stateName: animationEditor.selectedStateName,
-      state,
-      workflowId: asset.workflow?.id || '',
-      framePattern: asset.workflow?.framePattern || 'frame_001.png ~ frame_999.png',
-    };
-  };
-
-  const getSelectedAnimationWorkflow = () => {
-    const selected = getSelectedAnimationState();
-    if (!selected?.workflowId) return null;
-    return {
-      id: selected.workflowId,
-      stateName: selected.stateName,
-      framePattern: selected.framePattern,
-    };
-  };
-
-  const setAnimationWorkflowControlsEnabled = (enabled) => {
-    [
-      animationEditorOpenSourceBtn,
-      animationEditorOpenFramesBtn,
-      animationEditorOpenReferenceBtn,
-      animationEditorExportReferenceBtn,
-      animationEditorExportFramesBtn,
-      animationEditorImportFramesBtn,
-      animationEditorBakeBtn,
-    ].forEach((btn) => {
-      if (btn) btn.disabled = !enabled;
-    });
-  };
-
-  const prepareAnimationWorkflow = async () => {
-    const workflow = getSelectedAnimationWorkflow();
-    if (!workflow?.id) return null;
-    const result = await window.electronAPI.animationPrepareWorkflow?.(workflow.id, workflow.stateName);
-    if (!result?.success) {
-      throw new Error(result?.error || '初始化动画工作流失败');
-    }
-    return { ...workflow, ...(result.workflow || {}) };
-  };
-
-  const renderAnimationWorkflowSummary = () => {
-    if (!animationEditorWorkflowHint) return;
-    const workflow = getSelectedAnimationWorkflow();
-    if (!workflow?.id) {
-      animationEditorWorkflowHint.textContent = '当前动画未接入按状态工作流。';
-      setAnimationWorkflowControlsEnabled(false);
-      return;
-    }
-    animationEditorWorkflowHint.textContent = `当前动画：${workflow.stateName}。源图目录按状态隔离，逐帧命名 ${workflow.framePattern || 'frame_001.png ~ frame_999.png'}。建议流程：导出参考底图 -> 导入或编辑逐帧图 -> 烘焙当前动画。`;
-    setAnimationWorkflowControlsEnabled(true);
-  };
-
   const updateAnimationStateList = (asset) => {
     if (!animationEditorStateList) return;
     if (!asset) {
@@ -1467,36 +1422,12 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
         ...((asset.files || []).map((file) => `- ${file.name}`)),
       ];
       animationEditorStateList.textContent = lines.filter(Boolean).join('\n');
-      if (animationEditorStateMeta) animationEditorStateMeta.textContent = '当前资源不支持状态预览';
       return;
     }
-    const selected = getSelectedAnimationState();
-    if (animationEditorStateMeta) {
-      if (!selected) {
-        animationEditorStateMeta.textContent = '请选择一个动画状态';
-      } else {
-        animationEditorStateMeta.textContent = [
-          `state: ${selected.stateName}`,
-          `row: ${selected.state.row ?? 0}`,
-          `columns: ${selected.state.columns ?? selected.asset.meta?.columns ?? '-'}`,
-          `frames: ${selected.state.frames ?? '-'}`,
-          `frameDuration: ${selected.state.frameDuration ?? '-'}ms`,
-          `loop: ${selected.state.loop ? 'yes' : 'no'}`,
-          `next: ${selected.state.next || '-'}`,
-        ].join('\n');
-      }
-    }
-    const stateLines = Object.entries(asset.states || {}).map(([name, state]) => {
-      const marker = name === animationEditor.selectedStateName ? '>' : '-';
-      return `${marker} ${name}: row=${state.row}, columns=${state.columns ?? asset.meta?.columns ?? '-'}, frames=${state.frames}, duration=${state.frameDuration}ms, loop=${state.loop ? 'yes' : 'no'}${state.next ? `, next=${state.next}` : ''}`;
-    });
-    animationEditorStateList.textContent = [
-      `当前动画包: ${asset.label}`,
-      asset.description || '',
-      '',
-      '可用动画状态:',
-      ...stateLines,
-    ].filter(Boolean).join('\n');
+    const stateLines = Object.entries(asset.states || {}).map(([name, state]) =>
+      `${name}: row=${state.row}, frames=${state.frames}, duration=${state.frameDuration}ms, loop=${state.loop ? 'yes' : 'no'}${state.next ? `, next=${state.next}` : ''}`
+    );
+    animationEditorStateList.textContent = [asset.label, asset.description || '', '', ...stateLines].filter(Boolean).join('\n');
   };
 
   const updateAnimationConfigEditor = (asset, force = false) => {
@@ -1569,10 +1500,10 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     }
     const fw = Number(meta.frameWidth || animationEditorPreview.width);
     const fh = Number(meta.frameHeight || animationEditorPreview.height);
-    const cols = Math.max(1, Number(state.columns || meta.columns || 1));
+    const cols = Number(meta.columns || 1);
     const col = animationEditor.previewFrame % cols;
     const sx = col * fw;
-    const sy = (Number(state.row || 0) + Math.floor(animationEditor.previewFrame / cols)) * fh;
+    const sy = Number(state.row || 0) * fh;
     animationEditorCtx.drawImage(animationEditor.previewImage, sx, sy, fw, fh, 0, 0, animationEditorPreview.width, animationEditorPreview.height);
   };
 
@@ -1598,14 +1529,13 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
       animationEditorAssetSelect.value = animationEditor.selectedAssetId;
     }
     const asset = getSelectedAnimationAsset();
-    updateAnimationStateSelect(asset);
     updateAnimationStateList(asset);
-    renderAnimationWorkflowSummary();
+    updateAnimationStateSelect(asset);
     updateAnimationConfigEditor(asset, forceConfig);
     await loadAnimationPreviewImage(asset);
     if (animationEditorStatus) {
       animationEditorStatus.textContent = asset
-        ? `已加载: ${asset.label}${animationEditor.selectedStateName ? ` / ${animationEditor.selectedStateName}` : ''}`
+        ? `已加载: ${asset.label}`
         : '未找到动画资源';
     }
   };
@@ -1690,6 +1620,15 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     }
   }
 
+  // 记忆分类定义（与 memory-manager.js 保持同步）
+  const MEMORY_CATEGORIES = {
+    user_info: { label: '个人信息', icon: '👤' },
+    preference: { label: '偏好', icon: '⭐' },
+    instruction: { label: '指令', icon: '📌' },
+    fact: { label: '事实', icon: '📝' },
+    relationship: { label: '关系', icon: '💬' },
+  };
+
   function _renderMemoryList() {
     const listEl = document.getElementById('memory-list');
     if (!listEl) return;
@@ -1700,19 +1639,28 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     }
     const memories = mm.getAll();
     if (memories.length === 0) {
-      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆</div></div>';
+      listEl.innerHTML = '<div class="memory-empty"><img src="illustrations/empty-memory.png" class="ill-empty" alt=""><div>暂无记忆<br><span style="font-size:11px;color:#bbb;">对猫咪说"记住..."来添加记忆</span></div></div>';
       return;
     }
     listEl.innerHTML = '';
     for (const mem of memories) {
       const item = document.createElement('div');
       item.className = 'memory-item';
+      // 来源标记
+      const sourceIcon = document.createElement('span');
+      sourceIcon.className = 'memory-source';
+      sourceIcon.textContent = mem.source === 'user_explicit' ? '📌' : '🤖';
+      sourceIcon.title = mem.source === 'user_explicit' ? '用户主动添加' : 'AI 自动提取';
+      // 分类标签
+      const catInfo = MEMORY_CATEGORIES[mem.category] || { label: mem.category, icon: '📎' };
       const catBadge = document.createElement('span');
       catBadge.className = 'memory-category';
-      catBadge.textContent = mem.category;
+      catBadge.textContent = `${catInfo.icon} ${catInfo.label}`;
+      // 内容（兼容旧格式）
       const factEl = document.createElement('span');
       factEl.className = 'memory-fact';
-      factEl.textContent = mem.fact;
+      factEl.textContent = mem.content || mem.fact || '';
+      // 删除按钮
       const delBtn = document.createElement('button');
       delBtn.className = 'memory-delete';
       delBtn.textContent = '×';
@@ -1720,6 +1668,7 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
         mm.deleteMemory(mem.id);
         _renderMemoryList();
       });
+      item.appendChild(sourceIcon);
       item.appendChild(catBadge);
       item.appendChild(factEl);
       item.appendChild(delBtn);
@@ -1788,6 +1737,13 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     for (const t of ['info', 'care', 'efficiency', 'chat']) {
       const el = document.getElementById(`scene-${t}`);
       if (el) el.checked = enabledTypes.includes(t);
+    }
+
+    // V2 Pillar C: 恢复 consent toggle 状态
+    const consentToggle = document.getElementById('consent-toggle');
+    if (consentToggle) {
+      const isGranted = await window.electronAPI.consentCheck();
+      consentToggle.checked = isGranted;
     }
   }
 
@@ -1879,6 +1835,38 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     await window.electronAPI.setStore('proactiveConfig', proactiveConfig);
 
     if (chatUI._onSettingsSaved) chatUI._onSettingsSaved();
+
+    // 猫猫对话气泡反馈保存成功
+    const saveMsgs = [
+      '设置已保存喵~ ✅',
+      '保存成功！(=^・ω・^=)',
+      '收到！已经记好啦~ 📝',
+      '喵~设置更新完毕！✨',
+      '好的好的，都保存好了喵！🐾',
+    ];
+    const msg = saveMsgs[Math.floor(Math.random() * saveMsgs.length)];
+    showCatBubble(msg, 3000);
+  });
+
+  // Memory add (手动添加记忆)
+  document.getElementById('memory-add-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('memory-add-input');
+    const categorySelect = document.getElementById('memory-add-category');
+    const content = input?.value?.trim();
+    if (!content || !aiService._memoryManager) return;
+    const category = categorySelect?.value || null;
+    await aiService._memoryManager.addUserMemory(content, category);
+    if (input) input.value = '';
+    if (categorySelect) categorySelect.value = '';
+    _renderMemoryList();
+  });
+
+  // Memory add — 回车键提交
+  document.getElementById('memory-add-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('memory-add-btn')?.click();
+    }
   });
 
   // Memory clear
@@ -2058,14 +2046,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     animationEditor.previewFrame = 0;
     animationEditor.previewFrameTime = 0;
     animationEditor.previewLastTs = 0;
-    updateAnimationStateList(getSelectedAnimationAsset());
-    renderAnimationWorkflowSummary();
-    if (animationEditorStatus) {
-      const asset = getSelectedAnimationAsset();
-      animationEditorStatus.textContent = asset
-        ? `已切换到: ${asset.label} / ${animationEditor.selectedStateName || '-'}`
-        : '未找到动画资源';
-    }
   });
 
   animationEditorOpenSheetBtn?.addEventListener('click', async () => {
@@ -2082,111 +2062,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     const target = fileUrlToPath(asset?.configUrl || asset?.revealPath || '');
     if (!target) return;
     await window.electronAPI.openFilePath?.(target);
-  });
-
-  animationEditorOpenSourceBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = await prepareAnimationWorkflow();
-      if (!workflow?.sourceDir) return;
-      await window.electronAPI.openPath?.(workflow.sourceDir);
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `打开源目录失败: ${err.message}`;
-    }
-  });
-
-  animationEditorOpenFramesBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = await prepareAnimationWorkflow();
-      if (!workflow?.framesDir) return;
-      await window.electronAPI.openPath?.(workflow.framesDir);
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `打开 frames 失败: ${err.message}`;
-    }
-  });
-
-  animationEditorOpenReferenceBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = await prepareAnimationWorkflow();
-      if (!workflow?.referencePath) return;
-      const exportResult = await window.electronAPI.animationExportReference?.(workflow.id, workflow.stateName);
-      if (exportResult?.success === false) {
-        throw new Error(exportResult.error || '导出参考底图失败');
-      }
-      await window.electronAPI.openPath?.(workflow.referencePath);
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `打开参考底图失败: ${err.message}`;
-    }
-  });
-
-  animationEditorExportReferenceBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = getSelectedAnimationWorkflow();
-      if (!workflow?.id) return;
-      const result = await window.electronAPI.animationExportReference?.(workflow.id, workflow.stateName);
-      if (!result?.success) throw new Error(result?.error || '导出参考底图失败');
-      if (animationEditorStatus) animationEditorStatus.textContent = `参考底图已导出: ${workflow.stateName}/reference/base.png`;
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `导出参考底图失败: ${err.message}`;
-    }
-  });
-
-  animationEditorExportFramesBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = getSelectedAnimationWorkflow();
-      if (!workflow?.id) return;
-      const useBlackBackground = animationEditorExportBlackBg?.checked === true;
-      const result = await window.electronAPI.animationExportStateFrames?.(workflow.id, workflow.stateName, {
-        blackBackground: useBlackBackground,
-      });
-      if (!result?.success) throw new Error(result?.error || '导出当前动画帧失败');
-      if (animationEditorStatus) {
-        animationEditorStatus.textContent = useBlackBackground
-          ? `已导出 ${result.frames || 0} 帧到 ${workflow.stateName}/frames-black`
-          : `已导出 ${result.frames || 0} 帧到 ${workflow.stateName}/frames`;
-      }
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `导出当前动画帧失败: ${err.message}`;
-    }
-  });
-
-  animationEditorImportFramesBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = getSelectedAnimationWorkflow();
-      if (!workflow?.id) return;
-      const result = await window.electronAPI.animationImportStateFrames?.(workflow.id, workflow.stateName);
-      if (result?.cancelled) {
-        if (animationEditorStatus) animationEditorStatus.textContent = '已取消导入';
-        return;
-      }
-      if (!result?.success) throw new Error(result?.error || '导入当前动画帧失败');
-      if (animationEditorStatus) animationEditorStatus.textContent = `已导入 ${result.count || 0} 帧到 ${workflow.stateName}/frames`;
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `导入当前动画帧失败: ${err.message}`;
-    }
-  });
-
-  animationEditorBakeBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    try {
-      const workflow = getSelectedAnimationWorkflow();
-      if (!workflow?.id) return;
-      const result = await window.electronAPI.animationBakeSheet?.(workflow.id, workflow.stateName);
-      if (!result?.success) throw new Error(result?.error || '烘焙 spritesheet 失败');
-      animationEditor.previewImage = null;
-      animationEditor.selectedSheetUrl = '';
-      animationEditor.lastConfigAssetId = '';
-      await activeCharacter?.reloadAssets?.();
-      await refreshAnimationEditor(true);
-      if (animationEditorStatus) animationEditorStatus.textContent = `烘焙完成: ${workflow.stateName} 共 ${result.frameFiles?.length || 0} 帧`;
-    } catch (err) {
-      if (animationEditorStatus) animationEditorStatus.textContent = `烘焙失败: ${err.message}`;
-    }
   });
 
   animationEditorReloadBtn?.addEventListener('click', async () => {
@@ -2446,9 +2321,13 @@ function setupDrag() {
 function setupClickThrough() {
   const selectors = '#pet-container, #settings-container, #animation-manager-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
+  let restoreTimer = null; // 防抖定时器：延迟恢复穿透
+  const toolbarState = (window.__catToolbarState ||= {});
 
   document.addEventListener('mouseenter', (e) => {
     if (e.target.closest && e.target.closest(selectors)) {
+      // 鼠标进入交互区域：立即取消穿透（无延迟，确保交互响应）
+      if (restoreTimer) { clearTimeout(restoreTimer); restoreTimer = null; }
       if (lastIgnoreState !== false) {
         lastIgnoreState = false;
         window.electronAPI.setIgnoreMouse(false);
@@ -2460,10 +2339,19 @@ function setupClickThrough() {
     if (e.target.closest && e.target.closest(selectors)) {
       const to = e.relatedTarget;
       if (!to || !to.closest || !to.closest(selectors)) {
-        if (lastIgnoreState !== true) {
-          lastIgnoreState = true;
-          window.electronAPI.setIgnoreMouse(true);
-        }
+        // 拖拽过程中不恢复穿透，避免快速拖拽时鼠标短暂离开猫猫区域导致闪烁
+        if (toolbarState.isDraggingPet) return;
+        // 鼠标离开交互区域：延迟恢复穿透（防抖 150ms）
+        if (restoreTimer) clearTimeout(restoreTimer);
+        restoreTimer = setTimeout(() => {
+          restoreTimer = null;
+          // 再次检查拖拽状态（防抖期间可能开始了新的拖拽）
+          if (toolbarState.isDraggingPet) return;
+          if (lastIgnoreState !== true) {
+            lastIgnoreState = true;
+            window.electronAPI.setIgnoreMouse(true);
+          }
+        }, 150);
       }
     }
   }, true);
@@ -2472,16 +2360,14 @@ function setupClickThrough() {
 function setupCharacterSelect(canvas) {
   const grid = document.getElementById('character-grid');
   const tabsContainer = document.getElementById('character-tabs');
-  const searchInput = document.getElementById('character-search');
   const errorToast = document.getElementById('character-error-toast');
 
-  let currentCategory = 'all';
-  let searchQuery = '';
+  let currentCategory = 'color'; // 默认显示颜色页签
 
-  // Build category tabs
-  CATEGORIES.forEach(cat => {
+  // Build category tabs (只有颜色和乐器两个)
+  CATEGORIES.forEach((cat, idx) => {
     const tab = document.createElement('button');
-    tab.className = 'character-tab' + (cat.id === 'all' ? ' active' : '');
+    tab.className = 'character-tab' + (idx === 0 ? ' active' : '');
     tab.textContent = cat.name;
     tab.dataset.category = cat.id;
     tab.addEventListener('click', () => {
@@ -2493,35 +2379,32 @@ function setupCharacterSelect(canvas) {
     tabsContainer.appendChild(tab);
   });
 
-  searchInput.addEventListener('input', () => {
-    searchQuery = searchInput.value.trim().toLowerCase();
-    renderGrid();
-  });
-
   async function renderGrid() {
     grid.innerHTML = '';
 
     const filtered = CHARACTER_PRESETS.filter(p => {
-      const matchCategory = currentCategory === 'all' || p.category === currentCategory;
-      const matchSearch = !searchQuery ||
-        p.name.toLowerCase().includes(searchQuery) ||
-        p.id.toLowerCase().includes(searchQuery) ||
-        (p.colorName && p.colorName.includes(searchQuery)) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery));
-      return matchCategory && matchSearch;
+      return p.category === currentCategory;
     });
 
-    const currentCharId = await window.electronAPI.getStore('character') || 'bongo-classic';
+    // 分别读取当前选中的颜色和乐器
+    const currentColorId = await window.electronAPI.getStore('characterColor') || 'bongo-classic';
+    const currentInstrumentId = await window.electronAPI.getStore('characterInstrument') || 'bongo-classic';
+    const activeId = currentCategory === 'color' ? currentColorId : currentInstrumentId;
 
     for (const preset of filtered) {
       const card = document.createElement('div');
-      card.className = 'character-card' + (preset.id === currentCharId ? ' active' : '');
+      card.className = 'character-card' + (preset.id === activeId ? ' active' : '');
       card.dataset.id = preset.id;
 
       const c = preset.color || { from: '#74b9ff', to: '#0984e3' };
       const instrumentLabel = preset.instrument
         ? (INSTRUMENT_NAMES[preset.instrument] || preset.instrument)
-        : '动画';
+        : '';
+
+      // 根据分类只显示对应信息：颜色页签只显示颜色名，乐器页签只显示乐器名
+      const displayLabel = currentCategory === 'color'
+        ? (preset.colorName || '')
+        : instrumentLabel;
 
       card.innerHTML = `
         <div class="card-thumbnail cat-${preset.category}">
@@ -2529,8 +2412,7 @@ function setupCharacterSelect(canvas) {
           <span class="avatar-color-swatch" style="display:none;background:linear-gradient(135deg,${c.from},${c.to})"></span>
         </div>
         <div class="card-info">
-          <div class="card-color-name">${preset.colorName || ''}</div>
-          <div class="card-instrument-name">${instrumentLabel}</div>
+          <div class="card-color-name">${displayLabel}</div>
         </div>
         <div class="card-tooltip">${preset.description}</div>
       `;
@@ -2560,11 +2442,22 @@ function setupCharacterSelect(canvas) {
       activeCharacter.loadSkin(preset.id);
       activeCharacter.start();
     }
-    await window.electronAPI.setStore('character', preset.id);
+
+    // 根据分类只切换颜色或乐器
+    if (preset.category === 'color') {
+      activeCharacter.setColor(preset.id);
+      await window.electronAPI.setStore('characterColor', preset.id);
+    } else if (preset.category === 'instrument') {
+      activeCharacter.setInstrument(preset.id);
+      await window.electronAPI.setStore('characterInstrument', preset.id);
+    }
+
+    // 同步 character 字段（兼容其他模块读取）
+    await window.electronAPI.setStore('character', activeCharacter.skinId);
     // Update character reference in notification manager
     if (_notificationMgr) _notificationMgr.setCharacter(activeCharacter);
     // Push skin change to multiplayer immediately (if connected)
-    try { _mpClient?.sendStateUpdate({ skinId: preset.id }, true); } catch(e) {}
+    try { _mpClient?.sendStateUpdate({ skinId: activeCharacter.skinId }, true); } catch(e) {}
     renderGrid();
   }
 }

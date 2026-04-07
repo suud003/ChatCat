@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // Store
   getStore: (key) => ipcRenderer.invoke('get-store', key),
+  getStoreBatch: (keys) => ipcRenderer.invoke('get-store-batch', keys),
   setStore: (key, value) => ipcRenderer.invoke('set-store', key, value),
 
   // System info
@@ -71,13 +72,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   skillGetAllMeta: () => ipcRenderer.invoke('skill-get-all-meta'),
   dailyReportSetDir: () => ipcRenderer.invoke('daily-report-set-dir'),
   openFilePath: (filePath) => ipcRenderer.invoke('open-file-path', filePath),
-  openPath: (targetPath) => ipcRenderer.invoke('open-path', targetPath),
   saveFile: (filePath, content) => ipcRenderer.invoke('save-file', filePath, content),
-  animationPrepareWorkflow: (assetId, stateName) => ipcRenderer.invoke('animation-prepare-workflow', assetId, stateName),
-  animationExportReference: (assetId, stateName) => ipcRenderer.invoke('animation-export-reference', assetId, stateName),
-  animationBakeSheet: (assetId, stateName) => ipcRenderer.invoke('animation-bake-sheet', assetId, stateName),
-  animationExportStateFrames: (assetId, stateName, options) => ipcRenderer.invoke('animation-export-state-frames', assetId, stateName, options),
-  animationImportStateFrames: (assetId, stateName) => ipcRenderer.invoke('animation-import-state-frames', assetId, stateName),
 
   // Multiplayer
   mpStartServer: (port) => ipcRenderer.invoke('mp-start-server', port),

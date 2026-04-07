@@ -1,15 +1,9 @@
 {
-  "frameWidth": 800,
-  "frameHeight": 530,
-  "columns": 24,
+  "frameWidth": 300,
+  "frameHeight": 300,
+  "columns": 4,
   "tintable": true,
   "states": {
-    "drowsy": {
-      "row": 0,
-      "frames": 120,
-      "frameDuration": 30,
-      "loop": false,
-      "columns": 24
-    }
+    "drowsy": { "row": 0, "frames": 4, "frameDuration": 280, "loop": false }
   }
 }
