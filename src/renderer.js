@@ -731,7 +731,6 @@ async function init() {
   // Setup UI
   setupToolbar(chatUI, quickPanelUI);
   setupTabbedPanel('settings-container', 'settings-bubble-header', 'settings-close', 'settings-maximize');
-  setupTabbedPanel('animation-manager-container', 'animation-manager-header', 'animation-manager-close', 'animation-manager-maximize');
   setupTabbedPanel('tools-container', 'tools-bubble-header', 'tools-close', 'tools-maximize');
   setupTabbedPanel('fun-container', 'fun-bubble-header', 'fun-close', 'fun-maximize');
   setupToolbarHover();
@@ -1310,7 +1309,7 @@ function setupToolbar(chatUI, quickPanel) {
  * Moved from ChatUI to be a standalone panel.
  */
 function setupSettingsPanel(aiService, apiPresets, chatUI) {
-  const ENABLE_DEV_DEBUG_TOOLS = true;
+  const ENABLE_DEV_DEBUG_TOOLS = false;
   const presetSelect = document.getElementById('setting-preset');
   const modelSelect = document.getElementById('setting-model');
   const modelCustomInput = document.getElementById('setting-model-custom');
@@ -1322,9 +1321,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   const opacityValue = document.getElementById('opacity-value');
   const visionModelInput = document.getElementById('setting-vision-model');
   const personalitySelect = document.getElementById('setting-personality');
-  const openAnimationManagerBtn = document.getElementById('open-animation-manager-btn');
-  const animationManagerEntryHint = document.getElementById('animation-manager-entry-hint');
-  const animationManagerContainer = document.getElementById('animation-manager-container');
   const debugOpenDevtoolsBtn = document.getElementById('debug-open-devtools-btn');
   const debugCharacterTypeBtn = document.getElementById('debug-character-type-btn');
   const debugForceDrowsyBtn = document.getElementById('debug-force-drowsy-btn');
@@ -1364,25 +1360,6 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
     let pathname = decodeURIComponent(url.pathname);
     if (/^\/[A-Za-z]:/.test(pathname)) pathname = pathname.slice(1);
     return pathname;
-  };
-
-  const isAnimationManagerOpen = () => !!animationManagerContainer && !animationManagerContainer.classList.contains('hidden');
-
-  const positionAnimationManagerPanel = () => {
-    if (!animationManagerContainer) return;
-    const settingsContainer = document.getElementById('settings-container');
-    if (settingsContainer && !settingsContainer.classList.contains('hidden')) {
-      const rect = settingsContainer.getBoundingClientRect();
-      const maxLeft = Math.max(10, window.innerWidth - animationManagerContainer.offsetWidth - 10);
-      const maxTop = Math.max(10, window.innerHeight - animationManagerContainer.offsetHeight - 10);
-      animationManagerContainer.style.left = `${Math.min(maxLeft, rect.left + 24)}px`;
-      animationManagerContainer.style.top = `${Math.min(maxTop, Math.max(10, rect.top + 20))}px`;
-      animationManagerContainer.style.bottom = 'auto';
-      animationManagerContainer.style.right = 'auto';
-      animationManagerContainer.style.transform = 'none';
-      return;
-    }
-    positionAbovePet(animationManagerContainer);
   };
 
   const renderAnimationStateSummary = () => {
@@ -1508,7 +1485,7 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   };
 
   const refreshAnimationEditor = async (forceConfig = false) => {
-    if (!debugToolsSection || !isAnimationManagerOpen()) return;
+    if (!debugToolsSection || debugToolsSection.style.display === 'none') return;
     renderAnimationStateSummary();
     const manifest = activeCharacter?.getDebugAssetManifest?.() || { assets: [] };
     animationEditor.manifest = manifest;
@@ -1957,9 +1934,7 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   const initDebugTools = async () => {
     if (!debugToolsSection) return;
     if (!ENABLE_DEV_DEBUG_TOOLS) {
-      openAnimationManagerBtn?.style.setProperty('display', 'none');
-      if (animationManagerEntryHint) animationManagerEntryHint.textContent = '动画管理器当前已关闭。';
-      animationManagerContainer?.classList.add('hidden');
+      debugToolsSection.style.display = 'none';
       return;
     }
     const runtimeInfo = await window.electronAPI.getRuntimeInfo?.().catch(() => ({
@@ -1972,26 +1947,15 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
       animationEditorRuntime.textContent = `运行时: version=${animationEditor.runtimeInfo.version} | isDev=${animationEditor.runtimeInfo.isDev} | isPackaged=${animationEditor.runtimeInfo.isPackaged}`;
     }
     if (animationEditor.runtimeInfo.isPackaged) {
-      openAnimationManagerBtn?.style.setProperty('display', 'none');
-      if (animationManagerEntryHint) animationManagerEntryHint.textContent = '打包版本默认隐藏动画管理器。';
-      animationManagerContainer?.classList.add('hidden');
+      debugToolsSection.style.display = 'none';
       return;
     }
-    openAnimationManagerBtn?.style.setProperty('display', 'inline-flex');
-    if (animationManagerEntryHint) animationManagerEntryHint.textContent = '点击按钮，在独立弹层中查看预览、状态和配置。';
     debugToolsSection.style.display = '';
     await refreshAnimationEditor(true);
     if (!animationEditor.previewRafId) {
       animationEditor.previewRafId = requestAnimationFrame(drawAnimationPreview);
     }
   };
-
-  openAnimationManagerBtn?.addEventListener('click', async () => {
-    if (!ENABLE_DEV_DEBUG_TOOLS || !animationManagerContainer) return;
-    animationManagerContainer.classList.remove('hidden');
-    positionAnimationManagerPanel();
-    await initDebugTools();
-  });
 
   debugOpenDevtoolsBtn?.addEventListener('click', async () => {
     if (!ENABLE_DEV_DEBUG_TOOLS) return;
@@ -2109,7 +2073,8 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
 
   setInterval(() => {
     if (!ENABLE_DEV_DEBUG_TOOLS) return;
-    if (!isAnimationManagerOpen()) return;
+    if (!settingsContainer || settingsContainer.classList.contains('hidden')) return;
+    if (debugToolsSection?.style.display === 'none') return;
     refreshAnimationEditor();
   }, 500);
 
@@ -2228,7 +2193,7 @@ function setupDrag() {
     isDraggingPet: false,
     syncToolbarVisibility: null,
   });
-  const panelIds = ['settings-container', 'animation-manager-container', 'tools-container', 'fun-container'];
+  const panelIds = ['settings-container', 'tools-container', 'fun-container'];
   let isDragging = false;
   let lastX, lastY;
 
@@ -2319,7 +2284,7 @@ function setupDrag() {
 }
 
 function setupClickThrough() {
-  const selectors = '#pet-container, #settings-container, #animation-manager-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
+  const selectors = '#pet-container, #settings-container, #tools-container, #fun-container, .mini-cat, .drag-action-menu';
   let lastIgnoreState = true; // start as ignored (transparent)
   let restoreTimer = null; // 防抖定时器：延迟恢复穿透
   const toolbarState = (window.__catToolbarState ||= {});

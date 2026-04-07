@@ -172,10 +172,49 @@
             <label><input type="checkbox" id="scene-efficiency" checked> 效率</label>
             <label><input type="checkbox" id="scene-chat" checked> 聊天</label>
           </div>
-          <div class="setting-section-title">动画工具</div>
+          <div id="debug-tools-section" style="display:none;">
+          <div class="setting-section-title">开发调试</div>
           <div class="setting-group">
-            <button id="open-animation-manager-btn" class="chat-tool-btn" style="display:none;padding:6px 12px;font-size:12px;background:rgba(79,172,254,0.15);border:1px solid #222;border-radius:10px;color:#222;cursor:pointer;">打开动画管理器</button>
-            <div id="animation-manager-entry-hint" style="margin-top:8px;font-size:11px;color:#888;">可在独立弹层中查看预览、状态和配置。</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button id="debug-open-devtools-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(79,172,254,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">打开调试控制台</button>
+              <button id="debug-character-type-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(245,166,35,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">检查角色实例</button>
+              <button id="debug-force-drowsy-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(255,126,103,0.2);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">强制犯困测试</button>
+            </div>
+            <div id="debug-character-status" style="margin-top:8px;font-size:11px;color:#888;">未检查</div>
+          </div>
+          <div class="setting-group">
+            <div id="animation-editor-runtime" style="font-size:11px;color:#888;margin-bottom:8px;">运行时: 读取中...</div>
+            <div id="animation-editor-current-state" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;white-space:pre-wrap;">当前状态机: 读取中...</div>
+          </div>
+          <div class="setting-group">
+            <label>动画资源</label>
+            <select id="animation-editor-asset-select"></select>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button id="animation-editor-open-sheet-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开图片位置</button>
+              <button id="animation-editor-open-config-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开配置位置</button>
+              <button id="animation-editor-reload-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">重载动画资源</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>动画预览</label>
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <canvas id="animation-editor-preview" width="180" height="180" style="width:180px;height:180px;border:2px solid #222;border-radius:12px;background:#faf9f7;"></canvas>
+                <select id="animation-editor-state-select"></select>
+              </div>
+              <div style="flex:1;min-width:180px;">
+                <div id="animation-editor-state-list" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;min-height:120px;white-space:pre-wrap;">状态列表</div>
+              </div>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>动画配置 JSON</label>
+            <textarea id="animation-editor-config" style="width:100%;min-height:180px;padding:8px;border:1px solid #222;border-radius:8px;background:#fff;font-size:11px;font-family:'JetBrains Mono',monospace;resize:vertical;"></textarea>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button id="animation-editor-save-config-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:rgba(79,172,254,0.15);cursor:pointer;">保存配置</button>
+              <span id="animation-editor-status" style="font-size:11px;color:#888;">未加载</span>
+            </div>
+          </div>
           </div>
           <div class="setting-actions setting-actions-bottom">
             <button id="settings-save">保存</button>
@@ -183,67 +222,6 @@
         </div>
       </div>
       <div id="settings-bubble-tail"></div>
-    </div>
-  </div>
-
-  <div id="animation-manager-container" class="hidden">
-    <div id="animation-manager-bubble">
-      <div id="animation-manager-header">
-        <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="animation-manager-main">动画管理器</button>
-        </div>
-        <button id="animation-manager-maximize" class="chat-ctrl-btn" title="最大化">□</button>
-        <button id="animation-manager-close" class="chat-ctrl-btn" title="关闭">×</button>
-      </div>
-      <div id="animation-manager-body">
-        <div id="tab-animation-manager-main" class="tab-content active">
-          <div id="debug-tools-section">
-            <div class="setting-section-title">开发调试</div>
-            <div class="setting-group">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <button id="debug-open-devtools-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(79,172,254,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">打开调试控制台</button>
-                <button id="debug-character-type-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(245,166,35,0.15);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">检查角色实例</button>
-                <button id="debug-force-drowsy-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;background:rgba(255,126,103,0.2);border:1px solid #222;border-radius:4px;color:#222;cursor:pointer;">强制犯困测试</button>
-              </div>
-              <div id="debug-character-status" style="margin-top:8px;font-size:11px;color:#888;">未检查</div>
-            </div>
-            <div class="setting-group">
-              <div id="animation-editor-runtime" style="font-size:11px;color:#888;margin-bottom:8px;">运行时: 读取中...</div>
-              <div id="animation-editor-current-state" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;white-space:pre-wrap;">当前状态机: 读取中...</div>
-            </div>
-            <div class="setting-group">
-              <label>动画资源</label>
-              <select id="animation-editor-asset-select"></select>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                <button id="animation-editor-open-sheet-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开图片位置</button>
-                <button id="animation-editor-open-config-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">打开配置位置</button>
-                <button id="animation-editor-reload-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:#fff;cursor:pointer;">重载动画资源</button>
-              </div>
-            </div>
-            <div class="setting-group">
-              <label>动画预览</label>
-              <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                  <canvas id="animation-editor-preview" width="180" height="180" style="width:180px;height:180px;border:2px solid #222;border-radius:12px;background:#faf9f7;"></canvas>
-                  <select id="animation-editor-state-select"></select>
-                </div>
-                <div style="flex:1;min-width:180px;">
-                  <div id="animation-editor-state-list" style="font-size:11px;color:#333;padding:8px;border:1px solid #222;border-radius:8px;background:#faf9f7;min-height:120px;white-space:pre-wrap;">状态列表</div>
-                </div>
-              </div>
-            </div>
-            <div class="setting-group">
-              <label>动画配置 JSON</label>
-              <textarea id="animation-editor-config" style="width:100%;min-height:180px;padding:8px;border:1px solid #222;border-radius:8px;background:#fff;font-size:11px;font-family:'JetBrains Mono',monospace;resize:vertical;"></textarea>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                <button id="animation-editor-save-config-btn" class="chat-tool-btn" style="padding:4px 12px;font-size:12px;border:1px solid #222;border-radius:4px;background:rgba(79,172,254,0.15);cursor:pointer;">保存配置</button>
-                <span id="animation-editor-status" style="font-size:11px;color:#888;">未加载</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div id="animation-manager-tail"></div>
     </div>
   </div>
 
