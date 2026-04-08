@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStore: (key) => ipcRenderer.invoke('get-store', key),
   getStoreBatch: (keys) => ipcRenderer.invoke('get-store-batch', keys),
   setStore: (key, value) => ipcRenderer.invoke('set-store', key, value),
+  getStoreBatch: (keys) => ipcRenderer.invoke('get-store-batch', keys),
 
   // System info
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),

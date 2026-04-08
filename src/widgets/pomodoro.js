@@ -32,6 +32,8 @@ export class PomodoroTimer {
 
     // Callbacks
     this._onComplete = null;  // called when pomodoro completes (for cat reactions)
+    this._onStart = null;
+    this._onStop = null;
 
     this._init();
   }
@@ -48,6 +50,8 @@ export class PomodoroTimer {
   }
 
   set onComplete(fn) { this._onComplete = fn; }
+  set onStart(fn) { this._onStart = fn; }
+  set onStop(fn) { this._onStop = fn; }
 
   _toggleTimer() {
     if (this._running) {
@@ -63,12 +67,23 @@ export class PomodoroTimer {
         this._phase = 'work';
         this._remaining = this._getWorkSeconds();
       }
+      console.warn('[PomodoroTimer] start requested', {
+        phase: this._phase,
+        remaining: this._remaining
+      });
       this._running = true;
       this._startBtn.textContent = '暂停';
       this._startBtn.classList.add('running');
       this._workInput.disabled = true;
       this._breakInput.disabled = true;
       this._updateStatus();
+      if (this._onStart) {
+        console.warn('[PomodoroTimer] firing onStart callback', {
+          phase: this._phase,
+          remaining: this._remaining
+        });
+        this._onStart({ phase: this._phase, remaining: this._remaining });
+      }
 
       this._interval = setInterval(() => {
         this._remaining--;
@@ -81,17 +96,37 @@ export class PomodoroTimer {
   }
 
   _pause() {
+    console.warn('[PomodoroTimer] pause requested', {
+      phase: this._phase,
+      remaining: this._remaining
+    });
     this._running = false;
     this._startBtn.textContent = '继续';
     this._startBtn.classList.remove('running');
     clearInterval(this._interval);
+    this._interval = null;
     this._statusDisplay.textContent = '已暂停';
     this._statusDisplay.className = '';
+    if (this._onStop) {
+      console.warn('[PomodoroTimer] firing onStop callback', {
+        reason: 'pause',
+        phase: this._phase,
+        remaining: this._remaining
+      });
+      this._onStop({ reason: 'pause', phase: this._phase, remaining: this._remaining });
+    }
   }
 
   _reset() {
+    const previousPhase = this._phase;
+    const wasRunning = this._running;
+    console.warn('[PomodoroTimer] reset requested', {
+      previousPhase,
+      wasRunning
+    });
     this._running = false;
     clearInterval(this._interval);
+    this._interval = null;
     this._phase = 'work';
     this._remaining = this._getWorkSeconds();
     this._startBtn.textContent = '开始';
@@ -102,16 +137,41 @@ export class PomodoroTimer {
     this._statusDisplay.className = '';
     if (this._illEl) this._illEl.src = 'illustrations/pomodoro-focus.png';
     this._updateDisplay();
+    if (this._onStop) {
+      console.warn('[PomodoroTimer] firing onStop callback', {
+        reason: wasRunning ? 'reset' : 'reset-idle',
+        phase: previousPhase,
+        remaining: this._remaining
+      });
+      this._onStop({
+        reason: wasRunning ? 'reset' : 'reset-idle',
+        phase: previousPhase,
+        remaining: this._remaining
+      });
+    }
   }
 
   _onPhaseEnd() {
+    const finishedPhase = this._phase;
+    console.warn('[PomodoroTimer] phase ended', {
+      phase: finishedPhase
+    });
     clearInterval(this._interval);
+    this._interval = null;
     this._running = false;
     this._startBtn.classList.remove('running');
     this._workInput.disabled = false;
     this._breakInput.disabled = false;
+    if (this._onStop) {
+      console.warn('[PomodoroTimer] firing onStop callback', {
+        reason: 'phase-end',
+        phase: finishedPhase,
+        remaining: 0
+      });
+      this._onStop({ reason: 'phase-end', phase: finishedPhase, remaining: 0 });
+    }
 
-    if (this._phase === 'work') {
+    if (finishedPhase === 'work') {
       this._completedToday++;
       this._saveStats();
       this._updateTodayCount();
@@ -120,7 +180,12 @@ export class PomodoroTimer {
         this._affection.onPomodoroComplete();
       }
 
-      if (this._onComplete) this._onComplete();
+      if (this._onComplete) {
+        console.warn('[PomodoroTimer] firing onComplete callback', {
+          phase: finishedPhase
+        });
+        this._onComplete({ phase: finishedPhase });
+      }
 
       this._phase = 'break';
       this._remaining = this._getBreakSeconds();

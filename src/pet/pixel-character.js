@@ -6,13 +6,17 @@
  * They are designed to overlay at the same origin in an 800x900 viewport.
  * We crop a viewport region from the composited result to fit our 300x300 canvas.
  *
- * Skins use Canvas color-burn blend to create solid-color cats:
- * the cat body is filled with a solid tint color, and only the dark outlines
- * from the original sprite are burned through, giving a clean solid look.
+ * Skins use Canvas multiply blend to tint the entire cat body (including white areas).
+ * Instruments replace the keyboard layer at the bottom.
  */
 
 const SPRITE_W = 800;
 const SPRITE_H = 900;
+const ENABLE_CAT_OVERLAY_ANIMATION = true;
+const IDLE_OVERLAY_STATE = 'idle-loop';
+const IDLE_OVERLAY_DELAY = 220;
+const DROWSY_MIN_TIMEOUT = 12_000;
+const DROWSY_MAX_TIMEOUT = 18_000;
 
 // The visible region we crop from the 800x900 composite.
 const CROP_Y = 320;
@@ -32,7 +36,6 @@ const SPRITE_NAMES = [
 const SKINS = {
   // === Color skins (keyboard) ===
   'bongo-classic': { name: 'Classic',       tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: null },
-  'hachiware':     { name: 'Hachiware',     tint: null,      filter: null,                                      instrument: 'keyboard', spriteSheet: 'default' },
   'bongo-orange':  { name: 'Orange Cat',    tint: '#FFB347', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-pink':    { name: 'Pink Cat',      tint: '#FFB6C1', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
   'bongo-blue':    { name: 'Blue Cat',      tint: '#87CEEB', filter: null,                                      instrument: 'keyboard', spriteSheet: null },
@@ -78,16 +81,19 @@ export class SpriteCharacter {
     this._rafId = null;
     this.skinId = 'bongo-classic';
 
-    // 解耦的颜色和乐器状态（独立切换）
-    this._colorSkinId = 'bongo-classic';       // 当前颜色皮肤 ID
-    this._instrumentSkinId = 'bongo-classic';   // 当前乐器皮肤 ID
-
-    // Offscreen canvas for compositing all layers at full resolution,
+    // Offscreen canvas for compositing base layers at full resolution,
     // then we crop the result onto the visible canvas.
     this._composite = document.createElement('canvas');
     this._composite.width = SPRITE_W;
     this._composite.height = SPRITE_H;
     this._compCtx = this._composite.getContext('2d');
+
+    // Dedicated cat layer so static cat and drowsy animation share
+    // the same render slot above the instrument layer.
+    this._catComposite = document.createElement('canvas');
+    this._catComposite.width = SPRITE_W;
+    this._catComposite.height = SPRITE_H;
+    this._catCompCtx = this._catComposite.getContext('2d');
 
     // Offscreen canvas for tinting individual sprite layers
     this._tintCanvas = document.createElement('canvas');
@@ -127,19 +133,36 @@ export class SpriteCharacter {
     this._rightTimer = null;
     this._mouthTimer = null;
     this._intentTimer = null;
+    this._lastTs = 0;
+    this._idleTime = 0;
+    this._nextDrowsyAt = this._randomDrowsyTime();
+    this._playedDrowsyThisIdle = false;
+
+    // Optional transparent overlay sheet: only the cat, no keyboard/background.
+    this._overlaySheet = null;
+    this._overlayMeta = null;
+    this._overlayLoaded = false;
+    this._overlayState = null;
+    this._overlayFrame = 0;
+    this._overlayFrameTime = 0;
+    this._overlayTintCanvas = document.createElement('canvas');
+    this._overlayTintCtx = this._overlayTintCanvas.getContext('2d');
+    this._overlaySuppressActivityUntil = 0;
 
     this._animate = this._animate.bind(this);
   }
 
   async load() {
     const basePath = new URL('./sprites/', import.meta.url).href;
-
-    await Promise.all(SPRITE_NAMES.map(name => new Promise((resolve, reject) => {
+    const spriteLoad = Promise.all(SPRITE_NAMES.map(name => new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => { this.images[name] = img; resolve(); };
       img.onerror = () => reject(new Error(`Failed to load sprite: ${name}.png`));
       img.src = `${basePath}${name}.png`;
     })));
+    const overlayLoad = ENABLE_CAT_OVERLAY_ANIMATION ? this._loadOverlayAssets() : Promise.resolve();
+
+    await Promise.all([spriteLoad, overlayLoad]);
 
     this._loaded = true;
   }
@@ -147,33 +170,8 @@ export class SpriteCharacter {
   loadSkin(skinId) {
     if (SKINS[skinId]) {
       this.skinId = skinId;
-      // 同步更新解耦状态（兼容旧的整体切换调用）
-      this._colorSkinId = skinId;
-      this._instrumentSkinId = skinId;
     }
   }
-
-  /** 只切换颜色（tint/filter），保持当前乐器不变 */
-  setColor(colorSkinId) {
-    if (SKINS[colorSkinId]) {
-      this._colorSkinId = colorSkinId;
-      // skinId 跟随颜色更新（用于外部读取当前状态）
-      this.skinId = colorSkinId;
-    }
-  }
-
-  /** 只切换乐器，保持当前颜色不变 */
-  setInstrument(instrumentSkinId) {
-    if (SKINS[instrumentSkinId]) {
-      this._instrumentSkinId = instrumentSkinId;
-    }
-  }
-
-  /** 获取当前颜色皮肤 ID */
-  getColorSkinId() { return this._colorSkinId; }
-
-  /** 获取当前乐器皮肤 ID */
-  getInstrumentSkinId() { return this._instrumentSkinId; }
 
   start() {
     if (!this._rafId && this._loaded) {
@@ -190,6 +188,7 @@ export class SpriteCharacter {
   }
 
   triggerTyping() {
+    this._onActivity();
     const paw = this._lastTypingPaw === 'left' ? 'right' : 'left';
     this._lastTypingPaw = paw;
     if (paw === 'left') {
@@ -204,6 +203,7 @@ export class SpriteCharacter {
   }
 
   triggerClick() {
+    this._onActivity();
     // Show a random pixel-art expression icon near the cat's face instead of paw slap
     const expressions = ['proud', 'alert', 'anger', 'heart', 'curious', 'star', 'note', 'sweat', 'sleepy'];
     const icon = expressions[Math.floor(Math.random() * expressions.length)];
@@ -213,6 +213,7 @@ export class SpriteCharacter {
   }
 
   triggerHappy() {
+    this._onActivity();
     this.mouthOpen = true;
     clearTimeout(this._mouthTimer);
     this._mouthTimer = setTimeout(() => { this.mouthOpen = false; }, 1500);
@@ -221,6 +222,7 @@ export class SpriteCharacter {
   triggerIntent(name) {
     console.log('[SpriteCharacter] triggerIntent:', name);
     clearTimeout(this._intentTimer);
+    if (name !== 'sleepy') this._onActivity();
     const intentIcons = {
       curious: 'curious',
       working: 'working',
@@ -273,6 +275,7 @@ export class SpriteCharacter {
     } else if (name === 'sleepy') {
       this._clickExpr = null;
       this.mouthOpen = false;
+      if (ENABLE_CAT_OVERLAY_ANIMATION) this._playOverlayState('drowsy');
     }
   }
 
@@ -285,11 +288,181 @@ export class SpriteCharacter {
     clearTimeout(this._intentTimer);
   }
 
+  async reloadAssets() {
+    const wasRunning = !!this._rafId;
+    if (wasRunning) this.stop();
+    await this.load();
+    this.loadSkin(this.skinId);
+    this._stopOverlayState();
+    this._onActivity();
+    if (wasRunning) this.start();
+  }
+
+  getDebugAnimationState() {
+    return {
+      renderer: 'SpriteCharacter',
+      skinId: this.skinId,
+      currentSkin: this.skinId,
+      overlayState: this._overlayState,
+      overlayLoaded: this._overlayLoaded,
+      overlayFrame: this._overlayFrame,
+      idleTimeMs: Math.round(this._idleTime),
+      nextDrowsyAtMs: Math.round(this._nextDrowsyAt),
+      leftPawDown: this.leftPawDown,
+      rightPawDown: this.rightPawDown,
+      mouthOpen: this.mouthOpen,
+      clickExpr: this._clickExpr?.icon || null,
+    };
+  }
+
+  getDebugAssetManifest() {
+    return {
+      renderer: 'SpriteCharacter',
+      assets: [
+        {
+          id: 'classic-base-sprites',
+          label: '经典底层 sprites',
+          kind: 'sprite-layers',
+          description: '键盘/乐器与经典猫身体拆层资源',
+          revealPath: new URL('./sprites/cat.png', import.meta.url).href,
+          files: SPRITE_NAMES.map((name) => ({ name: `${name}.png`, revealPath: new URL(`./sprites/${name}.png`, import.meta.url).href })),
+        },
+        {
+          id: 'classic-cat-overlay',
+          label: '猫层 Overlay 动画',
+          kind: 'sheet',
+          description: '只覆盖中间猫，不影响键盘与桌面',
+          revealPath: new URL('./cat-overlays/default/sheet.png', import.meta.url).href,
+          sheetUrl: new URL('./cat-overlays/default/sheet.png', import.meta.url).href,
+          configUrl: new URL('./cat-overlays/default/sheet.json', import.meta.url).href,
+          workflow: {
+            id: 'classic-cat-overlay',
+            sourceDir: new URL('./animation-sources/classic-cat-overlay/drowsy/', import.meta.url).href,
+            referenceDir: new URL('./animation-sources/classic-cat-overlay/drowsy/reference/', import.meta.url).href,
+            referencePath: new URL('./animation-sources/classic-cat-overlay/drowsy/reference/base.png', import.meta.url).href,
+            framesDir: new URL('./animation-sources/classic-cat-overlay/drowsy/frames/', import.meta.url).href,
+            buildDir: new URL('./cat-overlays/default/', import.meta.url).href,
+            framePattern: 'frame_001.png ~ frame_999.png',
+            stateName: 'drowsy',
+          },
+          meta: this._overlayMeta,
+          states: this._overlayMeta?.states || {},
+        },
+      ],
+    };
+  }
+
   // --- Internal ---
 
   _animate(_ts) {
+    const ts = _ts || performance.now();
+    const dt = this._lastTs ? (ts - this._lastTs) : 16;
+    this._lastTs = ts;
+    this._tickIdle(dt);
+    this._tickOverlay(dt);
     this._draw();
     this._rafId = requestAnimationFrame(this._animate);
+  }
+
+  async _loadOverlayAssets() {
+    try {
+      const overlayBasePath = new URL('./cat-overlays/default/', import.meta.url).href;
+      const resp = await fetch(`${overlayBasePath}sheet.json`);
+      if (!resp.ok) return;
+      this._overlayMeta = await resp.json();
+      this._overlaySheet = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load cat overlay sheet'));
+        img.src = `${overlayBasePath}sheet.png`;
+      });
+      this._overlayLoaded = true;
+    } catch (err) {
+      console.warn('[SpriteCharacter] overlay load failed:', err.message);
+    }
+  }
+
+  _tickIdle(dt) {
+    if (!ENABLE_CAT_OVERLAY_ANIMATION) return;
+    if (this._overlayState && this._overlayState !== IDLE_OVERLAY_STATE) return;
+    this._idleTime += dt;
+    if (!this._overlayState && this._idleTime >= IDLE_OVERLAY_DELAY && this._canShowIdleOverlay()) {
+      this._playOverlayState(IDLE_OVERLAY_STATE);
+    }
+    if (!this._playedDrowsyThisIdle && this._idleTime >= this._nextDrowsyAt) {
+      this._playedDrowsyThisIdle = true;
+      this._playOverlayState('drowsy');
+    }
+  }
+
+  _tickOverlay(dt) {
+    if (!this._overlayState || !this._overlayMeta) return;
+    const state = this._overlayMeta.states?.[this._overlayState];
+    if (!state) {
+      this._stopOverlayState();
+      return;
+    }
+    this._overlayFrameTime += dt;
+    if (this._overlayFrameTime < state.frameDuration) return;
+    this._overlayFrameTime -= state.frameDuration;
+    this._overlayFrame += 1;
+    if (this._overlayFrame < state.frames) return;
+    if (state.loop) {
+      this._overlayFrame = 0;
+      return;
+    }
+    const next = state.next;
+    if (next && this._overlayMeta.states?.[next]) {
+      this._overlayState = next;
+      this._overlayFrame = 0;
+      this._overlayFrameTime = 0;
+      return;
+    }
+    this._stopOverlayState();
+  }
+
+  _playOverlayState(name) {
+    if (!ENABLE_CAT_OVERLAY_ANIMATION) return false;
+    if (!this._overlayLoaded || !this._overlayMeta?.states?.[name]) return false;
+    console.log('[SpriteCharacter] overlay ->', name);
+    this._clickExpr = null;
+    this._overlayState = name;
+    this._overlayFrame = 0;
+    this._overlayFrameTime = 0;
+    this._overlaySuppressActivityUntil = name === IDLE_OVERLAY_STATE ? 0 : (performance.now() + 500);
+    return true;
+  }
+
+  _canShowIdleOverlay() {
+    if (!this._overlayLoaded || !this._overlayMeta?.states?.[IDLE_OVERLAY_STATE]) return false;
+    if (this.leftPawDown || this.rightPawDown || this.mouthOpen) return false;
+    if (this._clickExpr) return false;
+    return true;
+  }
+
+  _stopOverlayState() {
+    if (!this._overlayState) return;
+    console.log('[SpriteCharacter] overlay stop');
+    this._overlayState = null;
+    this._overlayFrame = 0;
+    this._overlayFrameTime = 0;
+    this._idleTime = 0;
+    this._nextDrowsyAt = this._randomDrowsyTime();
+    this._playedDrowsyThisIdle = false;
+  }
+
+  _onActivity() {
+    if (this._overlayState && performance.now() < this._overlaySuppressActivityUntil) {
+      return;
+    }
+    this._stopOverlayState();
+    this._idleTime = 0;
+    this._nextDrowsyAt = this._randomDrowsyTime();
+    this._playedDrowsyThisIdle = false;
+  }
+
+  _randomDrowsyTime() {
+    return DROWSY_MIN_TIMEOUT + Math.random() * (DROWSY_MAX_TIMEOUT - DROWSY_MIN_TIMEOUT);
   }
 
   /**
@@ -297,44 +470,43 @@ export class SpriteCharacter {
    * If applyColor is true and the skin has a tint, use multiply blend to color the sprite.
    */
   _drawLayer(cctx, img, srcX, applyColor) {
-    const skin = SKINS[this._colorSkinId] || SKINS[this.skinId];
-    const hasTint = applyColor && skin.tint;
+    const skin = SKINS[this.skinId];
 
-    const tc = this._tintCtx;
-    tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+    if (applyColor && skin.tint) {
+      // Tint via multiply blend on a temporary canvas:
+      // 1. Draw original sprite
+      // 2. Multiply with tint color (white → tint, black stays black, grays get tinted)
+      // 3. Restore original alpha mask
+      const tc = this._tintCtx;
+      tc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    if (hasTint) {
-      // === 实色填充模式 ===
-      // Step 1: 用 tint 实色完全填充精灵图的 alpha 区域
       tc.globalCompositeOperation = 'source-over';
       tc.filter = 'none';
+      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+
+      tc.globalCompositeOperation = 'multiply';
       tc.fillStyle = skin.tint;
       tc.fillRect(0, 0, SPRITE_W, SPRITE_H);
-      // 只保留精灵图有像素的区域（用 alpha 遮罩裁剪）
+
       tc.globalCompositeOperation = 'destination-in';
       tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
 
-      // Step 2: 提取原始精灵图的深色线条（轮廓/细节），叠加到实色底上
-      // 使用 color-burn 混合：深色像素（线条）会烧穿底色变暗，白色像素不影响底色
-      tc.globalCompositeOperation = 'color-burn';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
-
-      // Step 3: 恢复 alpha 遮罩（确保边缘干净）
-      tc.globalCompositeOperation = 'destination-in';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      // Draw tinted result onto composite, with optional CSS filter
+      if (skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(this._tintCanvas, 0, 0);
+      cctx.filter = 'none';
     } else {
-      // === 无着色模式（原色/经典猫）===
-      tc.globalCompositeOperation = 'source-over';
-      tc.filter = 'none';
-      tc.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      // No tint — apply CSS filter directly if present
+      if (applyColor && skin.filter) {
+        cctx.filter = skin.filter;
+      }
+      cctx.drawImage(img, srcX, 0, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H);
+      if (applyColor) {
+        cctx.filter = 'none';
+      }
     }
-
-    // Step 4: 绘制到 composite canvas，应用可选的 CSS filter
-    if (applyColor && skin.filter) {
-      cctx.filter = skin.filter;
-    }
-    cctx.drawImage(this._tintCanvas, 0, 0);
-    cctx.filter = 'none';
   }
 
   _draw() {
@@ -345,43 +517,48 @@ export class SpriteCharacter {
     ctx.clearRect(0, 0, cw, ch);
     if (!this._loaded) return;
 
-    // Step 1: Composite all layers onto offscreen canvas at 800x900
+    // Step 1: Build base layer and cat layer separately.
     const cc = this._compCtx;
+    const catCc = this._catCompCtx;
     cc.clearRect(0, 0, SPRITE_W, SPRITE_H);
+    catCc.clearRect(0, 0, SPRITE_W, SPRITE_H);
 
-    // Instrument layer — drawn at bottom, no tint/filter（使用独立的乐器状态）
-    const instrumentSkin = SKINS[this._instrumentSkinId] || SKINS[this.skinId] || SKINS['bongo-classic'];
-    const instrumentName = instrumentSkin.instrument || 'keyboard';
+    // Instrument layer — drawn at bottom, no tint/filter
+    const skin = SKINS[this.skinId] || SKINS['bongo-classic'];
+    const instrumentName = skin.instrument || 'keyboard';
     const instrImg = this.images[instrumentName];
     if (instrImg) {
       cc.drawImage(instrImg, 0, SPRITE_H - 450);
     }
 
-    // Cat body (apply tint/filter)
-    const catImg = this.images['cat'];
-    if (catImg) {
-      this._drawLayer(cc, catImg, 0, true);
+    const showOverlayCat = !!(this._overlayState && this._overlayLoaded && this._overlayMeta && this._overlaySheet);
+    if (!showOverlayCat) {
+      // Cat body (apply tint/filter)
+      const catImg = this.images['cat'];
+      if (catImg) {
+        this._drawLayer(catCc, catImg, 0, true);
+      }
+
+      // Mouth (2-frame, apply tint/filter)
+      const mouthImg = this.images['mouth'];
+      if (mouthImg) {
+        this._drawLayer(catCc, mouthImg, this.mouthOpen ? SPRITE_W : 0, true);
+      }
+
+      // Left paw (2-frame, apply tint/filter)
+      const leftImg = this.images['paw-left'];
+      if (leftImg) {
+        this._drawLayer(catCc, leftImg, this.leftPawDown ? SPRITE_W : 0, true);
+      }
+
+      // Right paw (2-frame, apply tint/filter)
+      const rightImg = this.images['paw-right'];
+      if (rightImg) {
+        this._drawLayer(catCc, rightImg, this.rightPawDown ? SPRITE_W : 0, true);
+      }
     }
 
-    // Mouth (2-frame, apply tint/filter)
-    const mouthImg = this.images['mouth'];
-    if (mouthImg) {
-      this._drawLayer(cc, mouthImg, this.mouthOpen ? SPRITE_W : 0, true);
-    }
-
-    // Left paw (2-frame, apply tint/filter)
-    const leftImg = this.images['paw-left'];
-    if (leftImg) {
-      this._drawLayer(cc, leftImg, this.leftPawDown ? SPRITE_W : 0, true);
-    }
-
-    // Right paw (2-frame, apply tint/filter)
-    const rightImg = this.images['paw-right'];
-    if (rightImg) {
-      this._drawLayer(cc, rightImg, this.rightPawDown ? SPRITE_W : 0, true);
-    }
-
-    // Step 2: Crop the interesting region from the composite and draw to canvas
+    // Step 2: Draw base layer first.
     const scale = cw / SPRITE_W;
     const drawH = CROP_H * scale;
     const offsetY = (ch - drawH) / 2;
@@ -392,7 +569,18 @@ export class SpriteCharacter {
       0, offsetY, cw, drawH           // destination
     );
 
-    // Step 3: Click expression overlay — drawn on final canvas so it won't be clipped
+    // Step 3: Draw the cat layer in the same render slot whether static or animated.
+    if (showOverlayCat) {
+      this._drawOverlayFrame(ctx, cw, ch, skin, offsetY, drawH);
+    } else {
+      ctx.drawImage(
+        this._catComposite,
+        0, CROP_Y, SPRITE_W, CROP_H,
+        0, offsetY, cw, drawH
+      );
+    }
+
+    // Step 4: Click expression overlay — drawn on final canvas so it won't be clipped
     if (this._clickExpr) {
       const elapsed = performance.now() - this._clickExpr.startTime;
       const progress = Math.min(elapsed / this._clickExpr.duration, 1);
@@ -413,5 +601,54 @@ export class SpriteCharacter {
       }
       ctx.restore();
     }
+  }
+
+  _drawOverlayFrame(ctx, cw, ch, skin, slotY = 0, slotH = ch) {
+    const state = this._overlayMeta?.states?.[this._overlayState];
+    if (!state || !this._overlaySheet) return;
+    const fw = Number(this._overlayMeta.frameWidth || cw);
+    const fh = Number(this._overlayMeta.frameHeight || ch);
+    const cols = Math.max(1, Number(state.columns || this._overlayMeta.columns || 1));
+    const col = this._overlayFrame % cols;
+    const row = Number(state.row || 0) + Math.floor(this._overlayFrame / cols);
+    const sx = col * fw;
+    const sy = row * fh;
+    const scale = Number(this._overlayMeta?.displayScale || 1);
+    const baseH = Math.min(slotH, ch);
+    const baseW = baseH * (fw / Math.max(1, fh));
+    const drawW = baseW * scale;
+    const drawH = baseH * scale;
+    const offsetX = Number(this._overlayMeta?.offsetX || 0);
+    const offsetY = Number(this._overlayMeta?.offsetY || 0);
+    const dx = ((cw - drawW) / 2) + offsetX;
+    const dy = slotY + ((slotH - drawH) / 2) + offsetY;
+
+    if (this._overlayMeta.tintable && (skin?.tint || skin?.filter)) {
+      this._overlayTintCanvas.width = fw;
+      this._overlayTintCanvas.height = fh;
+      const tc = this._overlayTintCtx;
+      tc.clearRect(0, 0, fw, fh);
+      tc.globalCompositeOperation = 'source-over';
+      tc.filter = 'none';
+      tc.drawImage(this._overlaySheet, sx, sy, fw, fh, 0, 0, fw, fh);
+      if (skin?.tint) {
+        tc.globalCompositeOperation = 'multiply';
+        tc.fillStyle = skin.tint;
+        tc.fillRect(0, 0, fw, fh);
+        tc.globalCompositeOperation = 'destination-in';
+        tc.drawImage(this._overlaySheet, sx, sy, fw, fh, 0, 0, fw, fh);
+      }
+      tc.globalCompositeOperation = 'source-over';
+      ctx.save();
+      if (skin?.filter) ctx.filter = skin.filter;
+      ctx.drawImage(this._overlayTintCanvas, dx, dy, drawW, drawH);
+      ctx.restore();
+      return;
+    }
+
+    ctx.save();
+    if (skin?.filter) ctx.filter = skin.filter;
+    ctx.drawImage(this._overlaySheet, sx, sy, fw, fh, dx, dy, drawW, drawH);
+    ctx.restore();
   }
 }

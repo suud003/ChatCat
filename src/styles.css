@@ -2,13 +2,8 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  scrollbar-width: none;  /* Firefox: 完全隐藏滚动条 */
-}
-
-html {
-  background: transparent;
-  outline: none;
-  border: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.2) transparent;
 }
 
 /* ── Kawaii Cat Icons (替换 emoji) ── */
@@ -61,19 +56,29 @@ html {
   margin-right: 2px;
 }
 
-/* Global: 隐藏所有滚动条（保留滚动功能） */
+/* Global custom scrollbar (Webkit/Electron) */
 ::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 ::-webkit-scrollbar-corner {
@@ -98,6 +103,8 @@ body {
   position: absolute;
   bottom: 100px;
   left: calc(50% - 150px);
+  width: 300px;
+  height: 300px;
   cursor: grab;
   will-change: left, top;
 }
@@ -107,9 +114,50 @@ body {
 }
 
 #pet-canvas {
+  display: block;
   pointer-events: auto;
-  width: 220px;
-  height: 220px;
+  transition: opacity 0.2s ease;
+}
+
+#pet-decoration-layer {
+  transition: opacity 0.2s ease;
+}
+
+.pet-pomodoro-animation {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--pomodoro-overlay-width, 320px);
+  height: var(--pomodoro-overlay-height, 320px);
+  transform: translate(calc(-50% + var(--pomodoro-overlay-offset-x, 0px)), var(--pomodoro-overlay-offset-y, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.pet-pomodoro-animation.is-visible {
+  opacity: var(--pomodoro-overlay-opacity, 1);
+}
+
+.pet-pomodoro-animation-frame {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#pet-container.pomodoro-animation-mode #pet-canvas,
+#pet-container.pomodoro-animation-mode #pet-decoration-layer,
+#pet-container.pomodoro-animation-mode #pet-overlay-bar {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Widget Container - Manga Bubble Style */
@@ -1998,6 +2046,208 @@ body {
   display: none;
 }
 
+#animation-manager-container {
+  position: absolute;
+  width: 620px;
+  z-index: 85;
+  -webkit-app-region: no-drag;
+  will-change: left, top;
+  animation: bubblePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#animation-manager-bubble {
+  position: relative;
+  background: #fff;
+  border: 3px solid #222;
+  border-radius: 22px;
+  box-shadow: 3px 3px 0 #222;
+  overflow: visible;
+}
+
+#animation-manager-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 2px;
+  cursor: grab;
+}
+
+#animation-manager-header:active {
+  cursor: grabbing;
+}
+
+#animation-manager-body {
+  padding: 8px 14px 12px;
+  max-height: 520px;
+  opacity: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+#animation-manager-tail {
+  position: absolute;
+  bottom: -18px;
+  right: 24px;
+  width: 28px;
+  height: 22px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#animation-manager-tail::before {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 22px;
+  background: #fff;
+  border-right: 3px solid #222;
+  border-bottom: 3px solid #222;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+#animation-manager-close:hover {
+  background: #f5576c;
+  color: #fff;
+  border-color: #f5576c;
+}
+
+#animation-manager-container.maximized {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  bottom: auto;
+  right: auto;
+  animation: none;
+  z-index: 105;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#animation-manager-container.maximized #animation-manager-bubble {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+#animation-manager-container.maximized #animation-manager-header {
+  padding: 10px 14px 6px;
+  border-bottom: 2px solid #eee;
+}
+
+#animation-manager-container.maximized #animation-manager-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  padding: 8px 16px 12px;
+  overflow-y: auto;
+}
+
+#animation-manager-container.maximized .tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+#animation-manager-container.maximized #animation-manager-tail {
+  display: none;
+}
+
+#open-animation-manager-btn:hover {
+  transform: scale(1.05);
+}
+
+.animation-manager-card {
+  background: #faf9f7;
+  border: 2px solid #222;
+  border-radius: 14px;
+  box-shadow: 2px 2px 0 #222;
+  padding: 10px 12px;
+}
+
+.animation-manager-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 4px;
+}
+
+.animation-manager-card-help,
+.animation-manager-subhelp {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #777;
+}
+
+.animation-manager-subtitle {
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+}
+
+.animation-manager-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.animation-manager-btn {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid #222;
+  border-radius: 10px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  text-align: center;
+}
+
+.animation-manager-btn-info {
+  background: rgba(79, 172, 254, 0.15);
+}
+
+.animation-manager-btn-warn {
+  background: rgba(245, 166, 35, 0.15);
+}
+
+.animation-manager-btn-accent {
+  background: rgba(255, 126, 103, 0.2);
+}
+
+.animation-manager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.animation-editor-preview-canvas {
+  width: min(320px, 100%);
+  height: auto;
+  aspect-ratio: 800 / 530;
+  border: 2px solid #222;
+  border-radius: 12px;
+  background: #111;
+  image-rendering: auto;
+  display: block;
+}
+
+@media (max-width: 720px) {
+  .animation-manager-btn-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================================================ */
 /*  Inline Chat (left side of pet, always)                       */
 /* ============================================================ */
@@ -3177,10 +3427,20 @@ body {
   background: #444;
 }
 
-/* Proactive micro-badge (small red dot on cat) — 暂时屏蔽 */
+/* Proactive micro-badge (small red dot on cat) */
 .proactive-dot {
-  display: none !important;
-  pointer-events: none !important;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  background: #ff4757;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  z-index: 56;
+  animation: dotPulse 2s ease-in-out infinite;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 @keyframes dotPulse {
@@ -3236,71 +3496,8 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* ============================================================ */
-/*  Memory Management (V2 重构)                                  */
-/* ============================================================ */
-
-.memory-add-row {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
-  align-items: center;
-}
-
-.memory-add-input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 12px;
-  outline: none;
-  box-shadow: 1px 1px 0 #222;
-  transition: border-color 0.15s;
-}
-
-.memory-add-input:focus {
-  border-color: #1a73e8;
-}
-
-.memory-add-category {
-  padding: 4px 4px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 11px;
-  background: #fff;
-  cursor: pointer;
-  box-shadow: 1px 1px 0 #222;
-  outline: none;
-}
-
-.memory-add-btn {
-  padding: 4px 10px;
-  border: 2px solid #222;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #e8f0fe;
-  color: #1a73e8;
-  cursor: pointer;
-  box-shadow: 1px 1px 0 #222;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.memory-add-btn:hover {
-  background: #1a73e8;
-  color: #fff;
-}
-
-.memory-hint {
-  font-size: 11px;
-  color: #999;
-  margin-bottom: 4px;
-  padding-left: 2px;
-}
-
 .memory-list {
-  max-height: 150px;
+  max-height: 120px;
   overflow-y: auto;
 }
 
@@ -3315,7 +3512,7 @@ body {
 .memory-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 3px 0;
   border-bottom: 1px solid #f0f0f0;
   font-size: 12px;
@@ -3325,21 +3522,14 @@ body {
   border-bottom: none;
 }
 
-.memory-source {
-  font-size: 11px;
-  flex-shrink: 0;
-  cursor: help;
-}
-
 .memory-category {
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: 11px;
+  padding: 1px 5px;
   border-radius: 6px;
   background: #e8f0fe;
   color: #1a73e8;
   font-weight: 600;
   flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .memory-fact {

@@ -1,0 +1,23 @@
+{
+  "frameWidth": 800,
+  "frameHeight": 530,
+  "columns": 24,
+  "tintable": true,
+  "states": {
+    "idle-loop": {
+      "row": 0,
+      "frames": 24,
+      "frameDuration": 110,
+      "loop": true,
+      "columns": 24
+    },
+    "drowsy": {
+      "row": 1,
+      "frames": 120,
+      "frameDuration": 30,
+      "loop": false,
+      "columns": 24,
+      "next": "idle-loop"
+    }
+  }
+}

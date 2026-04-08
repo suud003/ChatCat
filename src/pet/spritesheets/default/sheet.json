@@ -1,26 +1,65 @@
 {
   "frameWidth": 300,
   "frameHeight": 300,
-  "columns": 30,
+  "columns": 8,
   "tintable": true,
   "states": {
     "idle": {
       "row": 0,
-      "frames": 30,
+      "frames": 6,
       "frameDuration": 200,
-      "loop": true
+      "loop": true,
+      "columns": 6
+    },
+    "idle-blink": {
+      "row": 1,
+      "frames": 3,
+      "frameDuration": 80,
+      "loop": false
     },
     "typing-left": {
       "row": 2,
-      "frames": 30,
+      "frames": 3,
       "frameDuration": 60,
       "loop": false
     },
     "typing-right": {
       "row": 3,
-      "frames": 30,
+      "frames": 3,
       "frameDuration": 60,
       "loop": false
+    },
+    "click-react": {
+      "row": 4,
+      "frames": 4,
+      "frameDuration": 120,
+      "loop": false
+    },
+    "happy": {
+      "row": 5,
+      "frames": 4,
+      "frameDuration": 180,
+      "loop": true
+    },
+    "drowsy": {
+      "row": 6,
+      "frames": 4,
+      "frameDuration": 280,
+      "loop": false,
+      "next": "idle"
+    },
+    "sleep": {
+      "row": 7,
+      "frames": 4,
+      "frameDuration": 500,
+      "loop": true
+    },
+    "wake-up": {
+      "row": 8,
+      "frames": 3,
+      "frameDuration": 150,
+      "loop": false,
+      "next": "idle"
     }
   }
 }
