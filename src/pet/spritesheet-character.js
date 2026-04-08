@@ -11,7 +11,7 @@
 const CANVAS_SIZE = 300;
 
 // Timing constants
-const SLEEP_TIMEOUT = 2_000;       // 2 s idle → sleep (缩短用于快速测试休息动画)
+const SLEEP_TIMEOUT = 30_000;      // 30 s idle → sleep
 const DROWSY_MIN_TIMEOUT = 12_000;  // 12-18 s idle → drowsy once
 const DROWSY_MAX_TIMEOUT = 18_000;
 const BLINK_MIN     = 3_000;        // random blink interval 3-5 s
