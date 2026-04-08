@@ -6,13 +6,13 @@
   "states": {
     "idle-loop": {
       "row": 0,
-      "frames": 24,
-      "frameDuration": 110,
+      "frames": 169,
+      "frameDuration": 50,
       "loop": true,
       "columns": 24
     },
     "drowsy": {
-      "row": 1,
+      "row": 8,
       "frames": 120,
       "frameDuration": 30,
       "loop": false,

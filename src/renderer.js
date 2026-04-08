@@ -2116,10 +2116,26 @@ function setupSettingsPanel(aiService, apiPresets, chatUI) {
   animationEditorOpenFramesBtn?.addEventListener('click', async () => {
     if (!ENABLE_DEV_DEBUG_TOOLS) return;
     try {
+      console.warn('[AnimationEditor] open-frames clicked');
       const workflow = await prepareAnimationWorkflow();
-      if (!workflow?.framesDir) return;
-      await window.electronAPI.openPath?.(workflow.framesDir);
+      console.warn('[AnimationEditor] open-frames workflow:', workflow);
+      if (!workflow?.framesDir) {
+        if (animationEditorStatus) animationEditorStatus.textContent = '打开 frames 失败: workflow.framesDir 为空';
+        return;
+      }
+      if (typeof window.electronAPI.openPath !== 'function') {
+        console.warn('[AnimationEditor] electronAPI.openPath is missing');
+        if (animationEditorStatus) animationEditorStatus.textContent = '打开 frames 失败: electronAPI.openPath 不存在（请重启应用）';
+        return;
+      }
+      const result = await window.electronAPI.openPath(workflow.framesDir);
+      console.warn('[AnimationEditor] open-frames result:', result);
+      if (result?.success === false) {
+        throw new Error(result.error || 'open-path 返回失败');
+      }
+      if (animationEditorStatus) animationEditorStatus.textContent = `已打开 frames 目录: ${workflow.framesDir}`;
     } catch (err) {
+      console.warn('[AnimationEditor] open-frames error:', err);
       if (animationEditorStatus) animationEditorStatus.textContent = `打开 frames 失败: ${err.message}`;
     }
   });
